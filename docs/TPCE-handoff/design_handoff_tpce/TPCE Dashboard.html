@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TPCE — Theme Page Content Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="app-data.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-base: #F7F6F4;
+    --bg-surface: #FFFFFF;
+    --bg-elevated: #F0EEEC;
+    --bg-hover: #ECEAE8;
+    --bg-active: #E4E2E0;
+    --border: rgba(0,0,0,0.07);
+    --border-strong: rgba(0,0,0,0.12);
+    --text-primary: #1A1918;
+    --text-secondary: #6B6866;
+    --text-muted: #A8A5A2;
+    --accent: #D4890A;
+    --accent-dim: rgba(212,137,10,0.1);
+    --accent-glow: rgba(212,137,10,0.06);
+    --green: oklch(0.72 0.15 155);
+    --green-dim: oklch(0.72 0.15 155 / 0.15);
+    --red: oklch(0.65 0.18 25);
+    --red-dim: oklch(0.65 0.18 25 / 0.15);
+    --blue: oklch(0.68 0.14 250);
+    --blue-dim: oklch(0.68 0.14 250 / 0.15);
+    --purple: oklch(0.68 0.16 295);
+    --sidebar-w: 240px;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+    --font: 'DM Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  /* DARK MODE */
+  [data-theme="dark"] {
+    --bg-base: #100F0E;
+    --bg-surface: #181716;
+    --bg-elevated: #201F1E;
+    --bg-hover: #2A2927;
+    --bg-active: #323130;
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.12);
+    --text-primary: #F5F3F0;
+    --text-secondary: #9B9693;
+    --text-muted: #5A5855;
+    --accent: #F5A623;
+    --accent-dim: rgba(245,166,35,0.15);
+    --accent-glow: rgba(245,166,35,0.08);
+    --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  html, body { height: 100%; overflow: hidden; max-width: 100vw; background-color: var(--bg-base) !important; }
+  body {
+    font-family: var(--font);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root { height: 100vh; display: flex; overflow: hidden; max-width: 100vw; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  @keyframes scaleIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  @keyframes barGrow { from { width: 0; } to { width: var(--bar-w, 60%); } }
+
+  .fade-in { animation: fadeIn 0.25s ease both; }
+  .scale-in { animation: scaleIn 0.2s ease both; }
+
+  /* Stagger children */
+  .stagger > * { animation: fadeIn 0.3s ease both; }
+  .stagger > *:nth-child(1) { animation-delay: 0.04s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.08s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.12s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.16s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.20s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.24s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.28s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.32s; }
+
+  /* Micro grid texture */
+  .grid-bg {
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: -1px -1px;
+  }
+
+  /* ─── MODAL OVERLAY ─── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.15s ease;
+  }
+  .modal-box {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    width: 720px;
+    max-width: 95vw;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: scaleIn 0.2s ease;
+  }
+  .modal-box.modal-wide { width: 900px; }
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .modal-body { flex: 1; overflow-y: auto; padding: 24px; }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+  }
+
+  /* ─── BUTTONS ─── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: var(--radius-sm);
+    font-family: var(--font); font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--accent); color: #000;
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  .btn-primary:hover { filter: brightness(1.1); box-shadow: 0 0 16px var(--accent-dim); }
+  .btn-ghost {
+    background: transparent; color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-strong); }
+  .btn-surface {
+    background: var(--bg-elevated); color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-surface:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+  .btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid transparent; }
+  .btn-danger:hover { background: var(--red); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-icon { padding: 6px; border-radius: var(--radius-sm); }
+  .btn-icon:hover { background: var(--bg-hover); cursor: pointer; }
+
+  /* ─── BADGES ─── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 99px;
+    font-size: 11px; font-weight: 500; font-family: var(--mono);
+    letter-spacing: 0.02em;
+  }
+  .badge-green { background: var(--green-dim); color: var(--green); }
+  .badge-amber { background: var(--accent-dim); color: var(--accent); }
+  .badge-red { background: var(--red-dim); color: var(--red); }
+  .badge-blue { background: var(--blue-dim); color: var(--blue); }
+  .badge-muted { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border); }
+  .badge-dot::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  /* ─── FORM ELEMENTS ─── */
+  input[type="text"], textarea, select {
+    width: 100%; padding: 8px 12px;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-primary);
+    font-family: var(--font); font-size: 13px;
+    outline: none; transition: border-color 0.15s;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+  input::placeholder, textarea::placeholder { color: var(--text-muted); }
+
+  /* ─── TAGS ─── */
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 4px;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    font-size: 11px; color: var(--text-secondary);
+    cursor: default;
+  }
+  .tag:hover { border-color: var(--border-strong); color: var(--text-primary); }
+  .tag-remove { cursor: pointer; opacity: 0.5; }
+  .tag-remove:hover { opacity: 1; }
+
+  /* ─── CARD ─── */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+
+  /* ─── DIVIDER ─── */
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .divider-v { width: 1px; background: var(--border); }
+
+  /* ─── SCORE BAR ─── */
+  .score-bar { height: 3px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 2px; background: var(--accent); animation: barGrow 0.6s ease 0.3s both; }
+
+  /* ─── TOOLTIP ─── */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-elevated); border: 1px solid var(--border-strong);
+    color: var(--text-secondary); font-size: 11px; padding: 4px 8px;
+    border-radius: 4px; white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity 0.15s; z-index: 100;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+
+  /* ─── PIPELINE BAR ─── */
+  .pipeline-bar {
+    display: flex; gap: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .pipeline-step {
+    flex: 1; padding: 10px 10px;
+    display: flex; flex-direction: column; gap: 3px;
+    cursor: pointer; transition: background 0.15s;
+    border-right: 1px solid var(--border);
+    position: relative;
+    min-width: 0; overflow: hidden;
+    box-sizing: border-box; max-width: 20%;
+  }
+  .pipeline-step:last-child { border-right: none; }
+  .pipeline-step:hover { background: var(--bg-hover); }
+  .pipeline-step.active { background: var(--accent-glow); }
+  .pipeline-step.active::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent);
+  }
+  .pipeline-step-name { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pipeline-step-count { font-size: 20px; font-weight: 700; font-family: var(--mono); color: var(--text-primary); line-height: 1; white-space: nowrap; }
+  .pipeline-step-status { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; max-width: 100%; }
+  .pipeline-arrow {
+    width: 24px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 10px; flex-shrink: 0;
+    position: absolute; right: -12px; top: 50%; transform: translateY(-50%); z-index: 2;
+  }
+
+  /* ─── CONTENT EDITOR ─── */
+  .editor-layout { display: grid; grid-template-columns: 1fr 340px; height: 100%; }
+  .editor-panel { overflow-y: auto; }
+  .preview-phone {
+    width: 200px; height: 356px;
+    background: var(--bg-elevated);
+    border: 2px solid var(--border-strong);
+    border-radius: 28px;
+    overflow: hidden; position: relative;
+    box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .preview-phone-notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 80px; height: 18px;
+    background: var(--bg-base); border-radius: 0 0 12px 12px; z-index: 10;
+  }
+
+  /* ─── SCHEDULER ─── */
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border); border-radius: var(--radius); overflow: hidden; }
+  .cal-cell { background: var(--bg-surface); padding: 8px; min-height: 90px; transition: background 0.1s; cursor: pointer; }
+  .cal-cell:hover { background: var(--bg-hover); }
+  .cal-cell.today { background: var(--accent-glow); }
+  .cal-cell.other-month .cal-date { color: var(--text-muted); }
+  .cal-date { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .cal-event { padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 4px; }
+  .cal-header-cell { text-align: center; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px; }
+
+  /* ─── ANALYTICS CHART ─── */
+  .chart-bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+  .chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .chart-bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--accent-dim); transition: background 0.15s; cursor: pointer; min-height: 3px; }
+  .chart-bar:hover { background: var(--accent); }
+  .chart-bar.highlight { background: var(--accent); }
+  .chart-label { font-size: 10px; color: var(--text-muted); font-family: var(--mono); }
+
+  /* ─── MISC ─── */
+  .section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 8px; }
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 48px; color: var(--text-muted); text-align: center; }
+  .kbd { display: inline-flex; align-items: center; padding: 1px 5px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 3px; font-family: var(--mono); font-size: 10px; color: var(--text-secondary); }
+
+  /* ─── SIDEBAR ─── */
+  .sidebar { width: var(--sidebar-w); background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  .sidebar-logo { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .logo-mark { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #000; font-family: var(--mono); flex-shrink: 0; }
+  .logo-text { font-size: 13px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+  .logo-sub { font-size: 10px; color: var(--text-muted); }
+  .sidebar-nav { padding: 8px; display: flex; flex-direction: column; gap: 1px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.12s; color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+  .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+  .nav-item-icon { width: 16px; text-align: center; flex-shrink: 0; font-size: 14px; }
+  .nav-kbd { margin-left: auto; opacity: 0.5; }
+  .sidebar-section { padding: 8px; }
+  .sidebar-pages { flex: 1; overflow-y: auto; padding: 8px; border-top: 1px solid var(--border); margin-top: 4px; }
+  .page-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.12s; }
+  .page-item:hover { background: var(--bg-hover); }
+  .page-item.active { background: var(--bg-active); }
+  .page-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .page-name { font-size: 12px; font-weight: 500; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .page-status { font-size: 10px; font-family: var(--mono); }
+  .page-niche { font-size: 10px; color: var(--text-muted); }
+  .new-page-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer; font-family: var(--font); transition: all 0.15s; margin-top: 6px; }
+  .new-page-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+
+  /* ─── MAIN CONTENT ─── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .topbar { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; background: var(--bg-surface); flex-shrink: 0; min-width: 0; overflow: hidden; }
+  .topbar-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .topbar-sub { font-size: 12px; color: var(--text-muted); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+  .view-area { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px; }
+  .view-area.no-pad { padding: 0; }
+
+  /* ─── METRICS GRID ─── */
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; transition: border-color 0.15s; }
+  .metric-card:hover { border-color: var(--border-strong); }
+  .metric-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 6px; }
+  .metric-value { font-size: 28px; font-weight: 700; font-family: var(--mono); color: var(--text-primary); line-height: 1; }
+  .metric-delta { font-size: 10px; color: var(--green); margin-top: 4px; font-family: var(--mono); }
+
+  /* ─── TOPIC CARD ─── */
+  .topic-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; cursor: pointer; transition: all 0.15s; display: flex; gap: 12px; align-items: flex-start; min-width: 0; overflow: hidden; }
+  .topic-card:hover { border-color: var(--border-strong); background: var(--bg-hover); transform: translateY(-1px); box-shadow: var(--shadow); }
+  .topic-card.selected { border-color: var(--accent); background: var(--accent-glow); }
+  .topic-check { width: 16px; height: 16px; border: 1.5px solid var(--border-strong); border-radius: 4px; flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: all 0.12s; cursor: pointer; }
+  .topic-check.checked { background: var(--accent); border-color: var(--accent); color: #000; font-size: 10px; }
+  .topic-title { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px; line-height: 1.4; }
+  .topic-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; overflow: hidden; }
+
+  /* ─── TABS ─── */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 4px; background: var(--bg-surface); overflow: hidden; flex-shrink: 0; }
+  .tab-item { padding: 11px 16px; font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; margin-bottom: -1px; }
+  .tab-item:hover { color: var(--text-primary); }
+  .tab-item.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+  .tab-count { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: var(--bg-elevated); border-radius: 4px; font-size: 10px; font-family: var(--mono); margin-left: 6px; color: var(--text-secondary); }
+
+  /* ─── RIGHT PANEL ─── */
+  .right-panel { width: 280px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--bg-surface); display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .panel-header { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .source-filter { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 14px 0; }
+  .source-chip { padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); color: var(--text-secondary); background: transparent; font-family: var(--font); transition: all 0.12s; }
+  .source-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .source-chip:hover:not(.active) { border-color: var(--border-strong); color: var(--text-primary); }
+
+  /* ─── TOPIC SOURCE CARD ─── */
+  .source-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; transition: border-color 0.15s; }
+  .source-card:hover { border-color: var(--border-strong); }
+  .source-card-title { font-size: 12px; font-weight: 500; line-height: 1.4; margin-bottom: 6px; color: var(--text-primary); }
+  .source-card-meta { display: flex; align-items: center; justify-content: space-between; }
+  .source-icon { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600; background: var(--bg-hover); color: var(--text-secondary); }
+
+  /* ─── STEP WIZARD ─── */
+  .wizard-steps { display: flex; gap: 0; padding: 0 24px 20px; }
+  .wizard-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+  .wizard-step:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: calc(50% + 14px); right: calc(-50% + 14px); height: 1px; background: var(--border); }
+  .wizard-step-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text-muted); transition: all 0.2s; flex-shrink: 0; }
+  .wizard-step.done .wizard-step-dot { background: var(--green); border-color: var(--green); color: #fff; }
+  .wizard-step.active .wizard-step-dot { background: var(--accent); border-color: var(--accent); color: #000; }
+  .wizard-step-label { font-size: 11px; color: var(--text-muted); font-weight: 500; text-align: center; }
+  .wizard-step.active .wizard-step-label { color: var(--text-primary); }
+
+  /* NICHE CARDS */
+  .niche-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .niche-card { background: var(--bg-elevated); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all 0.15s; }
+  .niche-card:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+  .niche-card.selected { border-color: var(--accent); background: var(--accent-glow); }
+  .niche-card-name { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .niche-scores { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .niche-score-item { display: flex; flex-direction: column; gap: 2px; }
+  .niche-score-label { font-size: 10px; color: var(--text-muted); }
+  .niche-score-val { font-size: 12px; font-weight: 700; font-family: var(--mono); }
+
+  /* KEYWORD TAGS */
+  .keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* NAME SUGGESTIONS */
+  .name-suggestions { display: flex; flex-direction: column; gap: 6px; }
+  .name-suggestion { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-elevated); cursor: pointer; transition: all 0.15s; }
+  .name-suggestion:hover { border-color: var(--accent); background: var(--accent-glow); }
+  .name-suggestion.selected { border-color: var(--accent); background: var(--accent-glow); }
+
+  /* BRANDING */
+  .color-picker-row { display: flex; gap: 8px; }
+  .color-swatch { width: 32px; height: 32px; border-radius: var(--radius-sm); border: 2px solid var(--border); cursor: pointer; }
+  .color-swatch.active { border-color: var(--accent); }
+  .upload-zone { border: 1.5px dashed var(--border); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: all 0.15s; text-align: center; }
+  .upload-zone:hover { border-color: var(--accent); background: var(--accent-glow); }
+  .font-option { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; background: var(--bg-elevated); transition: all 0.15s; }
+  .font-option.selected { border-color: var(--accent); background: var(--accent-glow); }
+
+  /* EDITOR */
+  .editor-sidebar { border-right: 1px solid var(--border); padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+  .editor-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 0 0 8px; border-bottom: 1px solid var(--border); }
+  .editor-textarea { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-family: var(--font); font-size: 13px; color: var(--text-primary); resize: none; outline: none; line-height: 1.6; transition: border-color 0.15s; }
+  .editor-textarea:focus { border-color: var(--accent); }
+  .slide-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elevated); }
+  .slide-num { width: 20px; height: 20px; border-radius: 4px; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; font-size: 10px; font-family: var(--mono); color: var(--text-muted); flex-shrink: 0; }
+  .preview-panel { background: var(--bg-elevated); border-left: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px; overflow-y: auto; }
+  .preview-tabs { display: flex; gap: 4px; }
+  .preview-tab { padding: 5px 12px; border-radius: 99px; font-size: 11px; font-weight: 500; cursor: pointer; background: transparent; border: 1px solid var(--border); color: var(--text-secondary); transition: all 0.12s; font-family: var(--font); }
+  .preview-tab.active { background: var(--accent); border-color: var(--accent); color: #000; }
+
+  /* ANALYTICS */
+  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .analytics-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .analytics-big-num { font-size: 36px; font-weight: 700; font-family: var(--mono); }
+  .sparkline { display: flex; align-items: flex-end; gap: 2px; height: 32px; }
+  .spark-bar { width: 6px; border-radius: 2px 2px 0 0; background: var(--accent-dim); transition: background 0.15s; }
+  .spark-bar:hover { background: var(--accent); }
+  .perf-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .perf-row:last-child { border-bottom: none; }
+  .perf-bar { flex: 1; height: 4px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+  .perf-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+
+  /* SETTINGS / INTEGRATIONS */
+  .integration-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .integration-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .integration-info { flex: 1; }
+  .integration-name { font-size: 13px; font-weight: 600; }
+  .integration-desc { font-size: 12px; color: var(--text-secondary); }
+
+  /* SEARCH */
+  .search-input { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 12px 7px 32px; color: var(--text-primary); font-family: var(--font); font-size: 13px; outline: none; width: 200px; transition: all 0.15s; }
+  .search-input:focus { border-color: var(--accent); width: 240px; box-shadow: 0 0 0 3px var(--accent-dim); }
+  .search-wrap { position: relative; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; pointer-events: none; }
+</style>
+</head>
+<body style="background-color: rgb(24, 23, 22)">
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+
+
+const { useState, useEffect, useRef, useCallback } = React;
+const D = window.TPCE_DATA;
+
+// ─────────────────────────────────────────
+// ICONS (inline SVG micro-icons)
+// ─────────────────────────────────────────
+const Icon = ({ name, size = 14 }) => {
+  const icons = {
+    dashboard: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".7" /><rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".7" /><rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".7" /><rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".7" /></svg>,
+    pipeline: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h10M2 12h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>,
+    scheduler: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" /><path d="M5 1v4M11 1v4M2 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>,
+    analytics: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M2 13L6 8l3 3 3-4 2-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    settings: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.5" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>,
+    plus: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>,
+    check: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    x: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>,
+    chevronRight: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    chevronLeft: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    chevronDown: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    refresh: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M2.5 8a5.5 5.5 0 1 0 1.1-3.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><polyline points="2.5,2 2.5,5.5 6,5.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    upload: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M8 11V5M5 7l3-3 3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /><path d="M3 13h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>,
+    send: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L9 14l-2-5-5-2 12-5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    edit: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    trash: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V3h4v1M5 4l1 9h4l1-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    link: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5a3.5 3.5 0 005 0l2-2a3.5 3.5 0 00-5-5L7 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><path d="M9.5 6.5a3.5 3.5 0 00-5 0l-2 2a3.5 3.5 0 005 5L9 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>,
+    dots: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><circle cx="4" cy="8" r="1.5" fill="currentColor" /><circle cx="8" cy="8" r="1.5" fill="currentColor" /><circle cx="12" cy="8" r="1.5" fill="currentColor" /></svg>,
+    moon: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M13 10a6 6 0 01-7.5-7.5A6 6 0 1013 10z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>,
+    sun: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>,
+    search: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4" stroke="currentColor" strokeWidth="1.5" /><path d="M13 13l-3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>,
+    filter: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M2 4h12M5 8h6M7 12h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>,
+    instagram: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.4" /><circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.4" /><circle cx="11.5" cy="4.5" r="0.8" fill="currentColor" /></svg>,
+    canva: <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" /><path d="M5.5 5.5C6 7 8 8 8 8s2-1 2.5-2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /><path d="M8 8v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+  };
+  return icons[name] || <span style={{ fontSize: size * 0.8 }}>◆</span>;
+};
+
+// ─────────────────────────────────────────
+// SOURCE PLATFORM ICONS & LABELS
+// ─────────────────────────────────────────
+const PlatformBadge = ({ platform }) => {
+  const cfg = {
+    reddit: { label: 'Reddit', color: '#FF4500' },
+    twitter: { label: 'X', color: '#1DA1F2' },
+    trends: { label: 'Trends', color: '#4285F4' },
+    rss: { label: 'RSS', color: '#FFA500' }
+  };
+  const c = cfg[platform] || { label: platform, color: '#888' };
+  return <span className="source-icon" style={{ background: c.color + '22', color: c.color }}>{c.label}</span>;
+};
+
+// ─────────────────────────────────────────
+// SCORE RING
+// ─────────────────────────────────────────
+const ScoreRing = ({ score, size = 36 }) => {
+  const r = (size - 6) / 2;
+  const circ = 2 * Math.PI * r;
+  const fill = score / 100 * circ;
+  const color = score >= 85 ? 'var(--green)' : score >= 70 ? 'var(--accent)' : 'var(--red)';
+  return (
+    <svg width={size} height={size} style={{ flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth="3" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="3"
+      strokeDasharray={`${fill} ${circ}`} strokeLinecap="round"
+      transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      <text x={size / 2} y={size / 2 + 4} textAnchor="middle" fontSize="9" fontWeight="700" fill={color} fontFamily="var(--mono)">{score}</text>
+    </svg>);
+
+};
+
+// ─────────────────────────────────────────
+// SIDEBAR
+// ─────────────────────────────────────────
+const Sidebar = ({ activeNav, setActiveNav, activePage, setActivePage, pages, onNewPage, theme, setTheme }) => {
+  return (
+    <div className="sidebar">
+      <div className="sidebar-logo">
+        <div className="logo-mark">TC</div>
+        <div>
+          <div className="logo-text">TPCE</div>
+          <div className="logo-sub">Content Engine</div>
+        </div>
+      </div>
+      <div className="sidebar-nav">
+        {[
+        { key: 'dashboard', icon: 'dashboard', label: 'Dashboard', kbd: '⌘1' },
+        { key: 'pipeline', icon: 'pipeline', label: 'Pipeline', kbd: '⌘2' },
+        { key: 'scheduler', icon: 'scheduler', label: 'Scheduler', kbd: '⌘3' },
+        { key: 'analytics', icon: 'analytics', label: 'Analytics', kbd: '⌘4' },
+        { key: 'settings', icon: 'settings', label: 'Settings', kbd: '⌘,' }].
+        map((item) =>
+        <div key={item.key} className={`nav-item ${activeNav === item.key ? 'active' : ''}`} onClick={() => setActiveNav(item.key)}>
+            <span className="nav-item-icon"><Icon name={item.icon} size={14} /></span>
+            <span>{item.label}</span>
+            <span className="nav-kbd"><kbd className="kbd">{item.kbd}</kbd></span>
+          </div>
+        )}
+      </div>
+
+      <div className="sidebar-pages">
+        <div className="section-label" style={{ padding: '0 10px 6px' }}>Theme Pages</div>
+        {pages.map((page) =>
+        <div key={page.id} className={`page-item ${activePage === page.id ? 'active' : ''}`} onClick={() => setActivePage(page.id)}>
+            <div className="page-dot" style={{ background: page.accent }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="page-name">{page.name}</div>
+              <div className="page-niche">{page.niche}</div>
+            </div>
+            <span className={`page-status ${page.status === 'active' ? 'badge-green' : 'badge-muted'} badge`} style={{ padding: '1px 5px', fontSize: 9 }}>
+              {page.status === 'active' ? '●' : '○'} {page.status}
+            </span>
+          </div>
+        )}
+        <button className="new-page-btn" onClick={onNewPage}>
+          <Icon name="plus" size={12} /> New Theme Page
+        </button>
+      </div>
+
+      <div style={{ padding: '8px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>v1.0.0</span>
+          <button className="btn-icon" onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); document.documentElement.dataset.theme = next; }} style={{ padding: '4px 6px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--text-muted)' }}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
+          </button>
+        </div>
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// PIPELINE BAR COMPONENT
+// ─────────────────────────────────────────
+const PipelineBar = ({ activeStep, setActiveStep }) => {
+  const steps = [
+  { key: 'ingest', label: 'Ingest', count: 847, status: 'Running' },
+  { key: 'score', label: 'Score', count: 124, status: 'Done' },
+  { key: 'generate', label: 'Generate', count: 68, status: 'Processing' },
+  { key: 'review', label: 'Review', count: 43, status: 'Awaiting' },
+  { key: 'schedule', label: 'Schedule', count: 19, status: 'Ready' }];
+
+  return (
+    <div className="pipeline-bar">
+      {steps.map((step, i) =>
+      <div key={step.key} className={`pipeline-step ${activeStep === step.key ? 'active' : ''}`} onClick={() => setActiveStep(step.key)} style={{ position: 'relative' }}>
+          <div className="pipeline-step-name">{step.label}</div>
+          <div className="pipeline-step-count">{step.count.toLocaleString()}</div>
+          <div className="pipeline-step-status" style={{ color: step.status === 'Running' ? 'var(--green)' : step.status === 'Processing' ? 'var(--accent)' : 'var(--text-secondary)' }}>
+            {step.status === 'Running' && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: 'var(--green)', marginRight: 4, animation: 'pulse 1.5s infinite' }} />}
+            {step.status}
+          </div>
+          {i < steps.length - 1 &&
+        <div style={{ position: 'absolute', right: -9, top: '50%', transform: 'translateY(-50%)', zIndex: 2, color: 'var(--text-muted)', fontSize: 10, pointerEvents: 'none' }}>›</div>
+        }
+        </div>
+      )}
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// METRICS CARDS
+// ─────────────────────────────────────────
+const MetricCards = ({ metrics }) => {
+  const items = [
+  { key: 'topics', label: 'Topics', val: metrics.topics, delta: '+124 today', color: 'var(--blue)' },
+  { key: 'selected', label: 'Selected', val: metrics.selected, delta: '+18 today', color: 'var(--purple)' },
+  { key: 'qaReady', label: 'QA Ready', val: metrics.qaReady, delta: '+8 today', color: 'var(--accent)' },
+  { key: 'approved', label: 'Approved', val: metrics.approved, delta: '+5 today', color: 'var(--green)' },
+  { key: 'scheduled', label: 'Scheduled', val: metrics.scheduled, delta: 'Next: 5pm', color: 'var(--accent)' },
+  { key: 'posted', label: 'Posted', val: metrics.posted, delta: '+3 today', color: 'var(--green)' }];
+
+  return (
+    <div className="metrics-grid stagger">
+      {items.map((item) =>
+      <div key={item.key} className="metric-card" style={{ borderTop: `2px solid ${item.color}22` }}>
+          <div className="metric-label">{item.label}</div>
+          <div className="metric-value" style={{ color: item.color }}>{item.val.toLocaleString()}</div>
+          <div className="metric-delta">{item.delta}</div>
+        </div>
+      )}
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// TOPIC CARD
+// ─────────────────────────────────────────
+const TopicCard = ({ topic, selected, onSelect, onEdit, onDiscard }) => {
+  return (
+    <div className={`topic-card ${selected ? 'selected' : ''}`} onClick={() => onSelect && onSelect(topic.id)}>
+      <div className={`topic-check ${selected ? 'checked' : ''}`} onClick={(e) => {e.stopPropagation();onSelect && onSelect(topic.id);}}>
+        {selected && <Icon name="check" size={10} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="topic-title">{topic.title}</div>
+        <div className="topic-meta">
+          <PlatformBadge platform={topic.platform} />
+          <ScoreRing score={topic.score} size={28} />
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
+            {topic.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}
+          </div>
+          <span className={`badge ${topic.status === 'approved' ? 'badge-green' : topic.status === 'scheduled' ? 'badge-blue' : topic.status === 'posted' ? 'badge-muted' : 'badge-amber'}`}>
+            {topic.status}
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <button className="btn btn-sm btn-surface" onClick={(e) => {e.stopPropagation();onEdit && onEdit(topic);}}><Icon name="edit" size={11} /></button>
+        <button className="btn btn-sm btn-danger" onClick={(e) => {e.stopPropagation();onDiscard && onDiscard(topic.id);}}><Icon name="trash" size={11} /></button>
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// RIGHT PANEL — Topic Source Feed
+// ─────────────────────────────────────────
+const TopicSourcePanel = () => {
+  const [activeSource, setActiveSource] = useState('all');
+  const sources = ['all', 'Reddit', 'Twitter/X', 'Google Trends', 'RSS'];
+  const recent = [
+  { id: 'r1', title: 'Claude 4 just dropped and it\'s scary good', platform: 'twitter', score: 96 },
+  { id: 'r2', title: 'How I made $12K with one AI product page', platform: 'reddit', score: 91 },
+  { id: 'r3', title: 'AI agents are replacing customer support teams', platform: 'trends', score: 89 },
+  { id: 'r4', title: 'Top 10 AI writing tools for creators 2026', platform: 'rss', score: 87 },
+  { id: 'r5', title: 'The free Canva alternative that blew up on TikTok', platform: 'twitter', score: 85 },
+  { id: 'r6', title: 'Build a faceless AI channel from scratch', platform: 'reddit', score: 83 },
+  { id: 'r7', title: 'GPT-4o images now make ads automatically', platform: 'trends', score: 81 },
+  { id: 'r8', title: 'Why Reels beat carousels for new accounts in 2026', platform: 'rss', score: 79 }];
+
+  const filteredSources = activeSource === 'all' ? recent : recent.filter((r) => {
+    const map = { 'Reddit': 'reddit', 'Twitter/X': 'twitter', 'Google Trends': 'trends', 'RSS': 'rss' };
+    return r.platform === map[activeSource];
+  });
+
+  return (
+    <div className="right-panel">
+      <div className="panel-header">
+        <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Recent Topics</span>
+        <button className="btn btn-sm btn-surface"><Icon name="refresh" size={11} /> Refresh</button>
+      </div>
+      <div className="source-filter">
+        {sources.map((s) =>
+        <button key={s} className={`source-chip ${activeSource === s ? 'active' : ''}`} onClick={() => setActiveSource(s)}>
+            {s === 'all' ? 'All' : s}
+          </button>
+        )}
+      </div>
+      <div className="panel-body stagger" style={{ paddingTop: 10 }}>
+        {filteredSources.map((item) =>
+        <div key={item.id} className="source-card">
+            <div className="source-card-title">{item.title}</div>
+            <div className="source-card-meta">
+              <PlatformBadge platform={item.platform} />
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <ScoreRing score={item.score} size={24} />
+                <button className="btn btn-sm btn-primary" style={{ padding: '3px 8px', fontSize: 11 }}>Select</button>
+                <button className="btn btn-sm btn-ghost" style={{ padding: '3px 8px', fontSize: 11 }}>✕</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// DASHBOARD VIEW
+// ─────────────────────────────────────────
+const DashboardView = ({ page, onOpenEditor }) => {
+  const [pipelineStep, setPipelineStep] = useState('review');
+  const [selectedTopics, setSelectedTopics] = useState(new Set());
+  const [activeTab, setActiveTab] = useState('review');
+
+  const tabs = [
+  { key: 'review', label: 'Review', count: 3 },
+  { key: 'approved', label: 'Approved', count: 2 },
+  { key: 'scheduled', label: 'Scheduled', count: 1 },
+  { key: 'posted', label: 'Posted', count: 2 }];
+
+  const filteredTopics = D.topics.filter((t) => t.status === activeTab);
+
+  const toggleSelect = (id) => setSelectedTopics((s) => {const n = new Set(s);n.has(id) ? n.delete(id) : n.add(id);return n;});
+
+  return (
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Topbar */}
+        <div className="topbar">
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: page.accent }} />
+          <div>
+            <div className="topbar-title">{page.name}</div>
+            <div className="topbar-sub">{page.niche} · {page.followers} followers</div>
+          </div>
+          <div className="topbar-right">
+            <div className="search-wrap">
+              <span className="search-icon"><Icon name="search" size={12} /></span>
+              <input type="text" className="search-input" placeholder="Search topics… ⌘K" />
+            </div>
+            <button className="btn btn-ghost btn-sm"><Icon name="filter" size={12} /> Filter</button>
+            <button className="btn btn-primary btn-sm"><Icon name="send" size={12} /> Run Pipeline</button>
+          </div>
+        </div>
+
+        {/* View area */}
+        <div className="view-area" style={{ color: "rgb(255, 255, 255)" }}>
+          <MetricCards metrics={D.metrics} />
+
+          <div style={{ marginBottom: 16 }}>
+            <div className="section-label" style={{ marginBottom: 8 }}>Pipeline</div>
+            <PipelineBar activeStep={pipelineStep} setActiveStep={setPipelineStep} />
+          </div>
+
+          {selectedTopics.size > 0 &&
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent)' }}>{selectedTopics.size} selected</span>
+              <button className="btn btn-sm btn-primary">Approve All</button>
+              <button className="btn btn-sm btn-surface">Schedule</button>
+              <button className="btn btn-sm btn-ghost" style={{ marginLeft: 'auto' }} onClick={() => setSelectedTopics(new Set())}>Clear</button>
+            </div>
+          }
+
+          <div className="tabs">
+            {tabs.map((t) =>
+            <div key={t.key} className={`tab-item ${activeTab === t.key ? 'active' : ''}`} onClick={() => setActiveTab(t.key)}>
+                {t.label}<span className="tab-count">{t.count}</span>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }} className="stagger">
+            {filteredTopics.length > 0 ? filteredTopics.map((topic) =>
+            <TopicCard
+              key={topic.id} topic={topic}
+              selected={selectedTopics.has(topic.id)}
+              onSelect={toggleSelect}
+              onEdit={onOpenEditor} />
+
+            ) :
+            <div className="empty-state">
+                <div style={{ fontSize: 28, opacity: 0.3 }}>◉</div>
+                <div style={{ fontWeight: 600 }}>No {activeTab} topics</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Topics will appear here after pipeline processing</div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+      <TopicSourcePanel />
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// CONTENT EDITOR MODAL
+// ─────────────────────────────────────────
+const ContentEditor = ({ topic, onClose }) => {
+  const [hook, setHook] = useState('7 AI tools that will replace a full-time employee in 2025 (and how to use them before your competition does)');
+  const [caption, setCaption] = useState('Stop hiring for tasks that AI can automate. Here\'s the toolkit that\'s saving content creators 20+ hours per week.\n\n👇 Save this for later');
+  const [previewTab, setPreviewTab] = useState('post');
+  const [slides, setSlides] = useState([
+  { id: 1, text: 'Hook slide — Main title + statistic' },
+  { id: 2, text: 'Problem — What you\'re losing without AI tools' },
+  { id: 3, text: 'Solution #1 — ChatGPT for content ideation' },
+  { id: 4, text: 'Solution #2 — Midjourney for visuals' },
+  { id: 5, text: 'Solution #3 — Make.com for automation' },
+  { id: 6, text: 'CTA — Follow for daily AI tool breakdowns' }]
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-wide" style={{ width: '92vw', maxWidth: 1100, height: '88vh', maxHeight: '88vh' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} />
+            <span style={{ fontWeight: 700, fontSize: 14 }}>{topic?.title || 'Content Editor'}</span>
+            <span className="badge badge-amber">Review</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-surface btn-sm">Save Draft</button>
+            <button className="btn btn-primary btn-sm"><Icon name="check" size={11} /> Approve</button>
+            <button className="btn-icon" onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}><Icon name="x" size={14} /></button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflow: 'hidden', display: 'grid', gridTemplateColumns: '1fr 320px', minHeight: 0 }}>
+          {/* Left: Editor */}
+          <div className="editor-sidebar">
+            <div>
+              <div className="editor-section-title">Hook</div>
+              <textarea className="editor-textarea" value={hook} onChange={(e) => setHook(e.target.value)} rows={3} style={{ marginTop: 8 }} />
+            </div>
+            <div>
+              <div className="editor-section-title">Caption</div>
+              <textarea className="editor-textarea" value={caption} onChange={(e) => setCaption(e.target.value)} rows={4} style={{ marginTop: 8 }} />
+            </div>
+            <div>
+              <div className="editor-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Carousel Slides</span>
+                <button className="btn btn-sm btn-surface" onClick={() => setSlides((s) => [...s, { id: s.length + 1, text: `Slide ${s.length + 1}` }])}>
+                  <Icon name="plus" size={10} /> Add
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {slides.map((slide, i) =>
+                <div key={slide.id} className="slide-item">
+                    <div className="slide-num">{i + 1}</div>
+                    <input type="text" value={slide.text} onChange={(e) => setSlides((s) => s.map((sl) => sl.id === slide.id ? { ...sl, text: e.target.value } : sl))} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 12, color: 'var(--text-primary)', fontFamily: 'var(--font)', padding: '2px 0' }} />
+                    <button onClick={() => setSlides((s) => s.filter((sl) => sl.id !== slide.id))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0 2px' }}><Icon name="x" size={10} /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="editor-section-title">CTA</div>
+              <input type="text" defaultValue="Follow for daily AI tool breakdowns →" style={{ marginTop: 8 }} />
+            </div>
+            <div>
+              <div className="editor-section-title">Branding</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--accent)', border: '2px solid var(--accent)' }} />
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border)' }} />
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <Icon name="plus" size={10} />
+                </div>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" defaultChecked id="use-theme" />
+                  <label htmlFor="use-theme">Use default branding</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Preview */}
+          <div className="preview-panel">
+            <div className="preview-tabs">
+              {['post', 'carousel', 'reel'].map((t) =>
+              <button key={t} className={`preview-tab ${previewTab === t ? 'active' : ''}`} onClick={() => setPreviewTab(t)}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              )}
+            </div>
+
+            {/* Phone preview */}
+            <div className="preview-phone" style={{ width: 200, height: previewTab === 'reel' ? 356 : 280 }}>
+              <div className="preview-phone-notch" />
+              <div style={{ paddingTop: 20, height: '100%', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column' }}>
+                {/* IG Header */}
+                <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: '0.5px solid var(--border)' }}>
+                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent)', border: '1.5px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700 }}>AI</div>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-primary)' }}>ai_tools_daily</span>
+                </div>
+
+                {previewTab === 'carousel' &&
+                <div style={{ flex: 1, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', padding: 10 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 8, color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Slide 1 of {slides.length}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', lineHeight: 1.4 }}>7 AI Tools That Replace Full-Time Employees</div>
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 6, left: 0, right: 0, display: 'flex', gap: 2, justifyContent: 'center' }}>
+                      {slides.map((_, i) => <div key={i} style={{ width: i === 0 ? 12 : 4, height: 4, borderRadius: 2, background: i === 0 ? 'var(--accent)' : 'rgba(255,255,255,0.3)' }} />)}
+                    </div>
+                  </div>
+                }
+
+                {previewTab === 'post' &&
+                <div style={{ flex: 1, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.5 }}>{hook.substring(0, 80)}…</div>
+                    </div>
+                  </div>
+                }
+
+                {previewTab === 'reel' &&
+                <div style={{ flex: 1, background: 'linear-gradient(160deg, var(--bg-elevated), var(--bg-base))', display: 'flex', alignItems: 'flex-end', padding: 10, position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>▶</div>
+                    </div>
+                    <div style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, zIndex: 2 }}>
+                      {hook.substring(0, 60)}…
+                      <div style={{ fontSize: 7, color: 'var(--text-muted)', marginTop: 2 }}>@ai_tools_daily</div>
+                    </div>
+                  </div>
+                }
+
+                {/* IG Actions */}
+                <div style={{ padding: '6px 10px', display: 'flex', gap: 8, borderTop: '0.5px solid var(--border)' }}>
+                  {['♥', '💬', '↗'].map((icon) =>
+                  <span key={icon} style={{ fontSize: 10, cursor: 'pointer' }}>{icon}</span>
+                  )}
+                </div>
+                <div style={{ padding: '0 10px 8px', fontSize: 7.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  {caption.substring(0, 70)}…
+                </div>
+              </div>
+            </div>
+
+            <div style={{ width: '100%' }}>
+              <div className="section-label">Canva Integration</div>
+              <button className="btn btn-surface btn-sm" style={{ width: '100%', justifyContent: 'center', gap: 6, marginBottom: 6 }}>
+                <Icon name="canva" size={12} /> Open in Canva
+              </button>
+              <button className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                <Icon name="link" size={12} /> Use Template
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// SCHEDULER VIEW
+// ─────────────────────────────────────────
+const SchedulerView = () => {
+  const [currentMonth, setCurrentMonth] = useState(4); // May = 4
+  const year = 2026;
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const firstDay = new Date(year, currentMonth, 1).getDay();
+  const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
+  const daysInPrev = new Date(year, currentMonth, 0).getDate();
+
+  const cells = [];
+  for (let i = firstDay - 1; i >= 0; i--) cells.push({ day: daysInPrev - i, cur: false });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, cur: true });
+  while (cells.length % 7) cells.push({ day: cells.length - daysInMonth - firstDay + 1, cur: false });
+
+  const getEvents = (day) => {
+    if (!day.cur) return [];
+    const key = `${year}-${String(currentMonth + 1).padStart(2, '0')}-${String(day.day).padStart(2, '0')}`;
+    return D.schedulerSlots[key] || [];
+  };
+
+  const typeColors = { Carousel: 'var(--accent)', Reel: 'var(--blue)', Post: 'var(--green)' };
+
+  return (
+    <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="topbar">
+        <span className="topbar-title">Scheduler</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 16 }}>
+          <button className="btn-icon btn-ghost" style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setCurrentMonth((m) => Math.max(0, m - 1))}><Icon name="chevronLeft" size={14} /></button>
+          <span style={{ fontWeight: 700, minWidth: 80, textAlign: 'center' }}>{monthNames[currentMonth]} {year}</span>
+          <button className="btn-icon btn-ghost" style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setCurrentMonth((m) => Math.min(11, m + 1))}><Icon name="chevronRight" size={14} /></button>
+        </div>
+        <div className="topbar-right">
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {Object.entries(typeColors).map(([type, color]) =>
+            <div key={type} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{type}</span>
+              </div>
+            )}
+          </div>
+          <button className="btn btn-primary btn-sm"><Icon name="plus" size={11} /> Schedule Post</button>
+        </div>
+      </div>
+      <div className="view-area">
+        <div className="cal-header">
+          {dayNames.map((d) => <div key={d} className="cal-header-cell">{d}</div>)}
+        </div>
+        <div className="calendar-grid">
+          {cells.map((cell, i) => {
+            const events = getEvents(cell);
+            const isToday = cell.cur && cell.day === 1 && currentMonth === 4;
+            return (
+              <div key={i} className={`cal-cell ${isToday ? 'today' : ''} ${!cell.cur ? 'other-month' : ''}`}>
+                <div className="cal-date">{cell.day}</div>
+                {events.map((ev) =>
+                <div key={ev.id} className="cal-event" style={{ background: (typeColors[ev.type] || 'var(--accent)') + '22', color: typeColors[ev.type] || 'var(--accent)', border: `1px solid ${typeColors[ev.type] || 'var(--accent)'}44` }}>
+                    {ev.time} · {ev.title.substring(0, 20)}…
+                  </div>
+                )}
+              </div>);
+
+          })}
+        </div>
+        {/* Queue sidebar */}
+        <div style={{ marginTop: 20 }}>
+          <div className="section-label">Upcoming Queue</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            {Object.entries(D.schedulerSlots).flatMap(([date, events]) =>
+            events.filter((e) => e.status === 'scheduled').map((ev) => ({ ...ev, date }))
+            ).map((ev) =>
+            <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: typeColors[ev.type] || 'var(--accent)', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{ev.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>{ev.date} · {ev.time}</div>
+                </div>
+                <span className={`badge badge-muted`} style={{ fontFamily: 'var(--mono)' }}>{ev.type}</span>
+                <button className="btn btn-sm btn-ghost"><Icon name="edit" size={11} /></button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// ANALYTICS VIEW
+// ─────────────────────────────────────────
+const AnalyticsView = ({ page }) => {
+  const ad = D.analyticsData;
+  const maxViews = Math.max(...ad.views);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="topbar">
+        <span className="topbar-title">Analytics</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: page.accent }} />
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page.name}</span>
+        </div>
+        <div className="topbar-right">
+          {['7d', '30d', '90d', 'All'].map((p) =>
+          <button key={p} className={`btn btn-sm ${p === '30d' ? 'btn-surface' : 'btn-ghost'}`} style={{ padding: '4px 10px' }}>{p}</button>
+          )}
+        </div>
+      </div>
+      <div className="view-area">
+        {/* Top stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }} className="stagger">
+          {[
+          { label: 'Total Views', value: '341K', delta: '+18%', color: 'var(--blue)' },
+          { label: 'Total Saves', value: '21.6K', delta: '+24%', color: 'var(--green)' },
+          { label: 'New Followers', value: '5.3K', delta: '+31%', color: 'var(--accent)' },
+          { label: 'Avg Eng. Rate', value: '6.4%', delta: '+1.2%', color: 'var(--purple)' }].
+          map((stat) =>
+          <div key={stat.label} className="metric-card" style={{ borderTop: `2px solid ${stat.color}33` }}>
+              <div className="metric-label">{stat.label}</div>
+              <div className="metric-value" style={{ fontSize: 22, color: stat.color }}>{stat.value}</div>
+              <div style={{ fontSize: 11, color: 'var(--green)', fontFamily: 'var(--mono)', marginTop: 4 }}>{stat.delta} vs last period</div>
+            </div>
+          )}
+        </div>
+
+        <div className="analytics-grid">
+          {/* Views chart */}
+          <div className="analytics-card" style={{ gridColumn: 'span 2' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Views Over Time</div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}><div style={{ width: 10, height: 3, borderRadius: 2, background: 'var(--accent)' }} /><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Views</span></div>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}><div style={{ width: 10, height: 3, borderRadius: 2, background: 'var(--green)' }} /><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Saves</span></div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 120, marginBottom: 8 }}>
+              {ad.views.map((v, i) =>
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', gap: 2 }}>
+                  <div style={{ width: '100%', borderRadius: '3px 3px 0 0', background: 'var(--accent)', height: `${v / maxViews * 100}%`, minHeight: 3, transition: 'height 0.5s ease', cursor: 'pointer' }} title={`${v.toLocaleString()} views`} />
+                  <div style={{ width: '100%', borderRadius: '3px 3px 0 0', background: 'var(--green)', height: `${ad.saves[i] / Math.max(...ad.saves) * 30}%`, minHeight: 2 }} />
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {ad.months.map((m, i) => <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>{m}</div>)}
+            </div>
+          </div>
+
+          {/* Hook performance */}
+          <div className="analytics-card">
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>Content Type Performance</div>
+            {[
+            { type: 'Carousel', pct: 78, views: '210K' },
+            { type: 'Reel', pct: 65, views: '89K' },
+            { type: 'Static Post', pct: 41, views: '42K' },
+            { type: 'Story', pct: 28, views: '18K' }].
+            map((item) =>
+            <div key={item.type} className="perf-row">
+                <div style={{ width: 80, fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>{item.type}</div>
+                <div className="perf-bar"><div className="perf-fill" style={{ width: `${item.pct}%`, '--bar-w': `${item.pct}%` }} /></div>
+                <div style={{ width: 40, textAlign: 'right', fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text-primary)' }}>{item.views}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Top posts */}
+          <div className="analytics-card">
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>Top Posts</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {ad.topPosts.map((post, i) =>
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text-muted)', flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.title}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 8, marginTop: 2 }}>
+                      <span>{post.views} views</span><span>{post.saves} saves</span>
+                    </div>
+                  </div>
+                  <span className="badge badge-muted" style={{ flexShrink: 0, fontFamily: 'var(--mono)' }}>{post.type}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// SETTINGS VIEW
+// ─────────────────────────────────────────
+const SettingsView = () => {
+  const [connected, setConnected] = useState({ canva: false, instagram: true, twitter: false });
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="topbar"><span className="topbar-title">Settings & Integrations</span></div>
+      <div className="view-area">
+        <div style={{ maxWidth: 680 }}>
+          <div className="section-label" style={{ marginBottom: 12 }}>Integrations</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} className="stagger">
+            {[
+            { key: 'canva', name: 'Canva', desc: 'Design and export carousel templates via Canva API', icon: '🎨' },
+            { key: 'instagram', name: 'Instagram / Meta', desc: 'Auto-publish and schedule content to Instagram', icon: '📸' },
+            { key: 'twitter', name: 'Twitter / X', desc: 'Post threads and single images to Twitter/X', icon: '🐦' }].
+            map((int) =>
+            <div key={int.key} className="integration-card">
+                <div className="integration-icon">{int.icon}</div>
+                <div className="integration-info">
+                  <div className="integration-name">{int.name}</div>
+                  <div className="integration-desc">{int.desc}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {connected[int.key] && <span className="badge badge-green badge-dot">Connected</span>}
+                  <button className={`btn btn-sm ${connected[int.key] ? 'btn-ghost' : 'btn-primary'}`} onClick={() => setConnected((c) => ({ ...c, [int.key]: !c[int.key] }))}>
+                    {connected[int.key] ? 'Disconnect' : 'Connect'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="divider" />
+          <div className="section-label" style={{ marginBottom: 12 }}>Global Branding Defaults</div>
+          <div className="card stagger">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>Primary Color</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 6, background: 'var(--accent)', border: '2px solid var(--accent)' }} />
+                  <input type="text" defaultValue="#F5A623" style={{ width: 100 }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>Default Font</div>
+                <select style={{ width: '100%' }}>
+                  <option>DM Sans</option>
+                  <option>Inter</option>
+                  <option>Satoshi</option>
+                  <option>Clash Display</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>Caption Tone</div>
+                <select style={{ width: '100%' }}>
+                  <option>Educational</option>
+                  <option>Bold & Direct</option>
+                  <option>Casual & Friendly</option>
+                  <option>Professional</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>Logo</div>
+                <div className="upload-zone" style={{ padding: 12, flexDirection: 'row', gap: 8 }}>
+                  <Icon name="upload" size={14} />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Upload logo</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <button className="btn btn-primary btn-sm">Save as Default Preset</button>
+            </div>
+          </div>
+
+          <div className="divider" />
+          <div className="section-label" style={{ marginBottom: 12 }}>Pipeline Defaults</div>
+          <div className="card">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+              { label: 'Auto-select topics above score', value: '80', type: 'number' },
+              { label: 'Daily post limit', value: '3', type: 'number' },
+              { label: 'Default post times', value: '09:00, 17:00, 21:00', type: 'text' }].
+              map((field) =>
+              <div key={field.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{field.label}</div>
+                  <input type={field.type} defaultValue={field.value} style={{ width: 160 }} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// CREATE NEW PAGE MODAL (Multi-step)
+// ─────────────────────────────────────────
+const CreatePageModal = ({ onClose, onCreate }) => {
+  const [step, setStep] = useState(1);
+  const [selectedNiche, setSelectedNiche] = useState(null);
+  const [keywords, setKeywords] = useState(['AI tools', 'automation', 'ChatGPT', 'productivity hacks', 'side hustle', 'passive income', 'AI art', 'no code', 'content creation', 'digital products']);
+  const [selectedName, setSelectedName] = useState(null);
+  const [nicheSearch, setNicheSearch] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#F5A623');
+
+  const names = [
+  'AI Tools Daily', 'The AI Toolkit', 'Automate Everything', 'AI Insider Daily',
+  'The Future Worker', 'AI Edge', 'Smart Tools HQ', 'The AI Stack',
+  'Build With AI', 'AI Creators Lab', 'Workflow AI', 'Next Level AI'];
+
+
+  const filteredNiches = D.niches.filter((n) => n.name.toLowerCase().includes(nicheSearch.toLowerCase()));
+
+  const stepLabels = ['Niche', 'Keywords', 'Name', 'Branding'];
+
+  const canNext =
+  step === 1 && selectedNiche ||
+  step === 2 && keywords.length > 0 ||
+  step === 3 && selectedName ||
+  step === 4;
+
+
+  const handleCreate = () => {
+    if (onCreate && selectedNiche && selectedName) {
+      const niche = D.niches.find((n) => n.id === selectedNiche);
+      onCreate({ name: selectedName, niche: niche?.name || 'Custom', accent: primaryColor, status: 'active', posts: 0, followers: '0' });
+    }
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Create New Theme Page</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Step {step} of 4 — {stepLabels[step - 1]}</div>
+          </div>
+          <button className="btn-icon" onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}><Icon name="x" size={14} /></button>
+        </div>
+
+        <div style={{ padding: '16px 24px 0' }}>
+          <div className="wizard-steps">
+            {stepLabels.map((label, i) =>
+            <div key={label} className={`wizard-step ${i + 1 < step ? 'done' : i + 1 === step ? 'active' : ''}`}>
+                <div className="wizard-step-dot">
+                  {i + 1 < step ? <Icon name="check" size={12} /> : i + 1}
+                </div>
+                <div className="wizard-step-label">{label}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="modal-body">
+          {/* Step 1: Niche */}
+          {step === 1 &&
+          <div>
+              <div style={{ marginBottom: 14 }}>
+                <div className="search-wrap">
+                  <span className="search-icon"><Icon name="search" size={12} /></span>
+                  <input type="text" className="search-input" placeholder="Search niches…" value={nicheSearch} onChange={(e) => setNicheSearch(e.target.value)} style={{ width: '100%' }} />
+                </div>
+              </div>
+              <div className="niche-grid">
+                {filteredNiches.map((niche) =>
+              <div key={niche.id} className={`niche-card ${selectedNiche === niche.id ? 'selected' : ''}`} onClick={() => setSelectedNiche(niche.id)}>
+                    <div className="niche-card-name">
+                      <span style={{ fontSize: 16 }}>{niche.emoji}</span>
+                      {niche.name}
+                      {selectedNiche === niche.id && <span style={{ marginLeft: 'auto' }}><Icon name="check" size={12} /></span>}
+                    </div>
+                    <div className="niche-scores">
+                      <div className="niche-score-item">
+                        <div className="niche-score-label">Trend</div>
+                        <div className="niche-score-val" style={{ color: 'var(--accent)' }}>{niche.trendScore}</div>
+                        <div className="score-bar"><div className="score-fill" style={{ width: `${niche.trendScore}%`, '--bar-w': `${niche.trendScore}%` }} /></div>
+                      </div>
+                      <div className="niche-score-item">
+                        <div className="niche-score-label">Monetization</div>
+                        <div className="niche-score-val" style={{ color: 'var(--green)' }}>{niche.monetizationScore}</div>
+                        <div className="score-bar" style={{ '--bar-w': `${niche.monetizationScore}%` }}><div className="score-fill" style={{ width: `${niche.monetizationScore}%`, background: 'var(--green)' }} /></div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+                      <span className={`badge ${niche.competition === 'Low' ? 'badge-green' : niche.competition === 'Med' ? 'badge-amber' : 'badge-red'}`}>{niche.competition} competition</span>
+                      <span style={{ fontSize: 11, color: 'var(--green)', fontFamily: 'var(--mono)', marginLeft: 'auto' }}>↑ {niche.growth}</span>
+                    </div>
+                  </div>
+              )}
+              </div>
+            </div>
+          }
+
+          {/* Step 2: Keywords */}
+          {step === 2 &&
+          <div>
+              <div style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Auto-generated for</div>
+                <div style={{ fontWeight: 600 }}>{D.niches.find((n) => n.id === selectedNiche)?.name}</div>
+              </div>
+              <div className="section-label" style={{ marginBottom: 8 }}>Keywords & Phrases — click to remove</div>
+              <div className="keyword-tags" style={{ marginBottom: 16 }}>
+                {keywords.map((kw) =>
+              <span key={kw} className="tag" style={{ cursor: 'pointer' }} onClick={() => setKeywords((k) => k.filter((x) => x !== kw))}>
+                    {kw} <span className="tag-remove">×</span>
+                  </span>
+              )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="text" placeholder="Add custom keyword…" onKeyDown={(e) => {if (e.key === 'Enter' && e.target.value) {setKeywords((k) => [...k, e.target.value]);e.target.value = '';}}} style={{ flex: 1 }} />
+                <button className="btn btn-ghost btn-sm"><Icon name="refresh" size={11} /> Regenerate</button>
+              </div>
+            </div>
+          }
+
+          {/* Step 3: Name */}
+          {step === 3 &&
+          <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Select a name or type your own</div>
+                <button className="btn btn-sm btn-ghost"><Icon name="refresh" size={11} /> Regenerate</button>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <input type="text" placeholder="Or type a custom name…" style={{ width: '100%' }} onChange={(e) => setSelectedName(e.target.value || null)} />
+              </div>
+              <div className="name-suggestions stagger">
+                {names.map((name) =>
+              <div key={name} className={`name-suggestion ${selectedName === name ? 'selected' : ''}`} onClick={() => setSelectedName(name)}>
+                    <span style={{ fontWeight: 500, fontSize: 13 }}>{name}</span>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: 'var(--green)', fontFamily: 'var(--mono)' }}>✓ Available</span>
+                      {selectedName === name && <Icon name="check" size={13} />}
+                    </div>
+                  </div>
+              )}
+              </div>
+            </div>
+          }
+
+          {/* Step 4: Branding */}
+          {step === 4 &&
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div>
+                <div className="section-label" style={{ marginBottom: 8 }}>Logo</div>
+                <div className="upload-zone">
+                  <Icon name="upload" size={20} />
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>Upload logo image</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>PNG, SVG · recommended 400×400px</span>
+                </div>
+              </div>
+              <div>
+                <div className="section-label" style={{ marginBottom: 8 }}>Brand Colors</div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {['#F5A623', '#10B981', '#6366F1', '#EF4444', '#0EA5E9', '#EC4899', '#8B5CF6', '#14B8A6'].map((color) =>
+                <div key={color} className="color-swatch" style={{ background: color, borderColor: primaryColor === color ? color : 'transparent', transform: primaryColor === color ? 'scale(1.15)' : 'none', transition: 'all 0.15s' }} onClick={() => setPrimaryColor(color)} />
+                )}
+                </div>
+              </div>
+              <div>
+                <div className="section-label" style={{ marginBottom: 8 }}>Font Style</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {['Clean & Modern', 'Bold Display', 'Editorial', 'Minimal'].map((font) =>
+                <div key={font} className={`font-option ${font === 'Clean & Modern' ? 'selected' : ''}`}>{font}</div>
+                )}
+                </div>
+              </div>
+              <div>
+                <div className="section-label" style={{ marginBottom: 8 }}>Caption Tone</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['Educational', 'Bold & Direct', 'Casual', 'Professional'].map((tone) =>
+                <button key={tone} className={`btn btn-sm ${tone === 'Educational' ? 'btn-primary' : 'btn-ghost'}`}>{tone}</button>
+                )}
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={() => step > 1 ? setStep((s) => s - 1) : onClose()}>
+            {step > 1 ? '← Back' : 'Cancel'}
+          </button>
+          <button className="btn btn-primary" disabled={!canNext} onClick={() => step < 4 ? setStep((s) => s + 1) : handleCreate()} style={{ opacity: canNext ? 1 : 0.4 }}>
+            {step < 4 ? 'Continue →' : '🚀 Create Theme Page'}
+          </button>
+        </div>
+      </div>
+    </div>);
+
+};
+
+// ─────────────────────────────────────────
+// APP ROOT
+// ─────────────────────────────────────────
+const App = () => {
+  const [theme, setTheme] = useState('light');
+  const [activeNav, setActiveNav] = useState('dashboard');
+  const [activePage, setActivePage] = useState('tp1');
+  const [pages, setPages] = useState(D.themePages);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTopic, setEditingTopic] = useState(null);
+
+  // Tweaks
+  const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
+    "accentColor": "#F5A623",
+    "darkMode": false,
+    "sidebarWidth": 240,
+    "showRightPanel": true,
+    "compactMode": false
+  }/*EDITMODE-END*/);
+
+  // Apply tweaks
+  useEffect(() => {
+    document.documentElement.dataset.theme = tweaks.darkMode ? 'dark' : 'light';
+    document.body.style.removeProperty('background-color');
+    setTheme(tweaks.darkMode ? 'dark' : 'light');
+    document.documentElement.style.setProperty('--accent', tweaks.accentColor);
+    document.documentElement.style.setProperty('--sidebar-w', tweaks.sidebarWidth + 'px');
+  }, [tweaks]);
+
+  const handleThemeToggle = (t) => {
+    setTheme(t);
+    setTweak('darkMode', t === 'dark');
+    document.documentElement.dataset.theme = t;
+  };
+
+  const currentPage = pages.find((p) => p.id === activePage) || pages[0];
+
+  const handleCreatePage = (newPage) => {
+    const id = 'tp' + (pages.length + 1);
+    setPages((p) => [...p, { ...newPage, id, posts: 0, followers: '0' }]);
+    setActivePage(id);
+  };
+
+  return (
+    <>
+      <TweaksPanel tweaks={tweaks} setTweak={setTweak}>
+        <TweakSection title="Appearance">
+          <TweakToggle label="Dark Mode" tweakKey="darkMode" tweaks={tweaks} setTweak={setTweak} />
+          <TweakColor label="Accent Color" tweakKey="accentColor" tweaks={tweaks} setTweak={setTweak} />
+        </TweakSection>
+        <TweakSection title="Layout">
+          <TweakSlider label="Sidebar Width" tweakKey="sidebarWidth" min={180} max={300} step={10} tweaks={tweaks} setTweak={setTweak} />
+          <TweakToggle label="Show Source Panel" tweakKey="showRightPanel" tweaks={tweaks} setTweak={setTweak} />
+          <TweakToggle label="Compact Mode" tweakKey="compactMode" tweaks={tweaks} setTweak={setTweak} />
+        </TweakSection>
+      </TweaksPanel>
+
+      <div id="app-shell" style={{ display: 'flex', flex: 1, overflow: 'hidden', fontSize: tweaks.compactMode ? 12 : 13 }}>
+        <Sidebar
+          activeNav={activeNav} setActiveNav={setActiveNav}
+          activePage={activePage} setActivePage={setActivePage}
+          pages={pages} onNewPage={() => setShowCreateModal(true)}
+          theme={theme} setTheme={handleThemeToggle} />
+        
+
+        <div className="main">
+          {activeNav === 'dashboard' &&
+          <DashboardView
+            page={currentPage}
+            onOpenEditor={(topic) => setEditingTopic(topic)} />
+
+          }
+          {activeNav === 'pipeline' &&
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div className="topbar">
+                <span className="topbar-title">Content Pipeline</span>
+                <div className="topbar-right">
+                  <button className="btn btn-primary btn-sm"><Icon name="refresh" size={11} /> Run All Steps</button>
+                </div>
+              </div>
+              <div className="view-area">
+                <div style={{ marginBottom: 20 }}>
+                  <PipelineBar activeStep="generate" setActiveStep={() => {}} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} className="stagger">
+                  {D.topics.map((topic) =>
+                <TopicCard key={topic.id} topic={topic} onEdit={setEditingTopic} />
+                )}
+                </div>
+              </div>
+            </div>
+          }
+          {activeNav === 'scheduler' && <SchedulerView />}
+          {activeNav === 'analytics' && <AnalyticsView page={currentPage} />}
+          {activeNav === 'settings' && <SettingsView />}
+        </div>
+      </div>
+
+      {showCreateModal &&
+      <CreatePageModal onClose={() => setShowCreateModal(false)} onCreate={handleCreatePage} />
+      }
+      {editingTopic &&
+      <ContentEditor topic={editingTopic} onClose={() => setEditingTopic(null)} />
+      }
+    </>);
+
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+// Shared types — aligns API data shapes with UI models
+
+export type NavKey = 'dashboard' | 'pipeline' | 'scheduler' | 'analytics' | 'settings';
+
+export type ThemePage = {
+  id: string;
+  name: string;
+  niche: string;
+  nicheId: string;       // niche_id from DB
+  status: 'active' | 'paused';
+  accent: string;
+  posts: number;
+  followers: string;
+};
+
+export type SuggestedFormat = 'post' | 'carousel' | 'reel';
+export type FormatConfidence = 'user' | 'llm' | 'rule' | 'page_default';
+
+export type Topic = {
+  id: string;
+  title: string;
+  keywords: string[];
+  sources: string[];
+  score: number | null;
+  decision: string | null;
+  state: string;
+  suggestedFormat: SuggestedFormat | null;
+  formatConfidence: FormatConfidence | null;
+  // UI-side fields (from mock / enriched API)
+  platform?: 'reddit' | 'twitter' | 'trends' | 'rss';
+  tags?: string[];
+  status?: 'review' | 'approved' | 'scheduled' | 'posted';
+};
+
+export type ContentItem = {
+  id: string;
+  type: 'post' | 'reel' | 'carousel';
+  status: string;
+  payload: any;
+  qa_result: any;
+  topic_title: string;
+  page_name: string;
+  platform: string;
+  handle: string;
+};
+
+export type Post = {
+  id: string;
+  state: string;
+  scheduled_at: string;
+  platform: string;
+  page_name: string;
+  topic_title: string;
+  dry_run: boolean;
+  type: string;
+};
+
+export type Stats = {
+  topics: number;
+  selected_topics: number;
+  qa_ready: number;
+  approved: number;
+  scheduled: number;
+  posted: number;
+};
+
+export type SchedulerSlot = {
+  id: string;
+  title: string;
+  time: string;
+  type: 'Carousel' | 'Reel' | 'Post';
+  status: 'posted' | 'scheduled';
+};
+
+export type AnalyticsData = {
+  views: number[];
+  saves: number[];
+  follows: number[];
+  months: string[];
+  topPosts: { title: string; views: string; saves: string; type: string }[];
+};
