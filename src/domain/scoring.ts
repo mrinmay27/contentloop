@@ -1,23 +1,29 @@
 import type { Niche, RawTrend, Topic, TopicDecision } from "./types.js";
+import { seasonalScoreMultiplier } from "./seasonal-context.js";
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
 // ─── Task 2.9: Source quality multipliers ────────────────────────────────────
 const SOURCE_QUALITY_MULTIPLIER: Record<string, number> = {
-  hacker_news: 1.3,
-  hackernews: 1.3,
-  arxiv: 1.25,
-  pubmed: 1.25,
-  substack: 1.25,
-  exploding_topics: 1.2,
-  medium_pub: 1.2,
-  medium: 1.1,
-  devto: 1.05,
-  reddit: 1.0,
-  twitter: 0.9,
-  google_trends: 0.8,
-  google_news: 0.85,
-  rss: 0.95,
+  hacker_news:        1.30,
+  hackernews:         1.30,
+  arxiv:              1.25,
+  pubmed:             1.25,
+  substack:           1.25,
+  exploding_topics:   1.20,
+  medium_pub:         1.20,
+  product_hunt:       1.18,
+  finance_newsletter: 1.15,
+  youtube_trends:     1.15,
+  medium:             1.10,
+  devto:              1.05,
+  pinterest_trends:   1.05,
+  crypto_news:        1.00,
+  reddit:             1.00,
+  rss:                0.95,
+  google_news:        0.85,
+  twitter:            0.90,
+  google_trends:      0.80,
 };
 
 /** Returns a quality multiplier for a given source label (default: 1.0). */
@@ -103,7 +109,7 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[]): 
   );
   const sourceBoost = clamp01((bestSourceMultiplier - 1.0) * 0.5);
 
-  const score = clamp01(
+  const rawScore = clamp01(
     0.10 * recency +
     0.10 * crossSourceMentions +
     0.10 * velocity +
@@ -113,6 +119,10 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[]): 
     0.08 * (hasNegativeMatch ? 0 : 1) +
     0.06 * sourceBoost
   );
+
+  // Task 2.5.5: Apply seasonal multiplier (+0–10% when topic matches current season)
+  const seasonal = seasonalScoreMultiplier(`${topic.title} ${topic.keywords.join(" ")}`);
+  const score = clamp01(rawScore * seasonal);
 
   const decision = hasNegativeMatch
     ? "discarded" as TopicDecision

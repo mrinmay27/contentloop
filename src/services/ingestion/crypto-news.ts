@@ -51,7 +51,7 @@ export async function fetchCryptoTrends(keywords: string[]): Promise<RawTrend[]>
           : feed.engagementHint;
 
         trends.push({
-          source: "rss",
+          source: "crypto_news",
           title: item.title,
           url: item.link,
           keywords: [...keywords.slice(0, 5), "crypto", feed.name.toLowerCase()],

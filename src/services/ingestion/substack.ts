@@ -54,7 +54,7 @@ export async function fetchSubstackTrends(
           sourcePublishedAt: item.pubDate,
           observedAt: new Date(),
           engagementHint: 85,
-        } as RawTrend & { source: "substack" } as any);
+        });
       }
     } catch (err: any) {
       console.error(`[substack] Failed to fetch "${slug}": ${err?.message}`);

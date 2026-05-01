@@ -59,7 +59,11 @@ export interface Page {
 }
 
 export interface RawTrend {
-  source: "google_trends" | "reddit" | "rss" | "twitter" | "google_news" | "medium" | "hacker_news";
+  source:
+    | "google_trends" | "reddit" | "rss" | "twitter" | "google_news" | "medium" | "hacker_news"
+    | "arxiv" | "devto" | "substack" | "pubmed" | "exploding_topics"
+    | "product_hunt" | "crypto_news" | "finance_newsletter"
+    | "youtube_trends" | "pinterest_trends";
   title: string;
   url?: string;
   keywords: string[];

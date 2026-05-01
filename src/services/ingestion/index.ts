@@ -1,16 +1,10 @@
 /** Ingestion index — wires all sources.
  *  Task 2.0: Uses LLM-generated PageSourceMap (tag-generator) when available.
- *  Task 2.1: Medium (fully wired)
- *  Task 2.2: HackerNews (fully wired)
- *  Task 2.3: Dev.to (new)
- *  Task 2.5: Substack (new)
- *  Task 2.5.2: PubMed (health niches)
- *  Task 2.5.7: Google News with niche-specific queries
- *  Task 2.5.8: Crypto RSS (finance+crypto niches only)
- *  Task 2.6: Exploding Topics (all niches — reel-biased early signals)
- *  Task 2.7: Product Hunt (tech/business niches)
- *  Task 2.8: Finance Newsletter RSS (finance/business/tech)
- *  Falls back to heuristics when no cached source map exists.
+ *  Task 2.1: Medium  Task 2.2: HackerNews  Task 2.3: Dev.to  Task 2.5: Substack
+ *  Task 2.5.2: PubMed  Task 2.5.3: Pinterest Trends  Task 2.5.4: YouTube Trending
+ *  Task 2.5.7: Google News  Task 2.5.8: Crypto RSS
+ *  Task 2.6: Exploding Topics  Task 2.7: Product Hunt  Task 2.8: Finance Newsletters
+ *  Per-source enable/disable respected via PageSourceMap.sourceEnabled.
  */
 
 import type { Niche, RawTrend } from "../../domain/types.js";
@@ -29,6 +23,8 @@ import { fetchPubMedTrends } from "./pubmed.js";
 import { fetchRedditTrends } from "./reddit.js";
 import { fetchRssTrends } from "./rss.js";
 import { fetchSubstackTrends } from "./substack.js";
+import { fetchPinterestTrends } from "./pinterest-trends.js";
+import { fetchYouTubeTrends } from "./youtube-trends.js";
 
 
 export async function ingestForNiche(niche: Niche, pageId?: string): Promise<RawTrend[]> {
@@ -57,26 +53,34 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
   const usePubMed  = ["health", "food"].includes(category);
 
   const source = cachedMap ? "cached-llm-map" : "heuristics";
+  const enabled = cachedMap?.sourceEnabled ?? {};
+  const isEnabled = (src: string) => enabled[src] !== false; // default: enabled
+
   console.log(`[ingest] ${niche.name} | category=${category} | source=${source} | subreddits=${subreddits.length} | rss=${rssFeeds.length}`);
 
   const results = await Promise.allSettled([
-    fetchRedditTrends(subreddits, niche.keywords),
-    fetchRssTrends(rssFeeds),
-    fetchGoogleNewsTrends(niche.keywords),
-    fetchMediumTrends(niche.name, niche.keywords),
-    fetchHackerNewsTrends(niche.keywords),
-    devtoTags.length     > 0 ? fetchDevToTrends(devtoTags, niche.keywords)        : Promise.resolve([]),
-    substackSlugs.length > 0 ? fetchSubstackTrends(substackSlugs, niche.keywords) : Promise.resolve([]),
-    arxivCategories.length > 0 ? fetchArxivTrends(category, niche.keywords.slice(0, 3)) : Promise.resolve([]),
-    isCrypto  ? fetchCryptoTrends(niche.keywords)                                  : Promise.resolve([]),
-    usePubMed ? fetchPubMedTrends(niche.keywords.slice(0, 3))                      : Promise.resolve([]),
-    // Task 2.6: Exploding Topics — early-signal reel-biased trends (all niches)
-    fetchExplodingTopicsTrends(category, niche.keywords.slice(0, 4)),
-    // Task 2.7: Product Hunt — product launches for tech/business niches
-    fetchProductHuntTrends(category, niche.keywords),
-    // Task 2.8: Finance newsletter RSS — finance/business/tech curated content
-    fetchFinanceNewsletterTrends(category, niche.keywords),
-
+    isEnabled("reddit")             ? fetchRedditTrends(subreddits, niche.keywords)                      : Promise.resolve([]),
+    isEnabled("rss")                ? fetchRssTrends(rssFeeds)                                           : Promise.resolve([]),
+    isEnabled("google_news")        ? fetchGoogleNewsTrends(niche.keywords)                              : Promise.resolve([]),
+    isEnabled("medium")             ? fetchMediumTrends(niche.name, niche.keywords)                      : Promise.resolve([]),
+    isEnabled("hacker_news")        ? fetchHackerNewsTrends(niche.keywords)                              : Promise.resolve([]),
+    isEnabled("devto")              && devtoTags.length > 0
+      ? fetchDevToTrends(devtoTags, niche.keywords)                                                      : Promise.resolve([]),
+    isEnabled("substack")           && substackSlugs.length > 0
+      ? fetchSubstackTrends(substackSlugs, niche.keywords)                                               : Promise.resolve([]),
+    isEnabled("arxiv")              && arxivCategories.length > 0
+      ? fetchArxivTrends(category, niche.keywords.slice(0, 3))                                          : Promise.resolve([]),
+    isEnabled("crypto_news")        && isCrypto
+      ? fetchCryptoTrends(niche.keywords)                                                                : Promise.resolve([]),
+    isEnabled("pubmed")             && usePubMed
+      ? fetchPubMedTrends(niche.keywords.slice(0, 3))                                                    : Promise.resolve([]),
+    isEnabled("exploding_topics")   ? fetchExplodingTopicsTrends(category, niche.keywords.slice(0, 4))  : Promise.resolve([]),
+    isEnabled("product_hunt")       ? fetchProductHuntTrends(category, niche.keywords)                  : Promise.resolve([]),
+    isEnabled("finance_newsletter") ? fetchFinanceNewsletterTrends(category, niche.keywords)            : Promise.resolve([]),
+    // Task 2.5.3: Pinterest Trends — visual niches (food, travel, creative, health, lifestyle)
+    isEnabled("pinterest_trends")   ? fetchPinterestTrends(category as any, niche.keywords)             : Promise.resolve([]),
+    // Task 2.5.4: YouTube Trending — cross-platform reel signal (tech, edu, entertainment, etc.)
+    isEnabled("youtube_trends")     ? fetchYouTubeTrends(category as any, niche.keywords)               : Promise.resolve([]),
   ]);
 
   const all = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));

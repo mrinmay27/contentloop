@@ -348,6 +348,19 @@ app.delete("/api/pages/:id/sources", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// PATCH: update per-source enable/disable toggles
+app.patch("/api/pages/:id/sources/toggles", async (req, res, next) => {
+  try {
+    const { getCachedSourceMap, setCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
+    const map = getCachedSourceMap(req.params.id);
+    if (!map) return void res.status(404).json({ error: "No source map for this page — generate one first" });
+    const toggles = z.record(z.string(), z.boolean()).parse(req.body);
+    map.sourceEnabled = { ...(map.sourceEnabled ?? {}), ...toggles };
+    setCachedSourceMap(req.params.id, map);
+    res.json({ ok: true, sourceEnabled: map.sourceEnabled });
+  } catch (error) { next(error); }
+});
+
 
 app.post("/api/jobs/:name", async (req, res, next) => {
   try {

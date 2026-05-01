@@ -27,9 +27,14 @@ export function suggestFormatByRules(
     return { format: "reel" };
   }
 
-  // ── Exploding Topics → always reel (early trend signal) ─────────────────
-  if (src.includes("exploding_topics")) {
+  // ── Early/trend signal sources → always reel ─────────────────────────────
+  if (src.includes("exploding_topics") || src.includes("youtube_trends") || src.includes("pinterest_trends")) {
     return { format: "reel" };
+  }
+
+  // ── Product launches → post (announcement format) ────────────────────────
+  if (src.includes("product_hunt")) {
+    return { format: "post" };
   }
 
   // ── Long-form / research sources → carousel ──────────────────────────────
@@ -40,6 +45,9 @@ export function suggestFormatByRules(
     src.includes("hacker_news") ||
     src.includes("arxiv") ||
     src.includes("pubmed") ||
+    src.includes("devto") ||
+    src.includes("finance_newsletter") ||
+    src.includes("crypto_news") ||
     bodyWordCount > 300
   ) {
     return { format: "carousel" };

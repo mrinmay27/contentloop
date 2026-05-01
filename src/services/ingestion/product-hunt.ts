@@ -146,7 +146,7 @@ export async function fetchProductHuntTrends(
     const hint = Math.min(95, ENGAGEMENT_HINT + voteBoost);
 
     return {
-      source:            "hacker_news" as const,  // same scoring tier as HN
+      source:            "product_hunt" as const,
       title:             `${post.name}: ${post.tagline}`,
       url:               post.url,
       keywords:          [

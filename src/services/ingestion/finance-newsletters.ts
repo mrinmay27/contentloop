@@ -64,8 +64,8 @@ export async function fetchFinanceNewsletterTrends(
 
   try {
     const trends = await fetchRssTrends(feeds);
-    // Boost engagement hint for newsletter content (curated = higher quality)
-    const boosted = trends.map(t => ({ ...t, engagementHint: 78 }));
+    // Override source + boost engagement hint for newsletter content
+    const boosted = trends.map(t => ({ ...t, source: "finance_newsletter" as const, engagementHint: 78 }));
     console.log(`[finance-newsletters] ✓ ${boosted.length} newsletter articles fetched`);
     return boosted;
   } catch (err: any) {

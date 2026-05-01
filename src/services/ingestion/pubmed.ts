@@ -135,7 +135,7 @@ export async function fetchPubMedTrends(keywords: string[]): Promise<RawTrend[]>
     const validDate = isNaN(pubDate.getTime()) ? new Date() : pubDate;
 
     return {
-      source:            "hacker_news" as const, // Mapped to closest scoring tier — PubMed gets its own multiplier via source name
+      source:            "pubmed" as const,
       title:             carouselTitle(s.title, keywords),
       url:               `https://pubmed.ncbi.nlm.nih.gov/${s.uid}/`,
       keywords:          keywords.slice(0, 5),

@@ -51,7 +51,7 @@ export async function fetchDevToTrends(tags: string[], keywords: string[]): Prom
           sourcePublishedAt: article.published_at ? new Date(article.published_at) : undefined,
           observedAt: new Date(),
           engagementHint: Math.min(100, Math.round(article.positive_reactions_count / 5)),
-        } as RawTrend & { source: "devto" } as any);
+        });
       }
     } catch (err: any) {
       console.error(`[devto] Failed to fetch tag "${tag}": ${err?.message}`);

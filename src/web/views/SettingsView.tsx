@@ -710,6 +710,24 @@ function TagPills({ items, color = 'var(--accent)' }: { items: string[]; color?:
   );
 }
 
+const ALL_SOURCES: { key: string; label: string; icon: string }[] = [
+  { key: 'reddit',             label: 'Reddit',               icon: '🔴' },
+  { key: 'rss',                label: 'RSS Feeds',            icon: '📰' },
+  { key: 'google_news',        label: 'Google News',          icon: '🔍' },
+  { key: 'medium',             label: 'Medium',               icon: '✍️' },
+  { key: 'hacker_news',        label: 'Hacker News',          icon: '🔶' },
+  { key: 'devto',              label: 'Dev.to',               icon: '💻' },
+  { key: 'substack',           label: 'Substack',             icon: '📧' },
+  { key: 'arxiv',              label: 'arXiv',                icon: '📚' },
+  { key: 'pubmed',             label: 'PubMed',               icon: '🔬' },
+  { key: 'exploding_topics',   label: 'Exploding Topics',     icon: '🚀' },
+  { key: 'product_hunt',       label: 'Product Hunt',         icon: '🐱' },
+  { key: 'crypto_news',        label: 'Crypto News',          icon: '₿'  },
+  { key: 'finance_newsletter', label: 'Finance Newsletters',  icon: '💰' },
+  { key: 'youtube_trends',     label: 'YouTube Trending',     icon: '▶️' },
+  { key: 'pinterest_trends',   label: 'Pinterest Trends',     icon: '📌' },
+];
+
 function ContentSourcesSection() {
   const [pages,      setPages]      = useState<any[]>([]);
   const [pageId,     setPageId]     = useState('');
@@ -717,6 +735,7 @@ function ContentSourcesSection() {
   const [loading,    setLoading]    = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [msg,        setMsg]        = useState<string | null>(null);
+  const [togglingSource, setTogglingSource] = useState<string | null>(null);
 
   useEffect(() => {
     api.getPages().then((ps: any[]) => {
@@ -751,6 +770,23 @@ function ContentSourcesSection() {
     setMap(null);
     setMsg('🗑 Cache cleared — will regenerate on next ingest');
     setTimeout(() => setMsg(null), 3000);
+  };
+
+  const handleToggleSource = async (sourceKey: string, enabled: boolean) => {
+    if (!pageId || !map) return;
+    setTogglingSource(sourceKey);
+    // Optimistic update
+    setMap((m: any) => m ? { ...m, sourceEnabled: { ...(m.sourceEnabled ?? {}), [sourceKey]: enabled } } : m);
+    try {
+      await api.updatePageSourceToggles(pageId, { [sourceKey]: enabled });
+    } catch {
+      // Revert on failure
+      setMap((m: any) => m ? { ...m, sourceEnabled: { ...(m.sourceEnabled ?? {}), [sourceKey]: !enabled } } : m);
+      setMsg('✗ Failed to save toggle');
+      setTimeout(() => setMsg(null), 2000);
+    } finally {
+      setTogglingSource(null);
+    }
   };
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -811,9 +847,11 @@ function ContentSourcesSection() {
         )}
       </div>
 
-      {loading ? (
+      {loading && (
         <div style={{ color:'var(--text-muted)', fontSize:13 }}>Loading…</div>
-      ) : !map ? (
+      )}
+
+      {!loading && !map && (
         <div style={{ padding:'20px 16px', background:'var(--bg-elevated)',
           border:'1px solid var(--border)', borderRadius:'var(--radius)',
           color:'var(--text-muted)', fontSize:12, lineHeight:1.8 }}>
@@ -824,57 +862,107 @@ function ContentSourcesSection() {
           This runs one LLM call and caches the result for 7 days.
           During each ingest run the cached map is used automatically.
         </div>
-      ) : (
-        <div style={{ background:'var(--bg-surface)', border:'1px solid var(--border)',
-          borderRadius:'var(--radius)', padding:'0 16px' }}>
-          <Row label="Niche category">
-            <span className="badge badge-green" style={{ fontSize:11 }}>{map.nicheCategory}</span>
-          </Row>
-          <Row label="Default format">
-            <span className="badge badge-muted" style={{ fontSize:11, textTransform:'uppercase' }}>
-              {map.defaultFormat}
-            </span>
-          </Row>
-          <Row label="Subreddits">
-            <TagPills items={map.redditSubreddits} color="var(--accent)" />
-          </Row>
-          <Row label="Medium tags">
-            <TagPills items={map.mediumTags} color="#00ab6c" />
-          </Row>
-          <Row label="HN search terms">
-            <TagPills items={map.hackernewsTerms} color="#ff6600" />
-          </Row>
-          <Row label="Substack newsletters">
-            <TagPills items={map.substackSlugs} color="#ff6719" />
-          </Row>
-          <Row label="Dev.to tags">
-            <TagPills items={map.devtoTags} color="#3b49df" />
-          </Row>
-          {map.arxivCategories?.length > 0 && (
-            <Row label="arXiv categories">
-              <TagPills items={map.arxivCategories} color="#b31b1b" />
+      )}
+
+      {!loading && map && (
+        <div>
+          <div style={{ background:'var(--bg-surface)', border:'1px solid var(--border)',
+            borderRadius:'var(--radius)', padding:'0 16px' }}>
+            <Row label="Niche category">
+              <span className="badge badge-green" style={{ fontSize:11 }}>{map.nicheCategory}</span>
             </Row>
-          )}
-          <Row label="RSS feeds">
-            {(!map.rssFeeds || map.rssFeeds.length === 0) ? (
-              <span style={{ fontSize:11, color:'var(--text-muted)' }}>None verified</span>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                {map.rssFeeds.map((f: any, i: number) => (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <span style={{ fontSize:10, color:'var(--green)' }}>✓</span>
-                    <a href={f.url} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize:11, color:'var(--accent)', textDecoration:'none' }}>
-                      {f.name}
-                    </a>
-                    <span style={{ fontSize:10, color:'var(--text-muted)',
-                      fontFamily:'var(--mono)', overflow:'hidden', textOverflow:'ellipsis',
-                      whiteSpace:'nowrap', maxWidth:240 }}>{f.url}</span>
-                  </div>
-                ))}
-              </div>
+            <Row label="Default format">
+              <span className="badge badge-muted" style={{ fontSize:11, textTransform:'uppercase' }}>
+                {map.defaultFormat}
+              </span>
+            </Row>
+            <Row label="Subreddits">
+              <TagPills items={map.redditSubreddits} color="var(--accent)" />
+            </Row>
+            <Row label="Medium tags">
+              <TagPills items={map.mediumTags} color="#00ab6c" />
+            </Row>
+            <Row label="HN search terms">
+              <TagPills items={map.hackernewsTerms} color="#ff6600" />
+            </Row>
+            <Row label="Substack newsletters">
+              <TagPills items={map.substackSlugs} color="#ff6719" />
+            </Row>
+            <Row label="Dev.to tags">
+              <TagPills items={map.devtoTags} color="#3b49df" />
+            </Row>
+            {map.arxivCategories?.length > 0 && (
+              <Row label="arXiv categories">
+                <TagPills items={map.arxivCategories} color="#b31b1b" />
+              </Row>
             )}
-          </Row>
+            <Row label="RSS feeds">
+              {(!map.rssFeeds || map.rssFeeds.length === 0) ? (
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>None verified</span>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  {map.rssFeeds.map((f: any, i: number) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontSize:10, color:'var(--green)' }}>✓</span>
+                      <a href={f.url} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize:11, color:'var(--accent)', textDecoration:'none' }}>
+                        {f.name}
+                      </a>
+                      <span style={{ fontSize:10, color:'var(--text-muted)',
+                        fontFamily:'var(--mono)', overflow:'hidden', textOverflow:'ellipsis',
+                        whiteSpace:'nowrap', maxWidth:240 }}>{f.url}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Row>
+          </div>
+
+          <div style={{ marginTop:20 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)',
+              letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>
+              Source Enable / Disable
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:6 }}>
+              {ALL_SOURCES.map(src => {
+                const isOn = (map.sourceEnabled ?? {})[src.key] !== false;
+                return (
+                  <div key={src.key} style={{
+                    display:'flex', alignItems:'center', justifyContent:'space-between',
+                    padding:'8px 12px', borderRadius:'var(--radius-sm)',
+                    background:'var(--bg-elevated)', border:'1px solid var(--border)',
+                    opacity: isOn ? 1 : 0.55,
+                  }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:7, minWidth:0 }}>
+                      <span style={{ fontSize:14, flexShrink:0 }}>{src.icon}</span>
+                      <span style={{ fontSize:12, color:'var(--text-primary)',
+                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {src.label}
+                      </span>
+                    </div>
+                    <div
+                      onClick={() => handleToggleSource(src.key, !isOn)}
+                      title={isOn ? 'Click to disable' : 'Click to enable'}
+                      style={{
+                        cursor:'pointer', position:'relative', flexShrink:0,
+                        width:32, height:18, borderRadius:9, marginLeft:8,
+                        background: isOn ? 'var(--accent)' : 'var(--bg-hover)',
+                        border:'1px solid var(--border)', transition:'background 0.2s',
+                      }}>
+                      <div style={{
+                        position:'absolute', top:1, left: isOn ? 14 : 1,
+                        width:14, height:14, borderRadius:'50%', background:'#fff',
+                        transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,.3)',
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:8 }}>
+              Disabled sources are skipped during ingest. Changes take effect on the next pipeline run.
+            </div>
+          </div>
         </div>
       )}
     </div>

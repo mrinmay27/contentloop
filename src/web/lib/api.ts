@@ -100,4 +100,10 @@ export const api = {
   getPageSources:     (pageId: string) => req<{ map: any | null }>(`/pages/${pageId}/sources`),
   refreshPageSources: (pageId: string) => req<{ ok: boolean; map: any }>(`/pages/${pageId}/sources/refresh`, { method: 'POST' }),
   clearPageSources:   (pageId: string) => req<{ ok: boolean }>(`/pages/${pageId}/sources`, { method: 'DELETE' }),
+  updatePageSourceToggles: (pageId: string, toggles: Record<string, boolean>) =>
+    req<{ ok: boolean; sourceEnabled: Record<string, boolean> }>(`/pages/${pageId}/sources/toggles`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(toggles),
+    }),
 };

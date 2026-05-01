@@ -153,7 +153,7 @@ export async function fetchExplodingTopicsTrends(
   }
 
   const trends: RawTrend[] = unique.map(topic => ({
-    source:            "hacker_news" as const,  // mapped to closest scoring tier
+    source:            "exploding_topics" as const,
     title:             topic.name,
     url:               topic.slug
       ? `${BASE}/topics/${topic.slug}`

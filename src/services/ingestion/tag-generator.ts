@@ -28,6 +28,8 @@ export interface PageSourceMap {
   rssFeeds: Array<{ name: string; url: string; verified?: boolean }>;
   defaultFormat:      "post" | "carousel" | "reel";
   nicheCategory:      string;
+  /** Per-source enable/disable toggles. Absent key = enabled (default on). */
+  sourceEnabled?:     Record<string, boolean>;
 }
 
 // ─── Cache on disk ────────────────────────────────────────────────────────────

@@ -47,15 +47,38 @@ function sleep(ms: number): Promise<void> {
 
 // ─── 1. Docker Daemon Check ──────────────────────────────
 
-function ensureDocker(): void {
+async function ensureDocker(): Promise<void> {
   log("🐳 docker", "Checking Docker daemon...");
   try {
     exec("docker info");
     log("🐳 docker", "Docker daemon is running ✓");
+    return;
   } catch {
-    log("❌ error", "Docker is not running! Please start Docker Desktop and try again.");
+    // not running — try to start it (macOS only)
+  }
+
+  log("🐳 docker", "Docker not running. Attempting to start Docker Desktop...");
+  try {
+    exec("open -a Docker");
+  } catch {
+    log("❌ error", "Could not launch Docker Desktop. Please start it manually and retry.");
     process.exit(1);
   }
+
+  // Poll up to 60 s for the daemon to become ready
+  for (let i = 0; i < 60; i++) {
+    await sleep(1000);
+    try {
+      exec("docker info");
+      log("🐳 docker", `Docker daemon is ready ✓ (took ~${i + 1}s)`);
+      return;
+    } catch {
+      if (i % 10 === 9) log("🐳 docker", `Still waiting for Docker... (${i + 1}s)`);
+    }
+  }
+
+  log("❌ error", "Docker didn't start within 60 s. Please start Docker Desktop manually.");
+  process.exit(1);
 }
 
 // ─── 2. Start Docker Compose Services ────────────────────
@@ -192,7 +215,7 @@ async function main(): Promise<void> {
   console.log("\x1b[1m\x1b[36m║   🎨 Theme Page Content Engine — Dev Mode    ║\x1b[0m");
   console.log("\x1b[1m\x1b[36m╚══════════════════════════════════════════════╝\x1b[0m\n");
 
-  ensureDocker();
+  await ensureDocker();
   startDockerServices();
 
   await Promise.all([waitForPostgres(), waitForRedis()]);

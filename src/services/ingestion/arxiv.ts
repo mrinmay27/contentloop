@@ -59,7 +59,7 @@ export async function fetchArxivTrends(
           sourcePublishedAt: entry.published,
           observedAt: new Date(),
           engagementHint: 85, // High authority source baseline
-        } as RawTrend & { source: "arxiv" } as any);
+        });
       }
     } catch (err: any) {
       console.error(`[arxiv] Failed category "${category}": ${err?.message}`);
