@@ -52,21 +52,20 @@ async function generateOpenAI(prompt: string, model: string): Promise<string> {
 async function generateGoogle(prompt: string, model: string): Promise<string> {
   const apiKey = configStore.get('GOOGLE_AI_API_KEY');
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateImages?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: { text: prompt },
-        number_of_images: 1,
-        aspect_ratio: 'IMAGE_ASPECT_RATIO_SQUARE',
+        instances:  [{ prompt }],
+        parameters: { sampleCount: 1, aspectRatio: '1:1' },
       }),
       signal: AbortSignal.timeout(60_000),
     }
   );
   if (!res.ok) throw new Error(`Google Imagen ${res.status}: ${await res.text()}`);
   const data: any = await res.json();
-  const b64 = data.generatedImages?.[0]?.image?.imageBytes;
+  const b64 = data.predictions?.[0]?.bytesBase64Encoded;
   if (!b64) throw new Error('Google Imagen returned no image data');
   return `data:image/png;base64,${b64}`;
 }
