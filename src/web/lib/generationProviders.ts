@@ -45,7 +45,6 @@ export const IMAGE_PROVIDER_DEFS: ImageProviderDef[] = [
     keyName: 'GOOGLE_AI_API_KEY', logoRank: 3,
     models: [
       { id: 'gemini-2.0-flash-preview-image-generation', label: 'Gemini 2.0 Flash (Image)', description: 'AI Studio key · free tier · fast' },
-      { id: 'gemini-2.0-flash-exp',                      label: 'Gemini 2.0 Flash Exp',     description: 'Experimental · higher quality' },
     ],
     docsUrl: 'https://aistudio.google.com/app/apikey', docsLabel: 'Google AI Studio →',
     note: 'Uses your Google AI Studio key — works with free tier',

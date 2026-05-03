@@ -23,18 +23,27 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
   const [logoUrl,       setLogoUrl]       = useState('');
   const [error,         setError]         = useState<string | null>(null);
 
+  const [capabilities, setCapabilities] = useState<Record<string, any>>({});
+
   useEffect(() => {
-    api.getConfig().then((cfg: any) => {
-      const vals = cfg.values ?? {};
-      setConfig(vals);
-      const first = [...IMAGE_PROVIDER_DEFS]
-        .sort((a, b) => a.logoRank - b.logoRank)
-        .find(def => (vals[def.keyName]?.value ?? '').length > 0);
-      if (first) {
-        setSelected(first.id);
-        setSelectedModel(first.models[0]?.id ?? '');
-      }
-    }).catch(() => {});
+    Promise.all([api.getConfig(), api.getProviderCapabilities()])
+      .then(([cfg, { capabilities: caps }]) => {
+        const vals = cfg.values ?? {};
+        setConfig(vals);
+        setCapabilities(caps ?? {});
+        const first = [...IMAGE_PROVIDER_DEFS]
+          .sort((a, b) => a.logoRank - b.logoRank)
+          .find(def => (vals[def.keyName]?.value ?? '').length > 0);
+        if (first) {
+          setSelected(first.id);
+          // Prefer first recommended model from capabilities, fallback to static list
+          const imageModels = (caps ?? {})[first.id]?.image ?? [];
+          const bestModel = (imageModels.find((m: any) => m.recommended) ?? imageModels[0])?.id
+            ?? first.models[0]?.id ?? '';
+          setSelectedModel(bestModel);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Auto-fill prompt whenever brand values change, unless user has manually edited it
@@ -60,9 +69,12 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
   const rankedDefs    = [...IMAGE_PROVIDER_DEFS].sort((a, b) => a.logoRank - b.logoRank);
 
   const handleProviderSelect = (id: string) => {
-    const def = IMAGE_PROVIDER_DEFS.find(d => d.id === id);
+    const def       = IMAGE_PROVIDER_DEFS.find(d => d.id === id);
+    const liveImgs  = capabilities[id]?.image ?? [];
+    const bestModel = (liveImgs.find((m: any) => m.recommended) ?? liveImgs[0])?.id
+      ?? def?.models[0]?.id ?? '';
     setSelected(id);
-    setSelectedModel(def?.models[0]?.id ?? '');
+    setSelectedModel(bestModel);
   };
 
   const handleGenerate = async () => {
@@ -159,9 +171,18 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
               </label>
               <select value={selectedModel} style={{ width: '100%', fontSize: 11 }}
                 onChange={e => setSelectedModel(e.target.value)}>
-                {(IMAGE_PROVIDER_DEFS.find(d => d.id === selected)?.models ?? []).map(m => (
-                  <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
-                ))}
+                {(() => {
+                  const liveModels: Array<{ id: string; label: string; description?: string }> =
+                    capabilities[selected]?.image ?? [];
+                  const opts = liveModels.length > 0
+                    ? liveModels
+                    : (IMAGE_PROVIDER_DEFS.find(d => d.id === selected)?.models ?? []);
+                  return opts.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}{m.description ? ` — ${m.description}` : ''}
+                    </option>
+                  ));
+                })()}
               </select>
             </div>
           )}

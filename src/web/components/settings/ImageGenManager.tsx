@@ -25,22 +25,49 @@ export const ImageGenManager: React.FC = () => {
   const [capabilities, setCapabilities] = useState<Record<string, any>>({});
   const [probing,      setProbing]      = useState<Record<string, boolean>>({});
 
-  // Load config + cached capabilities on mount
+  // Load config + cached capabilities, then auto-probe any connected provider with no cache
   useEffect(() => {
-    api.getConfig().then((cfg: any) => {
-      const vals = cfg.values ?? {};
-      setConfig(vals);
-      try {
-        const p = JSON.parse(vals.IMAGE_PROVIDER_PRIORITY?.value || '[]');
-        if (Array.isArray(p) && p.length > 0) setPriority(p);
-      } catch {}
-      try { setModelPrefs(JSON.parse(vals.IMAGE_MODEL_PREFS?.value || '{}')); } catch {}
-    }).catch(() => {});
+    Promise.all([api.getConfig(), api.getProviderCapabilities()])
+      .then(([cfg, { capabilities: caps }]) => {
+        const vals = cfg.values ?? {};
+        setConfig(vals);
+        setCapabilities(caps ?? {});
+        try {
+          const p = JSON.parse(vals.IMAGE_PROVIDER_PRIORITY?.value || '[]');
+          if (Array.isArray(p) && p.length > 0) setPriority(p);
+        } catch {}
+        try { setModelPrefs(JSON.parse(vals.IMAGE_MODEL_PREFS?.value || '{}')); } catch {}
 
-    api.getProviderCapabilities().then(({ capabilities: caps }) => {
-      setCapabilities(caps ?? {});
-    }).catch(() => {});
+        // Auto-probe every connected provider that has no cached capabilities yet
+        IMAGE_PROVIDER_DEFS.forEach(def => {
+          const key = vals[def.keyName]?.value ?? '';
+          if (key.length > 0 && !caps[def.id]) {
+            runProbe(def.id);
+          }
+        });
+      })
+      .catch(() => {});
   }, []);
+
+  const runProbe = (providerId: string) => {
+    setProbing(p => ({ ...p, [providerId]: true }));
+    api.probeImageProvider(providerId)
+      .then(({ capabilities: caps }) => {
+        setCapabilities(prev => ({ ...prev, [providerId]: caps }));
+        if (caps?.status === 'ok' && caps.image?.length > 0) {
+          setModelPrefs(prev => {
+            if (prev[providerId]) return prev;
+            const rec = caps.image.find((m: any) => m.recommended) ?? caps.image[0];
+            if (!rec) return prev;
+            const next = { ...prev, [providerId]: rec.id };
+            setDirty(d => ({ ...d, IMAGE_MODEL_PREFS: JSON.stringify(next) }));
+            return next;
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setProbing(p => ({ ...p, [providerId]: false })));
+  };
 
   const getKeyValue = (keyName: string) =>
     dirty[keyName] ?? config[keyName]?.value ?? '';
@@ -81,22 +108,7 @@ export const ImageGenManager: React.FC = () => {
       setDirty({});
       setSaveMsg('✓ Saved');
 
-      for (const providerId of affectedProviders) {
-        setProbing(p => ({ ...p, [providerId]: true }));
-        api.probeImageProvider(providerId)
-          .then(({ capabilities: caps }) => {
-            setCapabilities(prev => ({ ...prev, [providerId]: caps }));
-            // Auto-set preferred model to first recommended image model if not yet set
-            if (caps?.status === 'ok' && caps.image?.length > 0 && !modelPrefs[providerId]) {
-              const recommended = caps.image.find((m: any) => m.recommended) ?? caps.image[0];
-              if (recommended) {
-                handleModelPrefChange(providerId, recommended.id);
-              }
-            }
-          })
-          .catch(() => {})
-          .finally(() => setProbing(p => ({ ...p, [providerId]: false })));
-      }
+      for (const providerId of affectedProviders) runProbe(providerId);
     } catch {
       setSaveMsg('✗ Save failed');
     } finally {
@@ -182,8 +194,15 @@ export const ImageGenManager: React.FC = () => {
                       ? 'color-mix(in srgb, var(--green) 30%, transparent)'
                       : 'var(--border)'}`,
                   }}>
-                    {connected ? '● Connected' : '○ No key'}
+                    {probing[def.id] ? '⟳ Detecting…' : connected ? '● Connected' : '○ No key'}
                   </span>
+                  {connected && !probing[def.id] && (
+                    <button title="Re-detect models" onClick={() => runProbe(def.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px', lineHeight: 1 }}>
+                      ↻
+                    </button>
+                  )}
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '3px 8px' }}
                     onClick={() => setExpanded(isOpen ? null : def.id)}>
                     {isOpen ? '▲' : 'Set up'}
