@@ -84,7 +84,16 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
       const result = await api.generateImage({ prompt: prompt.trim(), provider: selected, model: selectedModel });
       setLogoUrl(result.url);
     } catch (err: any) {
-      setError(err?.message ?? 'Logo generation failed');
+      const raw = err?.message ?? '';
+      let friendly = raw;
+      if (/429|quota|RESOURCE_EXHAUSTED/i.test(raw)) {
+        friendly = 'Quota exceeded for this model. Enable billing in Google Cloud Console, or switch to a different model (e.g. gemini-2.0-flash-preview-image-generation).';
+      } else if (/paid plan|upgrade your account/i.test(raw)) {
+        friendly = 'This model requires a paid Google Cloud plan. Try switching to gemini-2.0-flash-preview-image-generation which works on AI Studio free tier.';
+      } else if (/vertex/i.test(raw) || /NOT_FOUND/i.test(raw)) {
+        friendly = 'Model not accessible via AI Studio key. Select a Gemini image model instead of an Imagen model.';
+      }
+      setError(friendly || 'Logo generation failed');
     } finally { setGenerating(false); }
   };
 

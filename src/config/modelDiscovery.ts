@@ -137,12 +137,20 @@ async function probeGoogle(apiKey: string): Promise<DiscoveredCapabilities> {
   const videoModels: DiscoveredModel[] = [];
 
   for (const m of rawModels) {
-    const id    = (m.name as string).replace('models/', '');
-    const label = m.displayName ?? id;
+    const id      = (m.name as string).replace('models/', '');
+    const rawDesc = (m.description ?? '') as string;
     const methods: string[] = m.supportedGenerationMethods ?? [];
 
+    // Skip Vertex-served models — inaccessible via AI Studio API keys
+    if (/vertex/i.test(rawDesc)) continue;
+
+    // Use model ID as label; show displayName as description when it differs
+    const displayName = m.displayName as string | undefined;
+    const label = id;
+    const desc  = displayName && displayName !== id ? displayName : rawDesc.slice(0, 80);
+
     if (/veo/i.test(id)) {
-      videoModels.push({ id, label, recommended: /veo-2/i.test(id) });
+      videoModels.push({ id, label, description: desc, recommended: /veo-2/i.test(id) });
     } else if (
       /imagen|image-generation|flash.*image|image.*flash/i.test(id) &&
       methods.some((x) => x === 'generateContent' || x === 'predict')
@@ -150,25 +158,25 @@ async function probeGoogle(apiKey: string): Promise<DiscoveredCapabilities> {
       imageModels.push({
         id,
         label,
-        description: m.description ?? '',
-        recommended: id === 'imagen-3.0-generate-001' || id === 'gemini-2.0-flash-preview-image-generation',
+        description: desc,
+        // gemini-2.0-flash-preview is the most reliably accessible via AI Studio
+        recommended: id === 'gemini-2.0-flash-preview-image-generation',
       });
     } else if (/gemini/i.test(id) && methods.includes('generateContent')) {
-      textModels.push({
-        id,
-        label,
-        recommended: id === 'gemini-2.0-flash',
-      });
+      textModels.push({ id, label, recommended: id === 'gemini-2.0-flash' });
     }
   }
 
-  // Sort image: imagen-3.0-generate first, then imagen-3.0-fast, then rest
+  // Sort image: gemini-2.0-flash-preview first (known AI Studio free tier),
+  // then other gemini image models, then imagen (may need billing), then rest
   imageModels.sort((a, b) => {
     const rank = (id: string) => {
-      if (/imagen-3\.0-generate/.test(id)) return 0;
-      if (/imagen-3\.0-fast/.test(id))     return 1;
-      if (/imagen/.test(id))               return 2;
-      return 3;
+      if (id === 'gemini-2.0-flash-preview-image-generation') return 0;
+      if (/gemini.*image|image.*gemini/i.test(id))             return 1;
+      if (/imagen-3\.0-generate/.test(id))                     return 2;
+      if (/imagen-3\.0-fast/.test(id))                         return 3;
+      if (/imagen/.test(id))                                   return 4;
+      return 5;
     };
     return rank(a.id) - rank(b.id);
   });
