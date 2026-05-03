@@ -19,10 +19,23 @@ export const ScoreRing: React.FC<{ score: number; size?: number }> = ({ score, s
 
 export const PlatformBadge: React.FC<{ platform?: string }> = ({ platform }) => {
   const cfg: Record<string, { label: string; color: string }> = {
-    reddit:  { label: 'Reddit',  color: '#FF4500' },
-    twitter: { label: 'X',       color: '#1DA1F2' },
-    trends:  { label: 'Trends',  color: '#4285F4' },
-    rss:     { label: 'RSS',     color: '#FFA500' },
+    reddit:             { label: 'Reddit',       color: '#FF4500' },
+    twitter:            { label: 'X',            color: '#1DA1F2' },
+    trends:             { label: 'Trends',       color: '#4285F4' },
+    google_trends:      { label: 'Trends',       color: '#4285F4' },
+    rss:                { label: 'RSS',          color: '#FFA500' },
+    google_news:        { label: 'Google News',  color: '#4285F4' },
+    medium:             { label: 'Medium',       color: '#00AB6C' },
+    hacker_news:        { label: 'Hacker News',  color: '#FF6600' },
+    devto:              { label: 'Dev.to',       color: '#3B49DF' },
+    substack:           { label: 'Substack',     color: '#FF6719' },
+    arxiv:              { label: 'arXiv',        color: '#B31B1B' },
+    pubmed:             { label: 'PubMed',       color: '#0077CC' },
+    exploding_topics:   { label: 'Exploding',    color: '#FF3366' },
+    product_hunt:       { label: 'PH',           color: '#DA552F' },
+    crypto_news:        { label: 'Crypto',       color: '#F7931A' },
+    finance_newsletter: { label: 'Finance',      color: '#00B386' },
+    youtube_trends:     { label: 'YouTube',      color: '#FF0000' },
   };
   const c = cfg[platform ?? ''] ?? { label: platform ?? '?', color: '#888' };
   return (

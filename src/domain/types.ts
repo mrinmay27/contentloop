@@ -34,6 +34,8 @@ export interface Topic {
   suggestedFormat: SuggestedFormat | null;
   /** Which tier made the format decision */
   formatConfidence: FormatConfidence | null;
+  /** Original URL of the ingested article / post — shown in editor for human review */
+  sourceUrl: string | null;
 }
 
 export interface Niche {

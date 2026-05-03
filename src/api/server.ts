@@ -364,7 +364,7 @@ app.patch("/api/pages/:id/sources/toggles", async (req, res, next) => {
 
 app.post("/api/jobs/:name", async (req, res, next) => {
   try {
-    const params = z.object({ name: z.enum(["ingest", "score", "generate", "post", "analyze"]) }).parse(req.params);
+    const params = z.object({ name: z.enum(["ingest", "score", "generate", "schedule", "post", "analyze"]) }).parse(req.params);
     await queues[params.name].add(`manual-${params.name}`, {}, { removeOnComplete: 25, removeOnFail: 25 });
     res.json({ ok: true, queued: params.name });
   } catch (error) {
@@ -615,6 +615,17 @@ app.post("/api/pages/:id/canva/export", async (req, res, next) => {
   }
 });
 
+
+// ─── Pipeline reset (danger zone) ───────────────────────────────────────────
+app.post("/api/reset/pipeline", async (_req, res, next) => {
+  try {
+    // Truncate topics → cascades to content_items → cascades to posts/performance_metrics
+    await query("TRUNCATE topics CASCADE");
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _nextFunction: express.NextFunction) => {
   void _nextFunction;

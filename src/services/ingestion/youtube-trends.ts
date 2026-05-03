@@ -15,18 +15,26 @@
 
 import type { NicheCategory } from "../../domain/niche-taxonomy.js";
 import type { RawTrend } from "../../domain/types.js";
+import { configStore } from "../../config/configStore.js";
 
 // YouTube category IDs → niche categories
 // https://developers.google.com/youtube/v3/docs/videoCategories/list
+// Each niche maps to the most specific YouTube category available.
+// Overlapping a single category ID across multiple unrelated niches (old
+// behaviour: health/lifestyle/creative/food all on "26") widens the pool too much —
+// keyword filtering below is what keeps results on-niche after fetching.
 const CATEGORY_ID_MAP: Partial<Record<NicheCategory, string[]>> = {
   tech:          ["28"],     // Science & Technology
   education:     ["27"],     // Education
-  entertainment: ["20", "2"],// Gaming + Autos & Vehicles (broader entertainment)
-  business:      ["22"],     // People & Blogs (business content)
-  health:        ["26"],     // Howto & Style
-  lifestyle:     ["26", "22"],
-  creative:      ["26"],     // Howto & Style
-  food:          ["26"],
+  entertainment: ["20", "24"], // Gaming + Entertainment
+  business:      ["22"],     // People & Blogs
+  health:        ["26"],     // Howto & Style (fitness/wellness tutorials)
+  lifestyle:     ["22"],     // People & Blogs (vlogs/lifestyle)
+  creative:      ["26"],     // Howto & Style (DIY/art/design tutorials)
+  food:          ["26"],     // Howto & Style (cooking tutorials)
+  travel:        ["19"],     // Travel & Events (was missing entirely)
+  finance:       ["22"],     // People & Blogs (finance influencers)
+  sustainability:["28"],     // Science & Technology (environmental science)
 };
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
@@ -34,7 +42,8 @@ const REGION = "US";
 const MAX_RESULTS = 10;
 
 function getApiKey(): string | null {
-  return process.env.YOUTUBE_API_KEY ?? null;
+  const key = configStore.get('YOUTUBE_API_KEY');
+  return key.length > 0 ? key : null;
 }
 
 interface YTVideo {
@@ -116,12 +125,18 @@ export async function fetchYouTubeTrends(
     return [];
   }
 
-  // Filter to relevant videos (keyword overlap) or keep all if no overlap found
-  const relevant = allVideos.filter(v => {
-    const lower = v.title.toLowerCase();
-    return keywordLower.some(kw => lower.includes(kw));
-  });
-  const finalVideos = relevant.length > 0 ? relevant : allVideos.slice(0, 5);
+  // Keep only videos whose title overlaps with a niche keyword.
+  // No unfiltered fallback — YouTube categories are broad (e.g. "Howto & Style"
+  // covers cooking, DIY, beauty, fitness) so without keyword filtering the
+  // niche signal is meaningless.
+  const relevant = allVideos.filter(v =>
+    keywordLower.some(kw => v.title.toLowerCase().includes(kw))
+  );
+  if (relevant.length === 0) {
+    console.log(`[youtube-trends] No keyword-relevant videos for ${nicheCategory}`);
+    return [];
+  }
+  const finalVideos = relevant;
 
   const trends: RawTrend[] = finalVideos.map(video => {
     const pubDate = video.publishedAt ? new Date(video.publishedAt) : new Date();

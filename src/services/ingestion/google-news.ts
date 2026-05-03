@@ -1,4 +1,5 @@
 import type { RawTrend } from "../../domain/types.js";
+import { keywordize } from "./keywordize.js";
 
 /**
  * Google News RSS feed — returns real article headlines per niche keyword.
@@ -40,18 +41,6 @@ export async function fetchGoogleNewsTrends(keywords: string[]): Promise<RawTren
     }
   }
   return deduplicateByTitle(trends);
-}
-
-function keywordize(input: string): string[] {
-  return [
-    ...new Set(
-      input
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((word) => word.length > 3)
-    )
-  ].slice(0, 10);
 }
 
 function deduplicateByTitle(trends: RawTrend[]): RawTrend[] {

@@ -12,6 +12,7 @@
  */
 
 import type { RawTrend } from "../../domain/types.js";
+import { configStore } from "../../config/configStore.js";
 
 const BASE = "https://explodingtopics.com";
 
@@ -45,15 +46,15 @@ function deriveCategories(nicheCategory: string): string[] {
   return CATEGORY_MAP[nicheCategory] ?? CATEGORY_MAP.other;
 }
 
-/** Fetch the trending list from one category slug */
-async function fetchCategory(slug: string): Promise<ExplodingTopic[]> {
-  // Exploding Topics exposes a public API used by their own site
+/** Fetch the trending list from one category slug (requires Pro API key) */
+async function fetchCategory(slug: string, apiKey: string): Promise<ExplodingTopic[]> {
   const url = `${BASE}/api/topics?category=${encodeURIComponent(slug)}&sort=newest&limit=20`;
   const res = await fetch(url, {
     signal:  AbortSignal.timeout(8000),
     headers: {
-      "User-Agent": "TPCE/1.0 (trend-ingestion)",
-      "Accept":     "application/json",
+      "User-Agent":    "TPCE/1.0 (trend-ingestion)",
+      "Accept":        "application/json",
+      "Authorization": `Bearer ${apiKey}`,
     },
   });
 
@@ -77,37 +78,6 @@ async function fetchCategory(slug: string): Promise<ExplodingTopic[]> {
   })).filter(t => t.name.length > 3);
 }
 
-/** Fallback: scrape the publicly accessible RSS feed for trending topics */
-async function fetchRssFallback(keywords: string[]): Promise<ExplodingTopic[]> {
-  // Their blog/newsletter RSS includes recent trending topics
-  const res = await fetch("https://explodingtopics.com/blog/rss.xml", {
-    signal:  AbortSignal.timeout(6000),
-    headers: { "User-Agent": "TPCE/1.0 (trend-ingestion)" },
-  });
-  if (!res.ok) return [];
-
-  const xml = await res.text();
-  const titles: string[] = [];
-  const itemRegex = /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<\/item>/g;
-  const simpleTitleRegex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<\/item>/g;
-
-  let match;
-  while ((match = itemRegex.exec(xml)) !== null) titles.push(match[1].trim());
-  while ((match = simpleTitleRegex.exec(xml)) !== null) {
-    const t = match[1].replace(/<!\[CDATA\[|\]\]>/g, "").trim();
-    if (!titles.includes(t)) titles.push(t);
-  }
-
-  // Filter titles that match any keyword
-  const kw = keywords.map(k => k.toLowerCase());
-  return titles
-    .filter(title => {
-      const lower = title.toLowerCase();
-      return kw.some(k => lower.includes(k)) || lower.includes("trend");
-    })
-    .slice(0, 8)
-    .map(title => ({ name: title, slug: "", category: "blog" }));
-}
 
 /**
  * Fetch Exploding Topics trends for a given niche.
@@ -117,25 +87,29 @@ export async function fetchExplodingTopicsTrends(
   nicheCategory: string,
   keywords:      string[]
 ): Promise<RawTrend[]> {
+  const apiKey = configStore.get('EXPLODING_TOPICS_API_KEY');
+  if (!apiKey) {
+    console.log(`[exploding-topics] Skipped — EXPLODING_TOPICS_API_KEY not set (requires Pro subscription at explodingtopics.com/pricing)`);
+    return [];
+  }
+
   const categories = deriveCategories(nicheCategory);
   console.log(`[exploding-topics] Fetching for category=${nicheCategory}, slugs=${categories.join(",")}`);
 
   let topics: ExplodingTopic[] = [];
 
-  // Try API for each category slug
   for (const slug of categories) {
     try {
-      const results = await fetchCategory(slug);
+      const results = await fetchCategory(slug, apiKey);
       topics.push(...results);
     } catch (err: any) {
       console.warn(`[exploding-topics] API failed for "${slug}": ${err?.message}`);
     }
   }
 
-  // If API failed for all, fall back to RSS
   if (topics.length === 0) {
-    console.log(`[exploding-topics] API unavailable — trying RSS fallback`);
-    topics = await fetchRssFallback(keywords);
+    console.log(`[exploding-topics] No results — verify your Pro API key is valid`);
+    return [];
   }
 
   // De-duplicate by name

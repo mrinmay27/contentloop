@@ -13,7 +13,11 @@ import { CreatePageModal } from './components/modals/CreatePageModal';
 import { api } from './lib/api';
 import type { NavKey, ThemePage, Topic, Stats } from './lib/types';
 
-const EMPTY_STATS: Stats = { topics:0, selected_topics:0, qa_ready:0, approved:0, scheduled:0, posted:0 };
+const EMPTY_STATS: Stats = {
+  topics:0, selected_topics:0, qa_ready:0, approved:0, scheduled:0, posted:0,
+  topics_today:0, selected_today:0, qa_ready_today:0, approved_today:0, posted_today:0,
+  next_post_at: null,
+};
 
 /** Map API Page (already camelCased by mapPage) → ThemePage for UI */
 function mapApiPage(p: any): ThemePage {
@@ -102,8 +106,19 @@ function App() {
     setBusy(job);
     try {
       await api.runJob(job);
-      setTimeout(refresh, 1200);
-      setTimeout(refresh, 4000);
+
+      // Poll stats every 2s until they change (job output visible) or timeout
+      const timeouts: Record<string, number> = {
+        ingest: 90000, score: 45000, generate: 60000, schedule: 20000, post: 20000, analyze: 20000,
+      };
+      const deadline = Date.now() + (timeouts[job] ?? 45000);
+      const snap = await api.getStats();   // baseline before job runs
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 2500));
+        const fresh = await api.getStats();
+        if (JSON.stringify(fresh) !== JSON.stringify(snap)) break;
+      }
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Job failed');
     } finally {

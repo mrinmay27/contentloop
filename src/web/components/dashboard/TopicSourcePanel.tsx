@@ -11,25 +11,34 @@ import { ScoreRing, PlatformBadge } from '../ui/Badges';
 import { api } from '../../lib/api';
 import type { Topic } from '../../lib/types';
 
-const SOURCE_FILTER = ['All', 'Reddit', 'Twitter/X', 'Google Trends', 'RSS'] as const;
-type SourceFilter = typeof SOURCE_FILTER[number];
+const ALL_SOURCES = [
+  { key: 'reddit',             label: 'Reddit'        },
+  { key: 'twitter',            label: 'Twitter/X'     },
+  { key: 'google_news',        label: 'Google News'   },
+  { key: 'medium',             label: 'Medium'        },
+  { key: 'hacker_news',        label: 'HN'            },
+  { key: 'devto',              label: 'Dev.to'        },
+  { key: 'substack',           label: 'Substack'      },
+  { key: 'arxiv',              label: 'arXiv'         },
+  { key: 'pubmed',             label: 'PubMed'        },
+  { key: 'exploding_topics',   label: 'Exploding'     },
+  { key: 'product_hunt',       label: 'Product Hunt'  },
+  { key: 'crypto_news',        label: 'Crypto'        },
+  { key: 'finance_newsletter', label: 'Finance'       },
+  { key: 'youtube_trends',     label: 'YouTube'       },
+  { key: 'rss',                label: 'RSS'           },
+];
 
-const PLATFORM_MAP: Record<string, string> = {
-  reddit: 'Reddit', twitter: 'Twitter/X', trends: 'Google Trends', rss: 'RSS',
-  'Google Trends': 'Google Trends', 'Twitter/X': 'Twitter/X',
-};
-
-function topicPlatform(t: Topic): string {
-  // sources is string[] of source names like ['reddit'], ['Google Trends']
+function topicSource(t: Topic): string {
   const first = (t.sources?.[0] ?? '').toLowerCase();
   if (first.includes('reddit'))  return 'reddit';
   if (first.includes('twitter') || first.includes('x.com')) return 'twitter';
-  if (first.includes('trend'))   return 'trends';
-  return 'rss';
+  if (first === 'trends' || first === 'google_trends') return 'google_trends';
+  return first || 'rss';
 }
 
 export const TopicSourcePanel: React.FC = () => {
-  const [filter,   setFilter]   = useState<SourceFilter>('All');
+  const [filter,   setFilter]   = useState<string>('All');
   const [topics,   setTopics]   = useState<Topic[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [spinning, setSpinning] = useState(false);
@@ -52,18 +61,9 @@ export const TopicSourcePanel: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
 
-  // Simpler filter
   const shown = filter === 'All'
     ? topics
-    : topics.filter(t => {
-        const p = topicPlatform(t);
-        return (
-          (filter === 'Reddit'       && p === 'reddit')  ||
-          (filter === 'Twitter/X'    && p === 'twitter') ||
-          (filter === 'Google Trends'&& p === 'trends')  ||
-          (filter === 'RSS'          && p === 'rss')
-        );
-      });
+    : topics.filter(t => topicSource(t) === filter);
 
   return (
     <div className="right-panel">
@@ -86,11 +86,13 @@ export const TopicSourcePanel: React.FC = () => {
       </div>
 
       {/* Source filter chips */}
-      <div className="source-filter">
-        {SOURCE_FILTER.map(s => (
-          <button key={s} className={`source-chip ${filter === s ? 'active' : ''}`}
-            onClick={() => setFilter(s)}>
-            {s === 'All' ? 'All' : s}
+      <div className="source-filter" style={{ flexWrap: 'wrap' }}>
+        <button className={`source-chip ${filter === 'All' ? 'active' : ''}`}
+          onClick={() => setFilter('All')}>All</button>
+        {ALL_SOURCES.map(s => (
+          <button key={s.key} className={`source-chip ${filter === s.key ? 'active' : ''}`}
+            onClick={() => setFilter(s.key)}>
+            {s.label}
           </button>
         ))}
       </div>
@@ -110,7 +112,7 @@ export const TopicSourcePanel: React.FC = () => {
           </div>
         ) : shown.map(item => {
           const score100 = Math.round((item.score ?? 0) * 100);
-          const platform = topicPlatform(item);
+          const platform = topicSource(item);
           const isBackup = item.decision === 'backup';
           return (
             <div key={item.id} className="source-card">

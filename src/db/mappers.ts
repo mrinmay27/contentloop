@@ -38,5 +38,6 @@ export function mapTopic(row: any): Topic {
     state: row.state,
     suggestedFormat: row.suggested_format ?? null,
     formatConfidence: row.format_confidence ?? null,
+    sourceUrl: row.source_url ?? null,
   };
 }

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS topics (
 -- Migration: add format columns to existing topics tables
 ALTER TABLE topics ADD COLUMN IF NOT EXISTS suggested_format TEXT CHECK (suggested_format IN ('post', 'carousel', 'reel'));
 ALTER TABLE topics ADD COLUMN IF NOT EXISTS format_confidence TEXT CHECK (format_confidence IN ('user', 'llm', 'rule', 'page_default'));
+ALTER TABLE topics ADD COLUMN IF NOT EXISTS source_url TEXT;
 
 CREATE TABLE IF NOT EXISTS content_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -1,5 +1,6 @@
 import { env } from "../../config/env.js";
 import type { RawTrend } from "../../domain/types.js";
+import { keywordize } from "./keywordize.js";
 
 export async function fetchTwitterKeywordTrends(keywords: string[]): Promise<RawTrend[]> {
   if (!env.TWITTER_BEARER_TOKEN) {
@@ -30,9 +31,3 @@ export async function fetchTwitterKeywordTrends(keywords: string[]): Promise<Raw
   }));
 }
 
-function keywordize(input: string): string[] {
-  return [...new Set(input.toLowerCase().replace(/https?:\/\/\S+/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((word) => word.length > 3))].slice(
-    0,
-    10
-  );
-}

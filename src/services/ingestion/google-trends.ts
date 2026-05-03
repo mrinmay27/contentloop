@@ -1,5 +1,6 @@
 import googleTrends from "google-trends-api";
 import type { RawTrend } from "../../domain/types.js";
+import { keywordize } from "./keywordize.js";
 
 export async function fetchGoogleTrendSignals(keywords: string[]): Promise<RawTrend[]> {
   const trends: RawTrend[] = [];
@@ -30,11 +31,3 @@ export async function fetchGoogleTrendSignals(keywords: string[]): Promise<RawTr
   return trends;
 }
 
-function keywordize(input: string): string[] {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length > 2)
-    .slice(0, 8);
-}

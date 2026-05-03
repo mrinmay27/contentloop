@@ -15,7 +15,6 @@ export async function fetchSubstackTrends(
   if (newsletterSlugs.length === 0) return [];
 
   const trends: RawTrend[] = [];
-  const keywordLower = keywords.map((k) => k.toLowerCase());
 
   for (const slug of newsletterSlugs.slice(0, 8)) {
     const feedUrl = `https://${slug}.substack.com/feed`;
@@ -38,13 +37,9 @@ export async function fetchSubstackTrends(
         const ageDays = (Date.now() - item.pubDate.getTime()) / 864e5;
         if (ageDays > FRESHNESS_DAYS) continue;
 
-        // Relevance: must match at least one niche keyword in title/description
-        const titleLower = item.title.toLowerCase();
-        const descLower = item.description.toLowerCase();
-        const hasOverlap = keywordLower.some(
-          (kw) => titleLower.includes(kw) || descLower.includes(kw)
-        );
-        if (!hasOverlap && keywordLower.length > 0) continue;
+        // No keyword gate here — the newsletter slug itself is the niche filter.
+        // Applying keyword matching against article titles rejects valid content
+        // because finance newsletters don't say "investing" in every headline.
 
         trends.push({
           source: "substack",

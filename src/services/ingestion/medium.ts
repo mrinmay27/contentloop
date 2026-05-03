@@ -1,34 +1,21 @@
 import Parser from "rss-parser";
 import type { RawTrend } from "../../domain/types.js";
+import { classifyNiche } from "../../domain/niche-taxonomy.js";
+import { keywordize } from "./keywordize.js";
+import { MEDIUM_TAGS } from "./niche-queries.js";
 
 /**
  * Medium tag feeds — pulls trending articles from Medium by topic tag.
  * Medium exposes RSS feeds at: https://medium.com/feed/tag/TAGNAME
- * These give high-quality, long-form content ideas perfect for carousels.
+ * Tags are author-curated, so tag-based search is high-precision for niches.
+ * All 11 niche categories are mapped via MEDIUM_TAGS in niche-queries.ts.
  */
 
 const parser = new Parser();
 
-/** Map niche names to relevant Medium tags */
-const NICHE_MEDIUM_TAGS: Record<string, string[]> = {
-  "AI Productivity": [
-    "artificial-intelligence",
-    "chatgpt",
-    "productivity",
-    "automation",
-    "ai-tools"
-  ],
-  "Personal Finance": [
-    "personal-finance",
-    "investing",
-    "money",
-    "budgeting",
-    "side-hustle"
-  ]
-};
-
 export async function fetchMediumTrends(nicheName: string, nicheKeywords: string[]): Promise<RawTrend[]> {
-  const tags = NICHE_MEDIUM_TAGS[nicheName] ?? nicheKeywords.slice(0, 3).map((k) => k.toLowerCase().replace(/\s+/g, "-"));
+  const category = classifyNiche(nicheName, nicheKeywords);
+  const tags = MEDIUM_TAGS[category] ?? nicheKeywords.slice(0, 3).map((k) => k.toLowerCase().replace(/\s+/g, "-"));
   const trends: RawTrend[] = [];
 
   for (const tag of tags.slice(0, 4)) {
@@ -59,18 +46,6 @@ export async function fetchMediumTrends(nicheName: string, nicheKeywords: string
     }
   }
   return deduplicateByTitle(trends);
-}
-
-function keywordize(input: string): string[] {
-  return [
-    ...new Set(
-      input
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((word) => word.length > 3)
-    )
-  ].slice(0, 10);
 }
 
 function deduplicateByTitle(trends: RawTrend[]): RawTrend[] {

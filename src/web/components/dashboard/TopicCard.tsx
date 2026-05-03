@@ -50,17 +50,17 @@ function resolveStatus(topic: Topic): string {
 function resolvePlatform(topic: Topic): string {
   if (topic.platform) return topic.platform;
   const src = topic.sources?.[0]?.toLowerCase() ?? '';
-  if (src.includes('reddit'))  return 'reddit';
+  if (src.includes('reddit'))                          return 'reddit';
   if (src.includes('twitter') || src.includes('x.com')) return 'twitter';
-  if (src.includes('rss'))     return 'rss';
-  return 'trends';
+  if (src === 'trends' || src === 'google_trends')     return 'google_trends';
+  return src || 'rss';
 }
 
 export const TopicCard: React.FC<Props> = ({ topic, selected, onSelect, onEdit, onDiscard, onFormatChange }) => {
   const status   = resolveStatus(topic);
   const platform = resolvePlatform(topic);
   const tags     = topic.tags ?? topic.keywords?.slice(0, 3) ?? [];
-  const score    = topic.score ?? 0;
+  const score    = Math.round((topic.score ?? 0) * 100);
 
   const [formatPickerOpen, setFormatPickerOpen] = React.useState(false);
   const fmt = topic.suggestedFormat;
@@ -88,7 +88,7 @@ export const TopicCard: React.FC<Props> = ({ topic, selected, onSelect, onEdit, 
         <div className="topic-title">{topic.title}</div>
         <div className="topic-meta">
           <PlatformBadge platform={platform}/>
-          <ScoreRing score={Math.round(score)} size={28}/>
+          <ScoreRing score={score} size={28}/>
           <div style={{ display:'flex', gap:4, flexWrap:'wrap', flex:1 }}>
             {tags.map(tag => <span key={tag} className="tag">{tag}</span>)}
           </div>

@@ -1,75 +1,104 @@
 /** Ingestion index — wires all sources.
  *  Task 2.0: Uses LLM-generated PageSourceMap (tag-generator) when available.
  *  Task 2.1: Medium  Task 2.2: HackerNews  Task 2.3: Dev.to  Task 2.5: Substack
- *  Task 2.5.2: PubMed  Task 2.5.3: Pinterest Trends  Task 2.5.4: YouTube Trending
+ *  Task 2.5.2: PubMed  Task 2.5.4: YouTube Trending
  *  Task 2.5.7: Google News  Task 2.5.8: Crypto RSS
  *  Task 2.6: Exploding Topics  Task 2.7: Product Hunt  Task 2.8: Finance Newsletters
  *  Per-source enable/disable respected via PageSourceMap.sourceEnabled.
+ *
+ *  Source query strategy is centralised in niche-queries.ts.
+ *  Sources receive intent-specific phrases, not raw niche keywords, to prevent
+ *  ambiguous matches (e.g. "budget" → government bills instead of personal finance).
  */
 
 import type { Niche, RawTrend } from "../../domain/types.js";
 import { classifyNiche, usesCryptoSources } from "../../domain/niche-taxonomy.js";
 import { getCachedSourceMap, generateSourceMap } from "./tag-generator.js";
-import { fetchArxivTrends } from "./arxiv.js";
-import { fetchCryptoTrends } from "./crypto-news.js";
-import { fetchDevToTrends } from "./devto.js";
-import { fetchExplodingTopicsTrends } from "./exploding-topics.js";
+import {
+  GOOGLE_NEWS_QUERIES,
+  HN_KEYWORDS,
+  SUBREDDITS,
+  RSS_FEEDS,
+  SUBSTACK_SLUGS,
+} from "./niche-queries.js";
+import { fetchArxivTrends }            from "./arxiv.js";
+import { fetchCryptoTrends }           from "./crypto-news.js";
+import { fetchDevToTrends }            from "./devto.js";
+import { fetchExplodingTopicsTrends }  from "./exploding-topics.js";
 import { fetchFinanceNewsletterTrends } from "./finance-newsletters.js";
-import { fetchGoogleNewsTrends } from "./google-news.js";
-import { fetchHackerNewsTrends } from "./hackernews.js";
-import { fetchMediumTrends } from "./medium.js";
-import { fetchProductHuntTrends } from "./product-hunt.js";
-import { fetchPubMedTrends } from "./pubmed.js";
-import { fetchRedditTrends } from "./reddit.js";
-import { fetchRssTrends } from "./rss.js";
-import { fetchSubstackTrends } from "./substack.js";
-import { fetchPinterestTrends } from "./pinterest-trends.js";
-import { fetchYouTubeTrends } from "./youtube-trends.js";
+import { fetchGoogleNewsTrends }       from "./google-news.js";
+import { fetchHackerNewsTrends }       from "./hackernews.js";
+import { fetchMediumTrends }           from "./medium.js";
+import { fetchProductHuntTrends }      from "./product-hunt.js";
+import { fetchPubMedTrends }           from "./pubmed.js";
+import { fetchRedditTrends }           from "./reddit.js";
+import { fetchRssTrends }              from "./rss.js";
+import { fetchSubstackTrends }         from "./substack.js";
+import { fetchYouTubeTrends }          from "./youtube-trends.js";
 
 
 export async function ingestForNiche(niche: Niche, pageId?: string): Promise<RawTrend[]> {
   const category = classifyNiche(niche.name, niche.keywords);
 
   // ── Try cached LLM source map first (Task 2.0) ──────────────────────────
-  // Use the page's cached map if a pageId is provided; else generate fresh.
   let cachedMap = pageId ? getCachedSourceMap(pageId) : null;
 
-  // If no cached map but we have a pageId, kick off async generation (non-blocking)
   if (!cachedMap && pageId) {
-    // Fire and forget — will be used on the next ingest run
+    // Fire-and-forget — will be ready for the next ingest run
     generateSourceMap(pageId, niche.name, niche.keywords, false).catch(() => {});
   }
 
-  const subreddits     = cachedMap?.redditSubreddits   ?? deriveSubreddits(niche);
-  const rssFeeds       = cachedMap?.rssFeeds.map((f) => f.url) ?? deriveRssFeeds(niche);
-  const devtoTags      = cachedMap?.devtoTags          ?? deriveDevToTags(niche);
-  const substackSlugs  = cachedMap?.substackSlugs      ?? deriveSubstackSlugs(niche);
-  const arxivCategories= cachedMap?.arxivCategories    ?? (
-    ["tech", "health", "finance"].includes(category) ? deriveArxivCategories(category) : []
-  );
+  // ── Source query derivation ──────────────────────────────────────────────
+  // Precedence: cached LLM map → centralized niche-queries maps → keyword fallback
 
-  const isCrypto   = usesCryptoSources(category) &&
+  // Google News: use intent-specific compound phrases, never raw niche keywords
+  const googleNewsQueries = GOOGLE_NEWS_QUERIES[category] ?? [];
+
+  // HackerNews: merge niche-specific HN terms with user-defined keywords so
+  // custom niches (e.g. "Crypto Trading") retain their specific signals
+  const hnKeywords = [...new Set([...(HN_KEYWORDS[category] ?? []), ...niche.keywords])];
+
+  // Reddit: category-first; LLM map overrides if available
+  const subreddits = cachedMap?.redditSubreddits ?? SUBREDDITS[category] ?? [];
+
+  // RSS: category-first; LLM map overrides if available
+  const rssFeeds = cachedMap?.rssFeeds.map((f) => f.url) ?? RSS_FEEDS[category] ?? [];
+
+  // Dev.to tags: tech-only by design
+  const devtoTags = cachedMap?.devtoTags ?? deriveDevToTags(niche);
+
+  // Substack: category-first; LLM map overrides if available
+  const substackSlugs = cachedMap?.substackSlugs ?? SUBSTACK_SLUGS[category] ?? [];
+
+  // arXiv categories: STEM niches only
+  const arxivCategories = cachedMap?.arxivCategories ??
+    (["tech", "health", "finance"].includes(category) ? deriveArxivCategories(category) : []);
+
+  const isCrypto = usesCryptoSources(category) &&
     niche.keywords.some((k) => ["crypto", "bitcoin", "ethereum", "defi"].includes(k.toLowerCase()));
-  const usePubMed  = ["health", "food"].includes(category);
+  const usePubMed = ["health", "food"].includes(category);
 
-  const source = cachedMap ? "cached-llm-map" : "heuristics";
+  const source  = cachedMap ? "cached-llm-map" : "niche-queries";
   const enabled = cachedMap?.sourceEnabled ?? {};
-  const isEnabled = (src: string) => enabled[src] !== false; // default: enabled
+  const isEnabled = (src: string) => enabled[src] !== false;
 
-  console.log(`[ingest] ${niche.name} | category=${category} | source=${source} | subreddits=${subreddits.length} | rss=${rssFeeds.length}`);
+  console.log(
+    `[ingest] ${niche.name} | category=${category} | source=${source} | ` +
+    `gnQueries=${googleNewsQueries.length} | subreddits=${subreddits.length} | rss=${rssFeeds.length}`
+  );
 
   const results = await Promise.allSettled([
     isEnabled("reddit")             ? fetchRedditTrends(subreddits, niche.keywords)                      : Promise.resolve([]),
     isEnabled("rss")                ? fetchRssTrends(rssFeeds)                                           : Promise.resolve([]),
-    isEnabled("google_news")        ? fetchGoogleNewsTrends(niche.keywords)                              : Promise.resolve([]),
+    isEnabled("google_news")        ? fetchGoogleNewsTrends(googleNewsQueries)                           : Promise.resolve([]),
     isEnabled("medium")             ? fetchMediumTrends(niche.name, niche.keywords)                      : Promise.resolve([]),
-    isEnabled("hacker_news")        ? fetchHackerNewsTrends(niche.keywords)                              : Promise.resolve([]),
+    isEnabled("hacker_news")        ? fetchHackerNewsTrends(hnKeywords)                                  : Promise.resolve([]),
     isEnabled("devto")              && devtoTags.length > 0
       ? fetchDevToTrends(devtoTags, niche.keywords)                                                      : Promise.resolve([]),
     isEnabled("substack")           && substackSlugs.length > 0
       ? fetchSubstackTrends(substackSlugs, niche.keywords)                                               : Promise.resolve([]),
     isEnabled("arxiv")              && arxivCategories.length > 0
-      ? fetchArxivTrends(category, niche.keywords.slice(0, 3))                                          : Promise.resolve([]),
+      ? fetchArxivTrends(category, niche.keywords.slice(0, 3))                                           : Promise.resolve([]),
     isEnabled("crypto_news")        && isCrypto
       ? fetchCryptoTrends(niche.keywords)                                                                : Promise.resolve([]),
     isEnabled("pubmed")             && usePubMed
@@ -77,15 +106,12 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
     isEnabled("exploding_topics")   ? fetchExplodingTopicsTrends(category, niche.keywords.slice(0, 4))  : Promise.resolve([]),
     isEnabled("product_hunt")       ? fetchProductHuntTrends(category, niche.keywords)                  : Promise.resolve([]),
     isEnabled("finance_newsletter") ? fetchFinanceNewsletterTrends(category, niche.keywords)            : Promise.resolve([]),
-    // Task 2.5.3: Pinterest Trends — visual niches (food, travel, creative, health, lifestyle)
-    isEnabled("pinterest_trends")   ? fetchPinterestTrends(category as any, niche.keywords)             : Promise.resolve([]),
-    // Task 2.5.4: YouTube Trending — cross-platform reel signal (tech, edu, entertainment, etc.)
     isEnabled("youtube_trends")     ? fetchYouTubeTrends(category as any, niche.keywords)               : Promise.resolve([]),
   ]);
 
   const all = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 
-  // Source diversity cap — generous, scoring handles quality weighting
+  // Source diversity cap — generous per source; scoring handles quality weighting
   const sourceCounts: Record<string, number> = {};
   const deduplicated: RawTrend[] = [];
   const MAX_PER_SOURCE = 8;
@@ -103,30 +129,9 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
   return deduplicated;
 }
 
-// ─── Heuristic helpers (fallback when no cached PageSourceMap) ─────────────
-
-function deriveSubreddits(niche: Niche): string[] {
-  const kw = niche.keywords.map((k) => k.toLowerCase());
-
-  if (kw.some((k) => ["ai", "chatgpt", "llm", "gpt", "machine learning"].includes(k)))
-    return ["ChatGPT", "ArtificialIntelligence", "LocalLLaMA", "singularity", "MachineLearning"];
-  if (kw.some((k) => ["crypto", "bitcoin", "ethereum", "defi", "nft"].includes(k)))
-    return ["CryptoCurrency", "Bitcoin", "ethfinance", "CryptoMarkets"];
-  if (kw.some((k) => ["finance", "investing", "stock", "money", "budget"].includes(k)))
-    return ["personalfinance", "financialindependence", "sidehustle", "investing"];
-  if (kw.some((k) => ["health", "fitness", "workout", "nutrition", "diet"].includes(k)))
-    return ["fitness", "nutrition", "loseit", "running", "weightlifting"];
-  if (kw.some((k) => ["marketing", "startup", "entrepreneur", "business"].includes(k)))
-    return ["entrepreneur", "startups", "marketing", "smallbusiness"];
-  if (kw.some((k) => ["education", "learning", "study", "student", "course"].includes(k)))
-    return ["learnprogramming", "GetStudying", "Professors", "AskAcademia"];
-  if (kw.some((k) => ["travel", "nomad", "destination", "adventure"].includes(k)))
-    return ["travel", "solotravel", "digitalnomad", "backpacking"];
-  if (kw.some((k) => ["food", "recipe", "cooking", "meal", "baking"].includes(k)))
-    return ["recipes", "Cooking", "MealPrepSunday", "EatCheapAndHealthy"];
-
-  return niche.keywords.filter((k) => k.length > 4).slice(0, 3).map((k) => k.replace(/\s+/g, ""));
-}
+// ─── Remaining heuristic helpers ─────────────────────────────────────────────
+// Reddit, RSS, and Substack are now driven by niche-queries.ts maps above.
+// Only Dev.to and arXiv still use inline logic (they have non-trivial derivation).
 
 function deriveDevToTags(niche: Niche): string[] {
   const kw = niche.keywords.map((k) => k.toLowerCase());
@@ -140,41 +145,6 @@ function deriveDevToTags(niche: Niche): string[] {
   return [...new Set(kw.flatMap((k) => tagMap[k] ? [tagMap[k]] : []))].slice(0, 5);
 }
 
-function deriveSubstackSlugs(niche: Niche): string[] {
-  const category = classifyNiche(niche.name, niche.keywords);
-  const MAP: Record<string, string[]> = {
-    tech:          ["importai", "thesequence", "thebatch", "aiweekly"],
-    finance:       ["moringabriefing", "financebrief", "thehustle", "chartr"],
-    health:        ["hubermanlab", "themetabolicminute"],
-    business:      ["thehustle", "morningbrew"],
-    lifestyle:     ["jamesclear", "thecoachinglab"],
-    education:     ["thedownloadmit"],
-    sustainability:["climatetownhall"],
-    other:         [],
-  };
-  return MAP[category] ?? [];
-}
-
-function deriveRssFeeds(niche: Niche): string[] {
-  const category = classifyNiche(niche.name, niche.keywords);
-  const MAP: Record<string, string[]> = {
-    tech:     ["https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
-               "https://techcrunch.com/category/artificial-intelligence/feed/"],
-    finance:  ["https://www.cnbc.com/id/100003114/device/rss/rss.html",
-               "https://www.investopedia.com/feedbuilder/feed/getfeed?feedName=rss_headline"],
-    health:   ["https://www.medicalnewstoday.com/rss/medical-news-today.xml",
-               "https://www.healthline.com/health-news/rss.xml"],
-    business: ["https://hbr.org/resources/rss/hbr_topic_leadership_rss.xml",
-               "https://feeds.feedburner.com/entrepreneur/latest"],
-    education:["https://feeds.feedburner.com/TedTalksHD", "https://edsurge.com/news.rss"],
-    travel:   ["https://feeds.feedburner.com/nomadicmatt"],
-    food:     ["https://feeds.seriouseats.com/seriouseats/recipes"],
-    sustainability: ["https://e360.yale.edu/feed.xml"],
-    other:    [],
-  };
-  return MAP[category] ?? [];
-}
-
 function deriveArxivCategories(category: string): string[] {
   const MAP: Record<string, string[]> = {
     tech:    ["cs.AI", "cs.LG"],
@@ -183,4 +153,3 @@ function deriveArxivCategories(category: string): string[] {
   };
   return MAP[category] ?? [];
 }
-

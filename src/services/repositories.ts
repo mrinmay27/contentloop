@@ -31,18 +31,19 @@ export async function upsertRawTrend(nicheId: string, rawTrend: RawTrend): Promi
 
   const result = await query(
     `
-      INSERT INTO topics (niche_id, title, keywords, sources, source_count, first_seen_at, last_seen_at, velocity)
-      VALUES ($1, $2, $3, $4, 1, COALESCE($5, now()), $6, $7)
+      INSERT INTO topics (niche_id, title, keywords, sources, source_count, first_seen_at, last_seen_at, velocity, source_url)
+      VALUES ($1, $2, $3, $4, 1, COALESCE($5, now()), $6, $7, $8)
       ON CONFLICT (niche_id, title)
       DO UPDATE SET
         keywords = (SELECT ARRAY(SELECT DISTINCT unnest(topics.keywords || EXCLUDED.keywords))),
         sources = (SELECT ARRAY(SELECT DISTINCT unnest(topics.sources || EXCLUDED.sources))),
         source_count = cardinality((SELECT ARRAY(SELECT DISTINCT unnest(topics.sources || EXCLUDED.sources)))),
         last_seen_at = GREATEST(topics.last_seen_at, EXCLUDED.last_seen_at),
-        velocity = GREATEST(topics.velocity, EXCLUDED.velocity)
+        velocity = GREATEST(topics.velocity, EXCLUDED.velocity),
+        source_url = COALESCE(topics.source_url, EXCLUDED.source_url)
       RETURNING *
     `,
-    [nicheId, title, keywords, [rawTrend.source], rawTrend.sourcePublishedAt ?? null, rawTrend.observedAt, velocity]
+    [nicheId, title, keywords, [rawTrend.source], rawTrend.sourcePublishedAt ?? null, rawTrend.observedAt, velocity, rawTrend.url ?? null]
   );
   return mapTopic(result.rows[0]);
 }
@@ -235,47 +236,61 @@ export async function insertMetric(postId: string, metric: { views1h: number; vi
   await query("UPDATE posts SET state = 'ANALYZED' WHERE id = $1", [postId]);
 }
 
-export async function dashboardStats(nicheId?: string, pageId?: string): Promise<Record<string, number>> {
-  const result = await query(
-    `
-      SELECT 'topics' AS key,
-             count(*)::int AS value
-      FROM topics
-      WHERE ($1::uuid IS NULL OR niche_id = $1)
-      UNION ALL
-      SELECT 'selected_topics',
-             count(*)::int
-      FROM topics
-      WHERE decision = 'selected'
-        AND ($1::uuid IS NULL OR niche_id = $1)
-      UNION ALL
-      SELECT 'qa_ready',
-             count(*)::int
-      FROM content_items
-      WHERE status = 'qa_passed'
-        AND ($2::uuid IS NULL OR page_id = $2)
-      UNION ALL
-      SELECT 'approved',
-             count(*)::int
-      FROM content_items
-      WHERE status = 'approved'
-        AND ($2::uuid IS NULL OR page_id = $2)
-      UNION ALL
-      SELECT 'scheduled',
-             count(*)::int
-      FROM posts
-      WHERE state = 'SCHEDULED'
-        AND ($2::uuid IS NULL OR page_id = $2)
-      UNION ALL
-      SELECT 'posted',
-             count(*)::int
-      FROM posts
-      WHERE state = 'POSTED'
-        AND ($2::uuid IS NULL OR page_id = $2)
-    `,
-    [nicheId ?? null, pageId ?? null]
-  );
-  return Object.fromEntries(result.rows.map((row: any) => [row.key, Number(row.value)]));
+export async function dashboardStats(nicheId?: string, pageId?: string): Promise<Record<string, number | string | null>> {
+  const [counts, nextPost] = await Promise.all([
+    query(
+      `
+        SELECT 'topics' AS key, count(*)::int AS value
+          FROM topics WHERE ($1::uuid IS NULL OR niche_id = $1)
+        UNION ALL
+        SELECT 'selected_topics', count(*)::int
+          FROM topics WHERE decision = 'selected' AND ($1::uuid IS NULL OR niche_id = $1)
+        UNION ALL
+        SELECT 'qa_ready', count(*)::int
+          FROM content_items WHERE status = 'qa_passed' AND ($2::uuid IS NULL OR page_id = $2)
+        UNION ALL
+        SELECT 'approved', count(*)::int
+          FROM content_items WHERE status = 'approved' AND ($2::uuid IS NULL OR page_id = $2)
+        UNION ALL
+        SELECT 'scheduled', count(*)::int
+          FROM posts WHERE state = 'SCHEDULED' AND ($2::uuid IS NULL OR page_id = $2)
+        UNION ALL
+        SELECT 'posted', count(*)::int
+          FROM posts WHERE state = 'POSTED' AND ($2::uuid IS NULL OR page_id = $2)
+        UNION ALL
+        SELECT 'topics_today', count(*)::int
+          FROM topics WHERE created_at >= current_date AND ($1::uuid IS NULL OR niche_id = $1)
+        UNION ALL
+        SELECT 'selected_today', count(*)::int
+          FROM topics WHERE decision = 'selected' AND last_seen_at >= current_date AND ($1::uuid IS NULL OR niche_id = $1)
+        UNION ALL
+        SELECT 'qa_ready_today', count(*)::int
+          FROM content_items WHERE status = 'qa_passed' AND created_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
+        UNION ALL
+        SELECT 'approved_today', count(*)::int
+          FROM content_items WHERE status = 'approved' AND updated_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
+        UNION ALL
+        SELECT 'posted_today', count(*)::int
+          FROM posts WHERE state = 'POSTED' AND posted_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
+      `,
+      [nicheId ?? null, pageId ?? null]
+    ),
+    query(
+      `SELECT scheduled_at FROM posts
+       WHERE state = 'SCHEDULED' AND scheduled_at > now()
+         AND ($1::uuid IS NULL OR page_id = $1)
+       ORDER BY scheduled_at ASC LIMIT 1`,
+      [pageId ?? null]
+    ),
+  ]);
+
+  const stats: Record<string, number | string | null> =
+    Object.fromEntries(counts.rows.map((row: any) => [row.key, Number(row.value)]));
+
+  const nextAt: Date | null = nextPost.rows[0]?.scheduled_at ?? null;
+  stats.next_post_at = nextAt ? nextAt.toISOString() : null;
+
+  return stats;
 }
 
 /**

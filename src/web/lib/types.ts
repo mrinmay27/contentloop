@@ -26,6 +26,8 @@ export type Topic = {
   state: string;
   suggestedFormat: SuggestedFormat | null;
   formatConfidence: FormatConfidence | null;
+  lastSeenAt?: string;
+  sourceUrl?: string | null;
   // UI-side fields (from mock / enriched API)
   platform?: 'reddit' | 'twitter' | 'trends' | 'rss';
   tags?: string[];
@@ -62,6 +64,13 @@ export type Stats = {
   approved: number;
   scheduled: number;
   posted: number;
+  // Today deltas
+  topics_today: number;
+  selected_today: number;
+  qa_ready_today: number;
+  approved_today: number;
+  posted_today: number;
+  next_post_at: string | null;
 };
 
 export type SchedulerSlot = {

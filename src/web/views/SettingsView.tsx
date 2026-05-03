@@ -21,29 +21,42 @@ type Integration = { connected: boolean; label: string };
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
-const GROUP_ORDER = ['AI / LLM', 'Reddit', 'Twitter / X', 'Instagram', 'YouTube', 'Canva', 'Pipeline'];
-
 const GROUP_ICONS: Record<string, string> = {
-  'AI / LLM':        '🤖',
-  'Reddit':          '🔴',
-  'Twitter / X':     '🐦',
-  'Instagram':       '📸',
-  'YouTube':         '▶️',
-  'Canva':           '🖼️',
-  'Pipeline':        '⚙️',
-  'Content Sources': '📡',
+  'AI / LLM':          '🤖',
+  'Reddit':            '🔴',
+  'Product Hunt':      '🐱',
+  'Twitter / X':       '🐦',
+  'Exploding Topics':  '🚀',
+  'Instagram':         '📸',
+  'YouTube':           '▶️',
+  'Canva':             '🖼️',
+  'Pipeline':          '⚙️',
+  'Content Sources':   '📡',
 };
 
 const GROUP_DESC: Record<string, string> = {
-  'AI / LLM':        'LLM provider, model, and API key for content generation',
-  'Reddit':          'Reddit API credentials for trend ingestion',
-  'Twitter / X':     'X/Twitter bearer token for trend ingestion',
-  'Instagram':       'Instagram access token for publishing to Instagram Reels & feed',
-  'YouTube':         'YouTube Data API v3 credentials for publishing Shorts',
-  'Canva':           'Canva OAuth credentials for template autofill',
-  'Pipeline':        'Automation limits, approval mode, scheduling defaults, and default content format',
-  'Content Sources': 'LLM-generated source map per Theme Page — subreddits, newsletters, RSS feeds, and arXiv categories',
+  'AI / LLM':         'LLM provider, model, and API key for content generation',
+  'Reddit':           'Free Reddit API credentials — boosts rate limits beyond public JSON',
+  'Product Hunt':     'Free Developer Token — unlocks higher rate limits on the Product Hunt GraphQL API',
+  'Twitter / X':      'Paid API — Bearer Token for trend ingestion (requires Basic plan, ~$100/mo)',
+  'Exploding Topics': 'Paid Pro API — early-signal trend source (requires Pro subscription at explodingtopics.com)',
+  'Instagram':        'Instagram access token for publishing to Instagram Reels & feed',
+  'YouTube':          'YouTube Data API v3 key for Trending ingestion + OAuth for publishing Shorts',
+  'Canva':            'Canva OAuth credentials for template autofill',
+  'Pipeline':         'Automation limits, approval mode, scheduling defaults, and default content format',
+  'Content Sources':  'LLM-generated source map per Theme Page — subreddits, newsletters, RSS feeds, and arXiv categories',
 };
+
+// Groups that require a paid subscription to be useful
+const PREMIUM_GROUPS = new Set(['Twitter / X', 'Exploding Topics']);
+
+// Navigation sections — defines order and visual grouping in the left panel
+const NAV_SECTIONS: { label: string; groups: string[] }[] = [
+  { label: 'System',               groups: ['AI / LLM', 'Branding', 'Content Sources', 'Pipeline'] },
+  { label: 'Ingestion — Free',     groups: ['Reddit', 'Product Hunt'] },
+  { label: 'Ingestion — Premium',  groups: ['Twitter / X', 'Exploding Topics'] },
+  { label: 'Publishing',           groups: ['Instagram', 'YouTube', 'Canva'] },
+];
 
 const INTEGRATION_GROUPS = ['Reddit', 'Twitter / X', 'Instagram', 'YouTube', 'Canva'];
 const INTEG_KEY: Record<string, string> = {
@@ -495,8 +508,8 @@ const SETUP_GUIDES: Record<string, GuideStep[]> = {
       body:  'Hit the Connect YouTube button at the top of this section. Google Sign-In opens — sign in with the Google account that owns your channel. Tokens are saved automatically.',
     },
     {
-      title: 'Data API Key (optional — for reading analytics)',
-      body:  'APIs & Services → Credentials → Create Credentials → API Key. Paste into the Data API Key field above if you want to pull channel analytics.',
+      title: 'Data API Key (required for YouTube Trending ingestion)',
+      body:  'APIs & Services → Credentials → Create Credentials → API Key. Copy and paste into the "Data API Key" field above. This activates the YouTube Trending source in the ingestion pipeline. Free tier: 10,000 units/day.',
     },
   ],
   'Canva': [
@@ -520,6 +533,41 @@ const SETUP_GUIDES: Record<string, GuideStep[]> = {
     {
       title: 'Click Connect Canva',
       body:  'Hit the Connect Canva button at the top of this section. Canva Login opens — sign in with your Canva account. Your account is linked automatically.',
+    },
+  ],
+  'Product Hunt': [
+    {
+      title: 'Create a free Product Hunt account',
+      body:  'Go to producthunt.com and sign up if you don\'t have one. No payment needed — the Developer Token is completely free.',
+      link:  { label: 'producthunt.com →', url: 'https://www.producthunt.com' },
+    },
+    {
+      title: 'Go to the API applications page',
+      body:  'Visit api.producthunt.com/v2/oauth/applications → click "Add an application".',
+      link:  { label: 'API Applications →', url: 'https://api.producthunt.com/v2/oauth/applications' },
+    },
+    {
+      title: 'Create the application',
+      body:  'Name: TPCE · Redirect URI: http://localhost · Click "Create". On the next screen you\'ll see your Developer Token.',
+    },
+    {
+      title: 'Copy and paste the Developer Token',
+      body:  'Copy the Developer Token (starts with ph_) and paste it into the field above. This boosts your rate limit from ~10 requests/hour to the full authenticated quota.',
+    },
+  ],
+  'Exploding Topics': [
+    {
+      title: 'Subscribe to Exploding Topics Pro',
+      body:  'Go to explodingtopics.com/pricing and subscribe to the Pro plan (~$39/mo). This is required — their public API endpoints are no longer accessible without a subscription.',
+      link:  { label: 'Exploding Topics Pricing →', url: 'https://explodingtopics.com/pricing' },
+    },
+    {
+      title: 'Find your API Key',
+      body:  'After subscribing, log in to your dashboard → navigate to Settings or API section → generate an API key.',
+    },
+    {
+      title: 'Paste the key above',
+      body:  'Paste your API key into the "API Key" field above and click Save. Exploding Topics will activate on the next pipeline run and surface early-signal trends 6–18 months before they peak.',
     },
   ],
   'Pipeline': [
@@ -710,7 +758,7 @@ function TagPills({ items, color = 'var(--accent)' }: { items: string[]; color?:
   );
 }
 
-const ALL_SOURCES: { key: string; label: string; icon: string }[] = [
+const ALL_SOURCES: { key: string; label: string; icon: string; premium?: boolean }[] = [
   { key: 'reddit',             label: 'Reddit',               icon: '🔴' },
   { key: 'rss',                label: 'RSS Feeds',            icon: '📰' },
   { key: 'google_news',        label: 'Google News',          icon: '🔍' },
@@ -720,12 +768,12 @@ const ALL_SOURCES: { key: string; label: string; icon: string }[] = [
   { key: 'substack',           label: 'Substack',             icon: '📧' },
   { key: 'arxiv',              label: 'arXiv',                icon: '📚' },
   { key: 'pubmed',             label: 'PubMed',               icon: '🔬' },
-  { key: 'exploding_topics',   label: 'Exploding Topics',     icon: '🚀' },
+  { key: 'exploding_topics',   label: 'Exploding Topics',     icon: '🚀', premium: true },
   { key: 'product_hunt',       label: 'Product Hunt',         icon: '🐱' },
   { key: 'crypto_news',        label: 'Crypto News',          icon: '₿'  },
   { key: 'finance_newsletter', label: 'Finance Newsletters',  icon: '💰' },
   { key: 'youtube_trends',     label: 'YouTube Trending',     icon: '▶️' },
-  { key: 'pinterest_trends',   label: 'Pinterest Trends',     icon: '📌' },
+  { key: 'twitter',            label: 'Twitter / X',          icon: '🐦', premium: true },
 ];
 
 function ContentSourcesSection() {
@@ -939,6 +987,14 @@ function ContentSourcesSection() {
                         overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {src.label}
                       </span>
+                      {src.premium && (
+                        <span style={{ fontSize:9, fontWeight:700, letterSpacing:'0.05em',
+                          padding:'1px 5px', borderRadius:4, flexShrink:0,
+                          background:'color-mix(in srgb, var(--accent) 15%, transparent)',
+                          color:'var(--accent)', border:'1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
+                          PRO
+                        </span>
+                      )}
                     </div>
                     <div
                       onClick={() => handleToggleSource(src.key, !isOn)}
@@ -971,7 +1027,12 @@ function ContentSourcesSection() {
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 
-const GROUP_ORDER_WITH_BRANDING = ['AI / LLM', 'Branding', 'Content Sources', 'Reddit', 'Twitter / X', 'Instagram', 'YouTube', 'Canva', 'Pipeline'];
+const GROUP_ORDER_WITH_BRANDING = [
+  'AI / LLM', 'Branding', 'Content Sources', 'Pipeline',
+  'Reddit', 'Product Hunt',
+  'Twitter / X', 'Exploding Topics',
+  'Instagram', 'YouTube', 'Canva',
+];
 const ALL_GROUP_ICONS: Record<string, string> = { ...GROUP_ICONS, 'Branding': '🎨' };
 
 export const SettingsView: React.FC = () => {
@@ -983,6 +1044,9 @@ export const SettingsView: React.FC = () => {
   const [saving,      setSaving]     = useState(false);
   const [saveMsg,     setSaveMsg]    = useState<string | null>(null);
   const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
+  const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetting,    setResetting]    = useState(false);
+  const [resetMsg,     setResetMsg]     = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1022,10 +1086,23 @@ export const SettingsView: React.FC = () => {
     } finally { setSaving(false); }
   };
 
+  const handleReset = async () => {
+    if (!resetConfirm) { setResetConfirm(true); return; }
+    setResetting(true);
+    setResetConfirm(false);
+    try {
+      await api.resetPipeline();
+      setResetMsg('✓ Pipeline data cleared — topics, content and posts deleted');
+      setTimeout(() => setResetMsg(null), 5000);
+    } catch {
+      setResetMsg('✗ Reset failed');
+      setTimeout(() => setResetMsg(null), 3000);
+    } finally { setResetting(false); }
+  };
+
   const groups       = config ? groupFields(config.meta) : {};
   // Add Branding as a virtual group (not in config meta — it's per-page)
   const allGroups    = { ...groups, Branding: [] } as Record<string, string[]>;
-  const orderedGroups = GROUP_ORDER_WITH_BRANDING.filter(g => allGroups[g] !== undefined);
   const fieldsInGroup  = groups[activeGroup] ?? [];
   const dirtyCount   = Object.keys(dirty).length;
   const isIntegGroup = INTEGRATION_GROUPS.includes(activeGroup);
@@ -1127,6 +1204,12 @@ export const SettingsView: React.FC = () => {
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
                       <span style={{ fontSize:18 }}>{GROUP_ICONS[activeGroup]}</span>
                       <span style={{ fontSize:16, fontWeight:700 }}>{activeGroup}</span>
+                      {PREMIUM_GROUPS.has(activeGroup) && (
+                        <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px',
+                          borderRadius:4, background:'color-mix(in srgb, var(--accent) 15%, transparent)',
+                          color:'var(--accent)', border:'1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                          letterSpacing:'0.05em' }}>PRO</span>
+                      )}
                     </div>
                     <div style={{ fontSize:12, color:'var(--text-muted)' }}>
                       {GROUP_DESC[activeGroup]}
@@ -1136,6 +1219,21 @@ export const SettingsView: React.FC = () => {
                       {' '}— no restart needed.
                     </div>
                   </div>
+
+                  {/* Premium source banner */}
+                  {PREMIUM_GROUPS.has(activeGroup) && (
+                    <div style={{ display:'flex', gap:12, padding:'12px 14px', marginBottom:16,
+                      background:'color-mix(in srgb, var(--accent) 6%, transparent)',
+                      border:'1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                      borderRadius:'var(--radius-sm)' }}>
+                      <span style={{ fontSize:20, flexShrink:0 }}>🔒</span>
+                      <div style={{ fontSize:12, color:'var(--text-secondary)', lineHeight:1.65 }}>
+                        <strong style={{ color:'var(--text-primary)' }}>Premium source — requires a paid subscription.</strong>
+                        {' '}The source is skipped during ingestion until a valid API key is saved here.
+                        See the setup guide below for instructions.
+                      </div>
+                    </div>
+                  )}
 
                   <div style={{ background:'var(--bg-surface)', border:'1px solid var(--border)',
                     borderRadius:'var(--radius)', padding:'0 16px' }}>
@@ -1150,6 +1248,57 @@ export const SettingsView: React.FC = () => {
 
               {/* Setup guide — shown below config fields */}
               <SetupGuide group={activeGroup} />
+
+              {/* Danger Zone — Pipeline section only */}
+              {activeGroup === 'Pipeline' && (
+                <div style={{ marginTop:24, padding:16,
+                  border:'1px solid var(--red, #ef4444)', borderRadius:'var(--radius)',
+                  background:'rgba(239,68,68,0.04)' }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:'var(--red, #ef4444)',
+                    textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>
+                    ⚠ Danger Zone
+                  </div>
+                  <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:12, lineHeight:1.6 }}>
+                    <strong>Reset Pipeline Data</strong> deletes all topics, generated content, and posts
+                    from the database. Niches, pages, and settings are untouched.
+                    Use this to start fresh after testing.
+                  </div>
+                  {resetMsg && (
+                    <div style={{ fontSize:11, marginBottom:10,
+                      color: resetMsg.startsWith('✓') ? 'var(--green)' : 'var(--red, #ef4444)',
+                      fontWeight:600 }}>
+                      {resetMsg}
+                    </div>
+                  )}
+                  {resetConfirm ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontSize:12, color:'var(--red, #ef4444)', fontWeight:600 }}>
+                        Are you sure? This cannot be undone.
+                      </span>
+                      <button
+                        className="btn btn-sm"
+                        disabled={resetting}
+                        onClick={handleReset}
+                        style={{ background:'var(--red, #ef4444)', color:'#fff',
+                          border:'none', fontWeight:700 }}>
+                        {resetting ? 'Deleting…' : 'Yes, delete everything'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={() => setResetConfirm(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-sm"
+                      onClick={handleReset}
+                      style={{ border:'1px solid var(--red, #ef4444)',
+                        color:'var(--red, #ef4444)', background:'transparent', fontWeight:600 }}>
+                      🗑 Reset Pipeline Data
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Per-section save */}
               {dirtyCount > 0 && (
@@ -1171,55 +1320,67 @@ export const SettingsView: React.FC = () => {
           )}
         </div>
 
-        {/* RIGHT PANEL — group nav, mirrors TopicSourcePanel style */}
+        {/* RIGHT PANEL — sectioned group nav */}
         <div style={{ display:'flex', flexDirection:'column', overflowY:'auto',
-          background:'var(--bg-surface)', padding:'16px 0' }}>
-          <div className="section-label" style={{ padding:'0 14px', marginBottom:10 }}>
-            Config Groups
-          </div>
-          {orderedGroups.map(group => {
-            const isDirty  = (groups[group] ?? []).some(k => dirty[k]);
-            const isActive = group === activeGroup;
-            const integKey = INTEG_KEY[group];
-            const connected = integKey ? integrations[integKey]?.connected : undefined;
-
+          background:'var(--bg-surface)', padding:'12px 0' }}>
+          {NAV_SECTIONS.map((section, si) => {
+            const sectionGroups = section.groups.filter(g => allGroups[g] !== undefined);
+            if (sectionGroups.length === 0) return null;
             return (
-              <button key={group}
-                onClick={() => setActiveGroup(group)}
-                style={{ display:'flex', alignItems:'center', gap:9, width:'100%',
-                  padding:'9px 14px', background: isActive ? 'var(--bg-hover)' : 'transparent',
-                  border:'none', borderLeft:`2px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
-                  cursor:'pointer', textAlign:'left' }}>
-                <span style={{ fontSize:14, flexShrink:0 }}>{ALL_GROUP_ICONS[group]}</span>
-                <span style={{ fontSize:12, fontWeight: isActive ? 600 : 400,
-                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  flex:1, lineHeight:1.3 }}>
-                  {group}
-                </span>
-                <div style={{ display:'flex', gap:4, alignItems:'center', flexShrink:0 }}>
-                  {isDirty && (
-                    <div style={{ width:6, height:6, borderRadius:'50%',
-                      background:'var(--accent)' }} title="Unsaved changes"/>
-                  )}
-                  {connected === true  && <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--green)' }} title="Connected"/>}
-                  {connected === false && <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--border-strong)' }} title="Not connected"/>}
+              <div key={section.label}>
+                {si > 0 && <div className="divider" style={{ margin:'8px 14px' }}/>}
+                <div style={{ padding:'6px 14px 4px', fontSize:9, fontWeight:700,
+                  letterSpacing:'0.09em', textTransform:'uppercase',
+                  color:'var(--text-muted)' }}>
+                  {section.label}
                 </div>
-              </button>
+                {sectionGroups.map(group => {
+                  const isDirty   = (groups[group] ?? []).some(k => dirty[k]);
+                  const isActive  = group === activeGroup;
+                  const integKey  = INTEG_KEY[group];
+                  const connected = integKey ? integrations[integKey]?.connected : undefined;
+                  const isPremium = PREMIUM_GROUPS.has(group);
+
+                  return (
+                    <button key={group}
+                      onClick={() => setActiveGroup(group)}
+                      style={{ display:'flex', alignItems:'center', gap:9, width:'100%',
+                        padding:'8px 14px', background: isActive ? 'var(--bg-hover)' : 'transparent',
+                        border:'none', borderLeft:`2px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
+                        cursor:'pointer', textAlign:'left' }}>
+                      <span style={{ fontSize:13, flexShrink:0 }}>{ALL_GROUP_ICONS[group]}</span>
+                      <span style={{ fontSize:12, fontWeight: isActive ? 600 : 400,
+                        color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        flex:1, lineHeight:1.3 }}>
+                        {group}
+                      </span>
+                      <div style={{ display:'flex', gap:4, alignItems:'center', flexShrink:0 }}>
+                        {isPremium && (
+                          <span style={{ fontSize:8, fontWeight:700, padding:'1px 4px',
+                            borderRadius:3, background:'color-mix(in srgb, var(--accent) 15%, transparent)',
+                            color:'var(--accent)', border:'1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                            letterSpacing:'0.05em' }}>PRO</span>
+                        )}
+                        {isDirty && (
+                          <div style={{ width:5, height:5, borderRadius:'50%',
+                            background:'var(--accent)' }} title="Unsaved changes"/>
+                        )}
+                        {connected === true  && <div style={{ width:5, height:5, borderRadius:'50%', background:'var(--green)' }} title="Connected"/>}
+                        {connected === false && <div style={{ width:5, height:5, borderRadius:'50%', background:'var(--border-strong)' }} title="Not connected"/>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
 
-          <div className="divider" style={{ margin:'12px 14px' }}/>
-
-          {/* Config file info */}
+          <div className="divider" style={{ margin:'10px 14px' }}/>
           <div style={{ padding:'0 14px' }}>
-            <div style={{ fontSize:10, color:'var(--text-muted)', lineHeight:1.6 }}>
-              Config stored at:
+            <div style={{ fontSize:9, color:'var(--text-muted)', lineHeight:1.6 }}>
+              Saved to <code style={{ fontFamily:'var(--mono)', fontSize:9 }}>data/app.config.json</code>
               <br/>
-              <code style={{ fontFamily:'var(--mono)', fontSize:9,
-                wordBreak:'break-all' }}>data/app.config.json</code>
-            </div>
-            <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:8, lineHeight:1.5 }}>
-              .env values are used as fallbacks if a field is empty here.
+              .env values used as fallbacks.
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import Parser from "rss-parser";
 import type { RawTrend } from "../../domain/types.js";
+import { keywordize } from "./keywordize.js";
 
 const parser = new Parser();
 
@@ -27,11 +28,3 @@ export async function fetchRssTrends(feedUrls: string[]): Promise<RawTrend[]> {
   return trends;
 }
 
-function keywordize(input: string): string[] {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length > 3)
-    .slice(0, 8);
-}

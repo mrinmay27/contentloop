@@ -47,32 +47,26 @@ export const PipelineBar: React.FC<Props> = ({
     return 'Idle';
   };
 
-  const handleClick = (stage: StageConfig) => {
-    setActiveStep(stage.key);
-    if (stage.job && onRunJob && !busy) {
-      onRunJob(stage.job);
-    }
-  };
-
   return (
     <div className="pipeline-bar">
       {STAGES.map((stage, i) => {
-        const isActive    = activeStep === stage.key;
+        const isActive     = activeStep === stage.key;
         const isBottleneck = stage.key === bottleneck;
-        const isRunning   = busy === stage.key;
-        const isHuman     = stage.job === null;
-        const count       = counts[stage.key] ?? 0;
-        const status      = statusLabel(stage.key);
+        const isRunning    = busy === stage.key;
+        const isHuman      = stage.job === null;
+        const count        = counts[stage.key] ?? 0;
+        const status       = statusLabel(stage.key);
+        const canRun       = isActive && !isHuman && !isRunning && !!onRunJob && !busy;
 
         return (
           <div
             key={stage.key}
-            title={stage.tooltip}
+            title={!isActive ? stage.tooltip : undefined}
             id={`pipeline-stage-${stage.key}`}
             className={`pipeline-step ${isActive ? 'active' : ''}`}
-            onClick={() => handleClick(stage)}
+            onClick={() => setActiveStep(stage.key)}
             style={{
-              cursor:  isHuman ? 'default' : 'pointer',
+              cursor: 'pointer',
               position: 'relative',
               outline: isBottleneck && !isActive
                 ? '1.5px solid var(--accent)'
@@ -93,7 +87,7 @@ export const PipelineBar: React.FC<Props> = ({
             {/* Stage label row */}
             <div className="pipeline-step-name" style={{ display:'flex', alignItems:'center', gap:5 }}>
               {stage.label}
-              {isBottleneck && (
+              {isBottleneck && !isActive && (
                 <span style={{
                   fontSize: 8, padding: '1px 5px', borderRadius: 8,
                   background: 'var(--accent)', color: '#000',
@@ -120,7 +114,7 @@ export const PipelineBar: React.FC<Props> = ({
 
             {/* Status */}
             <div className="pipeline-step-status" style={{
-              color: isRunning   ? 'var(--green)'
+              color: isRunning    ? 'var(--green)'
                    : isBottleneck ? 'var(--accent)'
                    : status === 'Ready' ? 'var(--green)'
                    : 'var(--text-secondary)',
@@ -134,14 +128,36 @@ export const PipelineBar: React.FC<Props> = ({
               {isRunning ? 'Running…' : status}
             </div>
 
-            {/* Click-to-run hint for automatable stages */}
-            {!isHuman && !isRunning && (
-              <div style={{
-                position:'absolute', bottom:4, right:6,
-                fontSize:8, color:'var(--text-muted)', opacity: isBottleneck ? 0.9 : 0.4,
-                fontFamily:'var(--mono)',
-              }}>
-                {isBottleneck ? '↑ click to run' : 'click'}
+            {/* Run button — only shown when this step is selected */}
+            {canRun && (
+              <button
+                onClick={e => { e.stopPropagation(); onRunJob!(stage.job!); }}
+                style={{
+                  marginTop: 8,
+                  width: '100%',
+                  padding: '4px 0',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                  borderRadius: 'var(--radius-sm, 4px)',
+                  border: '1px solid var(--accent)',
+                  background: 'var(--accent)',
+                  color: '#000',
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                ▶ Run
+              </button>
+            )}
+
+            {/* Human-action note when selected */}
+            {isActive && isHuman && (
+              <div style={{ marginTop:8, fontSize:10, color:'var(--text-muted)', fontStyle:'italic' }}>
+                Manual review required
               </div>
             )}
 

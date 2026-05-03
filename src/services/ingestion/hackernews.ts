@@ -1,4 +1,6 @@
 import type { RawTrend } from "../../domain/types.js";
+import { keywordize } from "./keywordize.js";
+import { matchesKeyword } from "./niche-queries.js";
 
 /**
  * Hacker News — pulls top and best stories from the HN API.
@@ -40,14 +42,11 @@ export async function fetchHackerNewsTrends(nicheKeywords: string[]): Promise<Ra
       (item): item is HNItem => item !== null && item.type === "story" && !!item.title
     );
 
-    // Filter stories: must match at least ONE niche keyword in the title
-    const lowerKeywords = nicheKeywords.map((k) => k.toLowerCase());
-
+    // Filter stories: must match at least ONE niche keyword in the title.
+    // Uses word-boundary matching so "ai" doesn't match "airline" or "air".
     for (const story of stories) {
-      const titleLower = (story.title ?? "").toLowerCase();
-      // Strict niche-only filter — no generic AI/tech fallback that
-      // was bleeding HN topics into every niche regardless of relevance.
-      const isRelevant = lowerKeywords.some((keyword) => titleLower.includes(keyword));
+      const title = story.title ?? "";
+      const isRelevant = nicheKeywords.some((keyword) => matchesKeyword(title, keyword));
 
       if (!isRelevant) continue;
 
@@ -67,14 +66,3 @@ export async function fetchHackerNewsTrends(nicheKeywords: string[]): Promise<Ra
   return trends;
 }
 
-function keywordize(input: string): string[] {
-  return [
-    ...new Set(
-      input
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((word) => word.length > 3)
-    )
-  ].slice(0, 10);
-}

@@ -57,27 +57,44 @@ async function ensureDocker(): Promise<void> {
     // not running — try to start it (macOS only)
   }
 
-  log("🐳 docker", "Docker not running. Attempting to start Docker Desktop...");
-  try {
-    exec("open -a Docker");
-  } catch {
-    log("❌ error", "Could not launch Docker Desktop. Please start it manually and retry.");
-    process.exit(1);
+  log("🐳 docker", "Docker not running. Attempting to start Docker runtime...");
+
+  // Try strategies in order; fall through to poll on any failure
+  const launched = (() => {
+    // 1. Colima (lightweight Docker runtime for macOS, common with brew-installed docker)
+    try {
+      exec("which colima");
+      exec("colima start", { cwd: ROOT }); // may take ~20s on first run
+      return true;
+    } catch { /* next */ }
+    // 2. macOS GUI app (Docker Desktop installed via .dmg)
+    for (const name of ['"Docker Desktop"', "Docker"]) {
+      try { exec(`open -a ${name}`); return true; } catch { /* next */ }
+    }
+    // 3. Homebrew service fallback
+    for (const svc of ["docker-desktop", "docker"]) {
+      try { exec(`brew services start ${svc}`); return true; } catch { /* next */ }
+    }
+    return false;
+  })();
+
+  if (!launched) {
+    log("🐳 docker", "Could not auto-start Docker — please run 'colima start' manually, then wait…");
   }
 
-  // Poll up to 60 s for the daemon to become ready
-  for (let i = 0; i < 60; i++) {
+  // Poll up to 90 s for the daemon to become ready
+  for (let i = 0; i < 90; i++) {
     await sleep(1000);
     try {
       exec("docker info");
       log("🐳 docker", `Docker daemon is ready ✓ (took ~${i + 1}s)`);
       return;
     } catch {
-      if (i % 10 === 9) log("🐳 docker", `Still waiting for Docker... (${i + 1}s)`);
+      if (i % 15 === 14) log("🐳 docker", `Still waiting for Docker… (${i + 1}s)`);
     }
   }
 
-  log("❌ error", "Docker didn't start within 60 s. Please start Docker Desktop manually.");
+  log("❌ error", "Docker didn't start within 90 s. Please start Docker Desktop manually and run npm run dev again.");
   process.exit(1);
 }
 
@@ -145,35 +162,23 @@ async function waitForRedis(maxRetries = 20): Promise<void> {
 // ─── 4. Auto-Init DB Schema ─────────────────────────────
 
 async function ensureSchema(): Promise<void> {
-  log("📦 schema", "Checking database schema...");
+  log("📦 schema", "Applying schema migrations...");
 
   // Dynamic import to load dotenv/env before pg
   const { pool } = await import("../src/db/pool.js");
 
   try {
-    // Check if the core 'niches' table exists
-    const result = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-          AND table_name = 'niches'
-      );
-    `);
-
-    if (result.rows[0].exists) {
-      log("📦 schema", "Schema already initialized ✓");
-      await pool.end();
-      return;
-    }
-
-    log("📦 schema", "First run detected — initializing schema...");
+    // Always run schema.sql — every statement is idempotent:
+    // CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN IF NOT EXISTS,
+    // CREATE INDEX IF NOT EXISTS. Safe to re-run on every boot so new
+    // migrations (like source_url) are picked up without dropping the DB.
     const schemaPath = path.join(ROOT, "src/db/schema.sql");
     const schema = await fs.readFile(schemaPath, "utf8");
     await pool.query(schema);
-    log("📦 schema", "Schema initialized successfully ✓");
+    log("📦 schema", "Schema up to date ✓");
     await pool.end();
   } catch (error) {
-    log("❌ error", `Schema check/init failed: ${error}`);
+    log("❌ error", `Schema migration failed: ${error}`);
     await pool.end();
     process.exit(1);
   }

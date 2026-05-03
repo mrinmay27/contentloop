@@ -178,6 +178,48 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
 
         {/* LEFT: Editor — Task 3.2: panel adapts to selected format */}
         <div className="editor-sidebar" style={{ overflowY:'auto' }}>
+
+          {/* Source reference banner */}
+          {topic.sourceUrl && (
+            <div style={{
+              display:'flex', alignItems:'center', gap:10,
+              padding:'10px 14px', marginBottom:16,
+              background:'var(--bg-elevated)', border:'1px solid var(--border)',
+              borderRadius:'var(--radius-sm)', borderLeft:'3px solid var(--accent)',
+            }}>
+              <span style={{ fontSize:14, flexShrink:0 }}>📖</span>
+              <div style={{ minWidth:0, flex:1 }}>
+                <div style={{ fontSize:10, color:'var(--text-muted)', fontWeight:600,
+                  textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:2 }}>
+                  Source Article
+                </div>
+                <a
+                  href={topic.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize:11, color:'var(--accent)', textDecoration:'none',
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                    display:'block',
+                  }}
+                >
+                  {topic.sourceUrl}
+                </a>
+              </div>
+              <a
+                href={topic.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize:10, fontWeight:700, padding:'4px 10px', borderRadius:6,
+                  background:'var(--accent)', color:'#000', textDecoration:'none', flexShrink:0,
+                }}
+              >
+                Open ↗
+              </a>
+            </div>
+          )}
+
           {/* Hook — always visible */}
           <div>
             <div className="editor-section-title">Hook</div>

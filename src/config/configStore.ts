@@ -28,6 +28,10 @@ export type ConfigKey =
   | 'YOUTUBE_API_KEY' | 'YOUTUBE_CHANNEL_ID'
   | 'YOUTUBE_CLIENT_ID' | 'YOUTUBE_CLIENT_SECRET'
   | 'YOUTUBE_ACCESS_TOKEN' | 'YOUTUBE_REFRESH_TOKEN'
+  // Product Hunt
+  | 'PRODUCT_HUNT_TOKEN'
+  // Exploding Topics
+  | 'EXPLODING_TOPICS_API_KEY'
   // Canva
   | 'CANVA_CLIENT_ID' | 'CANVA_CLIENT_SECRET' | 'CANVA_REDIRECT_URI'
   // Pipeline
@@ -62,6 +66,12 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
                           placeholder:'MyApp/0.1 by u/yourname' },
   // ── Twitter / X ───────────────────────────────────────────────────────────
   TWITTER_BEARER_TOKEN: { label:'Bearer Token',  group:'Twitter / X', type:'secret' },
+  // ── Product Hunt ──────────────────────────────────────────────────────────
+  PRODUCT_HUNT_TOKEN: { label:'Developer Token', group:'Product Hunt', type:'secret',
+                        placeholder:'ph_…' },
+  // ── Exploding Topics ──────────────────────────────────────────────────────
+  EXPLODING_TOPICS_API_KEY: { label:'API Key', group:'Exploding Topics', type:'secret',
+                               placeholder:'et_…' },
   // ── Instagram ─────────────────────────────────────────────────────────────
   INSTAGRAM_APP_ID:       { label:'Meta App ID',       group:'Instagram', type:'text',
                             placeholder:'123456789012345' },
@@ -109,6 +119,8 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
   REDDIT_CLIENT_SECRET:      env.REDDIT_CLIENT_SECRET ?? '',
   REDDIT_USER_AGENT:         env.REDDIT_USER_AGENT,
   TWITTER_BEARER_TOKEN:      env.TWITTER_BEARER_TOKEN ?? '',
+  PRODUCT_HUNT_TOKEN:        process.env.PRODUCT_HUNT_TOKEN ?? '',
+  EXPLODING_TOPICS_API_KEY:  process.env.EXPLODING_TOPICS_API_KEY ?? '',
   INSTAGRAM_ACCESS_TOKEN:    env.INSTAGRAM_ACCESS_TOKEN ?? '',
   YOUTUBE_API_KEY:           (process.env.YOUTUBE_API_KEY) ?? '',
   YOUTUBE_CHANNEL_ID:        (process.env.YOUTUBE_CHANNEL_ID) ?? '',
@@ -189,6 +201,7 @@ class ConfigStore {
   toApiResponse(): Record<ConfigKey, { value: string; masked: boolean }> {
     const SECRETS: ConfigKey[] = [
       "LLM_API_KEY","REDDIT_CLIENT_SECRET","TWITTER_BEARER_TOKEN",
+      "PRODUCT_HUNT_TOKEN","EXPLODING_TOPICS_API_KEY",
       "INSTAGRAM_ACCESS_TOKEN","CANVA_CLIENT_SECRET",
       "YOUTUBE_API_KEY","YOUTUBE_CLIENT_SECRET","YOUTUBE_ACCESS_TOKEN","YOUTUBE_REFRESH_TOKEN",
     ];

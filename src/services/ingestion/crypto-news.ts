@@ -7,9 +7,10 @@
 import type { RawTrend } from "../../domain/types.js";
 
 const CRYPTO_FEEDS = [
-  { name: "CoinDesk", url: "https://www.coindesk.com/arc/outboundfeeds/rss/", engagementHint: 80 },
-  { name: "Decrypt",  url: "https://decrypt.co/feed",                         engagementHint: 75 },
-  { name: "The Block", url: "https://www.theblock.co/rss.xml",               engagementHint: 78 },
+  { name: "CoinDesk",      url: "https://www.coindesk.com/arc/outboundfeeds/rss/", engagementHint: 80 },
+  { name: "Decrypt",       url: "https://decrypt.co/feed",                          engagementHint: 75 },
+  { name: "CoinTelegraph", url: "https://cointelegraph.com/rss",                    engagementHint: 76 },
+  // removed: theblock.co (403 as of 2026-05-03)
 ];
 
 const STALENESS_HOURS = 24; // crypto news older than this gets discarded

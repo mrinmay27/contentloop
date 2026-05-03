@@ -106,4 +106,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(toggles),
     }),
+
+  // ── Danger zone ───────────────────────────────────────────────────────────
+  resetPipeline: () => req<{ ok: boolean }>('/reset/pipeline', { method: 'POST' }),
 };

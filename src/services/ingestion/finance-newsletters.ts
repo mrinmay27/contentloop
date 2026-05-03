@@ -13,17 +13,17 @@ import { fetchRssTrends } from "./rss.js";
 
 // Finance/business newsletter RSS feeds
 const FINANCE_RSS_FEEDS = [
-  "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",                  // WSJ Markets
   "https://www.cnbc.com/id/10000664/device/rss/rss.html",           // CNBC Finance
   "https://feeds.feedburner.com/entrepreneur/latest",                // Entrepreneur
-  "https://hbr.org/resources/rss/hbr_topic_leadership_rss.xml",     // HBR Leadership
   "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",      // NYT Business
+  "https://www.nerdwallet.com/blog/feed/",                           // NerdWallet personal finance
+  // removed: wsj.com (403), hbr.org (403)
 ];
 
 const CRYPTO_RSS_FEEDS = [
   "https://cointelegraph.com/rss",                                    // CoinTelegraph
-  "https://coindesk.com/arc/outboundfeeds/rss/",                    // CoinDesk
-  "https://www.theblock.co/rss.xml",                                 // The Block
+  "https://www.coindesk.com/arc/outboundfeeds/rss/",                // CoinDesk
+  // removed: theblock.co (403 as of 2026-05-03)
 ];
 
 const GENERAL_BUSINESS_RSS_FEEDS = [

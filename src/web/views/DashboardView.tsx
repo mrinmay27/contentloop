@@ -28,6 +28,30 @@ const TABS = [
 
 type TabKey = typeof TABS[number]['key'];
 
+// ─── Sort state ───────────────────────────────────────────────────────────────
+type SortField = 'score' | 'date' | 'source' | 'title';
+type SortDir   = 'desc' | 'asc';
+type SortState = { field: SortField; dir: SortDir };
+const DEFAULT_SORT: SortState = { field: 'score', dir: 'desc' };
+
+const SORT_OPTIONS: { field: SortField; label: string }[] = [
+  { field: 'score',  label: 'Score'  },
+  { field: 'date',   label: 'Date'   },
+  { field: 'source', label: 'Source' },
+  { field: 'title',  label: 'Title'  },
+];
+
+function applySort(topics: Topic[], sort: SortState): Topic[] {
+  return [...topics].sort((a, b) => {
+    let cmp = 0;
+    if      (sort.field === 'score')  cmp = (a.score ?? 0) - (b.score ?? 0);
+    else if (sort.field === 'date')   cmp = (a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0) - (b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0);
+    else if (sort.field === 'source') cmp = (a.sources?.[0] ?? '').localeCompare(b.sources?.[0] ?? '');
+    else if (sort.field === 'title')  cmp = a.title.localeCompare(b.title);
+    return sort.dir === 'desc' ? -cmp : cmp;
+  });
+}
+
 // ─── Filter state ──────────────────────────────────────────────────────────────
 type FilterState = {
   sources:   string[];          // [] = all
@@ -39,10 +63,21 @@ type FilterState = {
 const DEFAULT_FILTER: FilterState = { sources: [], scoreMin: 0, scoreMax: 1, formats: [] };
 
 const SOURCE_OPTIONS = [
-  { value: 'reddit',  label: '🔴 Reddit'       },
-  { value: 'twitter', label: '🐦 Twitter / X'  },
-  { value: 'trends',  label: '📈 Google Trends' },
-  { value: 'rss',     label: '📰 RSS / News'    },
+  { value: 'reddit',             label: '🔴 Reddit'          },
+  { value: 'twitter',            label: '🐦 Twitter / X'     },
+  { value: 'google_news',        label: '📰 Google News'     },
+  { value: 'medium',             label: '✍️ Medium'           },
+  { value: 'hacker_news',        label: '🟠 Hacker News'     },
+  { value: 'devto',              label: '👩‍💻 Dev.to'           },
+  { value: 'substack',           label: '📧 Substack'        },
+  { value: 'arxiv',              label: '🎓 arXiv'           },
+  { value: 'pubmed',             label: '🔬 PubMed'          },
+  { value: 'exploding_topics',   label: '🚀 Exploding Topics' },
+  { value: 'product_hunt',       label: '🐱 Product Hunt'    },
+  { value: 'crypto_news',        label: '₿ Crypto'           },
+  { value: 'finance_newsletter', label: '💰 Finance'         },
+  { value: 'youtube_trends',     label: '▶️ YouTube'          },
+  { value: 'rss',                label: '📡 RSS'             },
 ];
 
 const FORMAT_OPTIONS: { value: SuggestedFormat; label: string }[] = [
@@ -265,6 +300,7 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
   const [filter, setFilter]                 = useState<FilterState>(DEFAULT_FILTER);
   const [filterOpen, setFilterOpen]         = useState(false);
   const [filterRect, setFilterRect]         = useState<DOMRect | null>(null);
+  const [sort, setSort]                     = useState<SortState>(DEFAULT_SORT);
   const btnRef                              = useRef<HTMLButtonElement>(null);
 
   // Sync localTopics when parent topics prop changes
@@ -275,7 +311,6 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
   // (portal renders on document.body so is outside [data-filter-root]).
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
       const insideTrigger  = (e.target as Element).closest?.('[data-filter-root]');
       const insideDropdown = (e.target as Element).closest?.('[data-filter-dropdown]');
       if (!insideTrigger && !insideDropdown) {
@@ -304,7 +339,7 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
     try { await api.rejectContent(id); } catch {}
   };
 
-  const filtered = applyFilters(localTopics, filter, search, activeTab);
+  const filtered = applySort(applyFilters(localTopics, filter, search, activeTab), sort);
 
   // Tab counts respect source/score filter but not search (so counts stay stable while typing)
   const tabCounts = Object.fromEntries(
@@ -484,8 +519,43 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
             </div>
           )}
 
+          {/* Sort control */}
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4, marginTop:6, justifyContent:'flex-end' }}>
+            <span style={{ fontSize:10, color:'var(--text-muted)', fontWeight:600,
+              textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0 }}>
+              Sort:
+            </span>
+            {SORT_OPTIONS.map(opt => {
+              const active = sort.field === opt.field;
+              return (
+                <button
+                  key={opt.field}
+                  onClick={() => setSort(s =>
+                    s.field === opt.field
+                      ? { ...s, dir: s.dir === 'desc' ? 'asc' : 'desc' }
+                      : { field: opt.field, dir: opt.field === 'title' || opt.field === 'source' ? 'asc' : 'desc' }
+                  )}
+                  style={{
+                    fontSize: 11, padding: '3px 9px', borderRadius: 20, cursor: 'pointer',
+                    border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                    background: active ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+                    color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                    fontWeight: active ? 700 : 400,
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt.label}
+                  {active && (
+                    <span style={{ fontSize: 10 }}>{sort.dir === 'desc' ? '↓' : '↑'}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Topic list */}
-          <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:8 }} className="stagger">
+          <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:8 }} className="stagger">
             {filtered.length > 0
               ? filtered.map(topic => (
                 <TopicCard key={topic.id} topic={topic}

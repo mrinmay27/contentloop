@@ -11,6 +11,7 @@
  */
 
 import type { RawTrend } from "../../domain/types.js";
+import { configStore } from "../../config/configStore.js";
 
 const PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql";
 const ENGAGEMENT_HINT = 80;
@@ -49,22 +50,24 @@ interface PhPost {
   createdAt:   string;
 }
 
-/** Fetch from Product Hunt GraphQL. No token needed for public data. */
+/** Fetch from Product Hunt GraphQL. Token optional — boosts rate limits if set. */
 async function fetchPhPosts(featured = true): Promise<PhPost[]> {
   const body = JSON.stringify({
     query: PH_QUERY,
     variables: { featured },
   });
 
+  const token = configStore.get('PRODUCT_HUNT_TOKEN');
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "User-Agent":   "TPCE/1.0 (content-ingestion)",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(PH_GRAPHQL_URL, {
     method: "POST",
     signal: AbortSignal.timeout(9000),
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent":   "TPCE/1.0 (content-ingestion)",
-      // Note: for higher rate limits add a Developer Token here:
-      // "Authorization": `Bearer ${process.env.PRODUCT_HUNT_TOKEN ?? ""}`,
-    },
+    headers,
     body,
   });
 
@@ -130,9 +133,14 @@ export async function fetchProductHuntTrends(
     return [];
   }
 
-  // Filter to niche-relevant posts, or keep all if no match (tech niches are broadly relevant)
-  const relevant = posts.filter(p => isRelevant(p, keywords));
-  const final = relevant.length >= 3 ? relevant : posts.slice(0, 10);
+  // Filter to niche-relevant posts only — no unfiltered fallback.
+  // Product Hunt is already gated to tech/business/creative/education so
+  // posts that don't match the niche keywords are genuinely off-topic.
+  const final = posts.filter(p => isRelevant(p, keywords));
+  if (final.length === 0) {
+    console.log(`[product-hunt] No keyword-relevant posts for ${nicheCategory}`);
+    return [];
+  }
 
   // Sort by votes desc (most upvoted = highest engagement signal)
   final.sort((a, b) => b.votesCount - a.votesCount);
