@@ -19,7 +19,7 @@ const PROVIDER_KEY_MAP: Record<ImageProvider, ConfigKey> = {
 
 const DEFAULT_MODELS: Record<ImageProvider, string> = {
   openai:    'dall-e-3',
-  google:    'imagen-3.0-generate-001',
+  google:    'gemini-2.0-flash-preview-image-generation',
   stability: 'stable-diffusion-3-5-large',
   fal:       'fal-ai/ideogram/v2',
   replicate: 'black-forest-labs/flux-1.1-pro',
@@ -52,22 +52,23 @@ async function generateOpenAI(prompt: string, model: string): Promise<string> {
 async function generateGoogle(prompt: string, model: string): Promise<string> {
   const apiKey = configStore.get('GOOGLE_AI_API_KEY');
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        instances:  [{ prompt }],
-        parameters: { sampleCount: 1, aspectRatio: '1:1' },
+        contents:       [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
       }),
       signal: AbortSignal.timeout(60_000),
     }
   );
-  if (!res.ok) throw new Error(`Google Imagen ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Google Gemini image ${res.status}: ${await res.text()}`);
   const data: any = await res.json();
-  const b64 = data.predictions?.[0]?.bytesBase64Encoded;
-  if (!b64) throw new Error('Google Imagen returned no image data');
-  return `data:image/png;base64,${b64}`;
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const imgPart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
+  if (!imgPart) throw new Error('Google Gemini returned no image');
+  return `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
 }
 
 async function generateStability(prompt: string, _model: string): Promise<string> {

@@ -41,13 +41,14 @@ export const IMAGE_PROVIDER_DEFS: ImageProviderDef[] = [
     note: 'Uses your existing LLM_API_KEY',
   },
   {
-    id: 'google', name: 'Google Imagen 3', icon: '🔵',
+    id: 'google', name: 'Google Gemini (Image)', icon: '🔵',
     keyName: 'GOOGLE_AI_API_KEY', logoRank: 3,
     models: [
-      { id: 'imagen-3.0-generate-001',      label: 'Imagen 3',      description: 'Highest quality · photorealistic' },
-      { id: 'imagen-3.0-fast-generate-001', label: 'Imagen 3 Fast', description: 'Faster, lower cost' },
+      { id: 'gemini-2.0-flash-preview-image-generation', label: 'Gemini 2.0 Flash (Image)', description: 'AI Studio key · free tier · fast' },
+      { id: 'gemini-2.0-flash-exp',                      label: 'Gemini 2.0 Flash Exp',     description: 'Experimental · higher quality' },
     ],
     docsUrl: 'https://aistudio.google.com/app/apikey', docsLabel: 'Google AI Studio →',
+    note: 'Uses your Google AI Studio key — works with free tier',
   },
   {
     id: 'stability', name: 'Stability AI', icon: '🎨',
