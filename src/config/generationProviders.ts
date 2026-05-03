@@ -1,7 +1,7 @@
 import { configStore } from "./configStore.js";
 import type { ConfigKey } from "./configStore.js";
 
-export type ImageProvider = 'openai' | 'google' | 'stability' | 'fal' | 'replicate';
+export type ImageProvider = 'openai' | 'google' | 'stability' | 'fal' | 'replicate' | 'pollinations';
 
 export interface GenerationResult {
   url:      string;
@@ -9,7 +9,8 @@ export interface GenerationResult {
   model:    string;
 }
 
-const PROVIDER_KEY_MAP: Record<ImageProvider, ConfigKey> = {
+// Providers that need an API key
+const PROVIDER_KEY_MAP: Partial<Record<ImageProvider, ConfigKey>> = {
   openai:    'LLM_API_KEY',
   google:    'GOOGLE_AI_API_KEY',
   stability: 'STABILITY_API_KEY',
@@ -17,12 +18,16 @@ const PROVIDER_KEY_MAP: Record<ImageProvider, ConfigKey> = {
   replicate: 'REPLICATE_API_TOKEN',
 };
 
+// Providers that work without any API key
+const FREE_PROVIDERS = new Set<ImageProvider>(['pollinations']);
+
 const DEFAULT_MODELS: Record<ImageProvider, string> = {
-  openai:    'dall-e-3',
-  google:    'gemini-2.0-flash-preview-image-generation',
-  stability: 'stable-diffusion-3-5-large',
-  fal:       'fal-ai/ideogram/v2',
-  replicate: 'black-forest-labs/flux-1.1-pro',
+  openai:       'dall-e-3',
+  google:       'gemini-2.0-flash-preview-image-generation',
+  stability:    'stable-diffusion-3-5-large',
+  fal:          'fal-ai/ideogram/v2',
+  replicate:    'black-forest-labs/flux-1.1-pro',
+  pollinations: 'flux',
 };
 
 export function getProviderChain(): Array<{ provider: ImageProvider; model: string }> {
@@ -30,9 +35,13 @@ export function getProviderChain(): Array<{ provider: ImageProvider; model: stri
   let modelPrefs: Record<string, string> = {};
   try { priority = JSON.parse(configStore.get('IMAGE_PROVIDER_PRIORITY') || '[]'); } catch {}
   try { modelPrefs = JSON.parse(configStore.get('IMAGE_MODEL_PREFS') || '{}'); } catch {}
+
+  // Always append pollinations at the end if it's not already in the priority list
+  if (!priority.includes('pollinations')) priority = [...priority, 'pollinations'];
+
   return priority
-    .filter((p): p is ImageProvider => p in PROVIDER_KEY_MAP)
-    .filter(p => configStore.get(PROVIDER_KEY_MAP[p]).length > 0)
+    .filter((p): p is ImageProvider => p in PROVIDER_KEY_MAP || FREE_PROVIDERS.has(p as ImageProvider))
+    .filter(p => FREE_PROVIDERS.has(p) || (configStore.get(PROVIDER_KEY_MAP[p]!) ?? '').length > 0)
     .map(p => ({ provider: p, model: modelPrefs[p] || DEFAULT_MODELS[p] }));
 }
 
@@ -54,7 +63,6 @@ async function generateGoogle(prompt: string, model: string): Promise<string> {
   const base   = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   if (model.startsWith('imagen')) {
-    // Imagen models (AI Studio Pro): use the predict endpoint
     const res = await fetch(`${base}/${model}:predict?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -71,7 +79,6 @@ async function generateGoogle(prompt: string, model: string): Promise<string> {
     return `data:image/png;base64,${b64}`;
   }
 
-  // Gemini image-capable models: use generateContent
   const res = await fetch(`${base}/${model}:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -83,7 +90,7 @@ async function generateGoogle(prompt: string, model: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`Google Gemini image ${res.status}: ${await res.text()}`);
   const data: any = await res.json();
-  const parts  = data.candidates?.[0]?.content?.parts ?? [];
+  const parts   = data.candidates?.[0]?.content?.parts ?? [];
   const imgPart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
   if (!imgPart) throw new Error('Google Gemini returned no image');
   return `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
@@ -141,13 +148,25 @@ async function generateReplicate(prompt: string, model: string): Promise<string>
   throw new Error('Replicate timed out after 90s');
 }
 
+async function generatePollinations(prompt: string, model: string): Promise<string> {
+  const seed = Math.floor(Math.random() * 999_999);
+  const url  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+               `?width=1024&height=1024&model=${model}&nologo=true&seed=${seed}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new Error(`Pollinations ${res.status}`);
+  const buffer = await res.arrayBuffer();
+  const ct = res.headers.get('content-type') ?? 'image/jpeg';
+  return `data:${ct};base64,${Buffer.from(buffer).toString('base64')}`;
+}
+
 async function callProvider(prompt: string, provider: ImageProvider, model: string): Promise<string> {
   switch (provider) {
-    case 'openai':    return generateOpenAI(prompt, model);
-    case 'google':    return generateGoogle(prompt, model);
-    case 'stability': return generateStability(prompt, model);
-    case 'fal':       return generateFal(prompt, model);
-    case 'replicate': return generateReplicate(prompt, model);
+    case 'openai':       return generateOpenAI(prompt, model);
+    case 'google':       return generateGoogle(prompt, model);
+    case 'stability':    return generateStability(prompt, model);
+    case 'fal':          return generateFal(prompt, model);
+    case 'replicate':    return generateReplicate(prompt, model);
+    case 'pollinations': return generatePollinations(prompt, model);
     default: throw new Error(`Unknown provider: ${provider}`);
   }
 }

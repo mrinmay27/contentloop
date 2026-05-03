@@ -72,7 +72,8 @@ export const ImageGenManager: React.FC = () => {
   const getKeyValue = (keyName: string) =>
     dirty[keyName] ?? config[keyName]?.value ?? '';
 
-  const isConnected = (def: ImageProviderDef) => getKeyValue(def.keyName).length > 0;
+  const isConnected = (def: ImageProviderDef) =>
+    !!def.freeProvider || getKeyValue(def.keyName).length > 0;
 
   const handleKeyChange = (keyName: string, value: string) => {
     setDirty(d => ({ ...d, [keyName]: value }));
@@ -117,9 +118,12 @@ export const ImageGenManager: React.FC = () => {
     }
   };
 
-  const orderedDefs = priority
-    .map(id => IMAGE_PROVIDER_DEFS.find(d => d.id === id))
-    .filter((d): d is ImageProviderDef => !!d);
+  // Include all known providers; stored priority controls order, new ones appended at end
+  const prioritySet  = new Set(priority);
+  const orderedDefs  = [
+    ...priority.map(id => IMAGE_PROVIDER_DEFS.find(d => d.id === id)).filter((d): d is ImageProviderDef => !!d),
+    ...IMAGE_PROVIDER_DEFS.filter(d => !prioritySet.has(d.id)),
+  ];
 
   const connectedCount = orderedDefs.filter(isConnected).length;
 
@@ -203,14 +207,16 @@ export const ImageGenManager: React.FC = () => {
                       ↻
                     </button>
                   )}
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '3px 8px' }}
-                    onClick={() => setExpanded(isOpen ? null : def.id)}>
-                    {isOpen ? '▲' : 'Set up'}
-                  </button>
+                  {!def.freeProvider && (
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '3px 8px' }}
+                      onClick={() => setExpanded(isOpen ? null : def.id)}>
+                      {isOpen ? '▲' : 'Set up'}
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {isOpen && (
+              {isOpen && !def.freeProvider && (
                 <div style={{ borderTop: '1px solid var(--border)', padding: '12px 14px',
                   background: 'var(--bg-elevated)' }}>
                   <div style={{ marginBottom: connected ? 12 : 0 }}>

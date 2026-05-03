@@ -33,7 +33,7 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
         setCapabilities(caps ?? {});
         const first = [...IMAGE_PROVIDER_DEFS]
           .sort((a, b) => a.logoRank - b.logoRank)
-          .find(def => (vals[def.keyName]?.value ?? '').length > 0);
+          .find(def => def.freeProvider || (vals[def.keyName]?.value ?? '').length > 0);
         if (first) {
           setSelected(first.id);
           // Prefer first recommended model from capabilities, fallback to static list
@@ -63,9 +63,10 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
     setPromptEdited(false);
   }, [brandName, brandAccent, brandFont]);
 
-  const isConnected   = (keyName: string) => (config[keyName]?.value ?? '').length > 0;
-  const ideogramReady = isConnected('FAL_API_KEY');
-  const anyConnected  = IMAGE_PROVIDER_DEFS.some(d => isConnected(d.keyName));
+  const isConnected   = (def: typeof IMAGE_PROVIDER_DEFS[number]) =>
+    !!def.freeProvider || (config[def.keyName]?.value ?? '').length > 0;
+  const ideogramReady = (config['FAL_API_KEY']?.value ?? '').length > 0;
+  const anyConnected  = IMAGE_PROVIDER_DEFS.some(d => isConnected(d));
   const rankedDefs    = [...IMAGE_PROVIDER_DEFS].sort((a, b) => a.logoRank - b.logoRank);
 
   const handleProviderSelect = (id: string) => {
@@ -139,7 +140,7 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
               Provider — ranked best → good for logos
             </div>
             {rankedDefs.map((def, i) => {
-              const connected = isConnected(def.keyName);
+              const connected = isConnected(def);
               const active    = selected === def.id;
               return (
                 <button key={def.id} disabled={!connected}

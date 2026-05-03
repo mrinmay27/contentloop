@@ -5,15 +5,16 @@ export interface ModelOption {
 }
 
 export interface ImageProviderDef {
-  id:        string;
-  name:      string;
-  icon:      string;
-  keyName:   string;
-  models:    ModelOption[];
-  docsUrl:   string;
-  docsLabel: string;
-  note?:     string;
-  logoRank:  number; // 1 = best for logos
+  id:           string;
+  name:         string;
+  icon:         string;
+  keyName:      string;
+  models:       ModelOption[];
+  docsUrl:      string;
+  docsLabel:    string;
+  note?:        string;
+  logoRank:     number; // 1 = best for logos
+  freeProvider?: boolean; // always available, no API key required
 }
 
 // Ordered by logo/brand generation quality (logoRank 1 = best)
@@ -66,5 +67,17 @@ export const IMAGE_PROVIDER_DEFS: ImageProviderDef[] = [
       { id: 'ideogram-ai/ideogram-v2',        label: 'Ideogram v2',  description: 'Text-heavy designs' },
     ],
     docsUrl: 'https://replicate.com/account/api-tokens', docsLabel: 'Replicate Tokens →',
+  },
+  {
+    id: 'pollinations', name: 'Pollinations.ai', icon: '🌸',
+    keyName: '', freeProvider: true, logoRank: 6,
+    models: [
+      { id: 'flux',          label: 'FLUX.1',        description: 'Best quality · always free' },
+      { id: 'flux-realism',  label: 'FLUX Realism',  description: 'Photorealistic · free' },
+      { id: 'turbo',         label: 'Turbo',         description: 'Fastest · free' },
+      { id: 'gptimage',      label: 'GPT Image',     description: 'GPT-4o image model · free' },
+    ],
+    docsUrl: 'https://pollinations.ai', docsLabel: 'Pollinations.ai →',
+    note: 'No API key needed — completely free, powered by FLUX.1',
   },
 ];
