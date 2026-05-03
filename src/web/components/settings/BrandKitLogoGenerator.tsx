@@ -1,17 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
 import { IMAGE_PROVIDER_DEFS } from '../../lib/generationProviders';
 
 interface Props {
   brandAccent: string;
   brandFont:   string;
+  brandName:   string;
 }
 
-export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont }) => {
+function buildPrompt(name: string, accent: string, font: string): string {
+  const safeName = name.trim() || 'my brand';
+  return `Clean minimal logo for "${safeName}". Primary accent color ${accent}. Typography inspired by ${font}. Geometric lettermark or wordmark, professional and modern, suitable for a social media theme page. White or transparent background. No gradients, no drop shadows, no complex illustrations. High contrast, scalable.`;
+}
+
+export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont, brandName }) => {
   const [config,        setConfig]        = useState<Record<string, { value: string }>>({});
   const [selected,      setSelected]      = useState('');
   const [selectedModel, setSelectedModel] = useState('');
   const [prompt,        setPrompt]        = useState('');
+  const [promptEdited,  setPromptEdited]  = useState(false);
   const [generating,    setGenerating]    = useState(false);
   const [logoUrl,       setLogoUrl]       = useState('');
   const [error,         setError]         = useState<string | null>(null);
@@ -30,7 +37,24 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont 
     }).catch(() => {});
   }, []);
 
-  const isConnected  = (keyName: string) => (config[keyName]?.value ?? '').length > 0;
+  // Auto-fill prompt whenever brand values change, unless user has manually edited it
+  useEffect(() => {
+    if (!promptEdited) {
+      setPrompt(buildPrompt(brandName, brandAccent, brandFont));
+    }
+  }, [brandName, brandAccent, brandFont, promptEdited]);
+
+  const handlePromptChange = (val: string) => {
+    setPrompt(val);
+    setPromptEdited(true);
+  };
+
+  const handleResetPrompt = useCallback(() => {
+    setPrompt(buildPrompt(brandName, brandAccent, brandFont));
+    setPromptEdited(false);
+  }, [brandName, brandAccent, brandFont]);
+
+  const isConnected   = (keyName: string) => (config[keyName]?.value ?? '').length > 0;
   const ideogramReady = isConnected('FAL_API_KEY');
   const anyConnected  = IMAGE_PROVIDER_DEFS.some(d => isConnected(d.keyName));
   const rankedDefs    = [...IMAGE_PROVIDER_DEFS].sort((a, b) => a.logoRank - b.logoRank);
@@ -59,7 +83,8 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont 
         <span style={{ fontSize: 14, fontWeight: 700 }}>Logo Generator</span>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
-        Generate logo concepts using your connected image APIs. Providers ranked best → good for logo quality.
+        Prompt is auto-filled from your page name, color, and font. Generate directly or
+        tweak the prompt for more control.
       </div>
 
       {!ideogramReady && (
@@ -87,6 +112,7 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont 
         </div>
       ) : (
         <>
+          {/* Ranked provider list */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
               Provider — ranked best → good for logos
@@ -125,6 +151,7 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont 
             })}
           </div>
 
+          {/* Model selector */}
           {selected && (
             <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
@@ -139,9 +166,32 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont 
             </div>
           )}
 
-          <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2}
-            placeholder={`e.g. Minimal logo, accent color ${brandAccent}, ${brandFont} font, geometric lettermark, dark background, no gradients`}
-            style={{ width: '100%', fontSize: 11, resize: 'vertical', marginBottom: 8, boxSizing: 'border-box' }} />
+          {/* Prompt — auto-filled, fully editable */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Prompt
+                {promptEdited && (
+                  <span style={{ marginLeft: 6, color: 'var(--accent)', fontSize: 10 }}>
+                    (edited)
+                  </span>
+                )}
+              </label>
+              {promptEdited && (
+                <button onClick={handleResetPrompt}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: 10, color: 'var(--text-muted)', padding: 0 }}>
+                  ↺ Reset to auto
+                </button>
+              )}
+            </div>
+            <textarea
+              value={prompt}
+              onChange={e => handlePromptChange(e.target.value)}
+              rows={3}
+              style={{ width: '100%', fontSize: 11, resize: 'vertical', boxSizing: 'border-box' }}
+            />
+          </div>
 
           <button className="btn btn-primary btn-sm" style={{ width: '100%', fontSize: 11 }}
             disabled={generating || !selected || !prompt.trim()} onClick={handleGenerate}>
@@ -166,6 +216,10 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont 
                   className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}>Open full size ↗</a>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   onClick={() => { setLogoUrl(''); setError(null); }}>Clear</button>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, marginLeft: 'auto' }}
+                  onClick={handleGenerate} disabled={generating}>
+                  ↻ Regenerate
+                </button>
               </div>
             </div>
           )}

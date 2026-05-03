@@ -483,7 +483,11 @@ function BrandingSection() {
         )}
       </div>
 
-      <BrandKitLogoGenerator brandAccent={brand.accent} brandFont={brand.font} />
+      <BrandKitLogoGenerator
+        brandAccent={brand.accent}
+        brandFont={brand.font}
+        brandName={selectedPage?.name ?? selectedPage?.handle ?? ''}
+      />
     </div>
   );
 }
