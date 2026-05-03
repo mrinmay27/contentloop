@@ -107,6 +107,13 @@ export const api = {
       body: JSON.stringify(toggles),
     }),
 
+  // ── AI Generation ────────────────────────────────────────────────────────
+  generateImage: (body: { prompt: string; provider?: string; model?: string; contentId?: string }) =>
+    req<{ ok: boolean; url: string; provider: string; model: string }>(
+      '/generate/image',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    ),
+
   // ── Danger zone ───────────────────────────────────────────────────────────
   resetPipeline: () => req<{ ok: boolean }>('/reset/pipeline', { method: 'POST' }),
 };

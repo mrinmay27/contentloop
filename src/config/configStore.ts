@@ -32,6 +32,15 @@ export type ConfigKey =
   | 'PRODUCT_HUNT_TOKEN'
   // Exploding Topics
   | 'EXPLODING_TOPICS_API_KEY'
+  // Image generation providers
+  | 'GOOGLE_AI_API_KEY'
+  | 'STABILITY_API_KEY'
+  | 'FAL_API_KEY'
+  | 'REPLICATE_API_TOKEN'
+  | 'RUNWAY_API_KEY'
+  | 'HEYGEN_API_KEY'
+  | 'IMAGE_PROVIDER_PRIORITY'
+  | 'IMAGE_MODEL_PREFS'
   // Canva
   | 'CANVA_CLIENT_ID' | 'CANVA_CLIENT_SECRET' | 'CANVA_REDIRECT_URI'
   // Pipeline
@@ -70,8 +79,17 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
   PRODUCT_HUNT_TOKEN: { label:'Developer Token', group:'Product Hunt', type:'secret',
                         placeholder:'ph_…' },
   // ── Exploding Topics ──────────────────────────────────────────────────────
-  EXPLODING_TOPICS_API_KEY: { label:'API Key', group:'Exploding Topics', type:'secret',
-                               placeholder:'et_…' },
+  EXPLODING_TOPICS_API_KEY: { label:'API Key',         group:'Exploding Topics',  type:'secret',
+                              placeholder:'et_…' },
+  // ── Image generation — managed by ImageGenManager, not auto-rendered ──────────
+  GOOGLE_AI_API_KEY:   { label:'Google AI API Key',    group:'Image Generation',  type:'secret', placeholder:'AIza…' },
+  STABILITY_API_KEY:   { label:'Stability AI API Key', group:'Image Generation',  type:'secret', placeholder:'sk-…' },
+  FAL_API_KEY:         { label:'fal.ai API Key',        group:'Image Generation',  type:'secret', placeholder:'…' },
+  REPLICATE_API_TOKEN: { label:'Replicate API Token',  group:'Image Generation',  type:'secret', placeholder:'r8_…' },
+  RUNWAY_API_KEY:      { label:'RunwayML API Key',      group:'Image Generation',  type:'secret', placeholder:'…' },
+  HEYGEN_API_KEY:      { label:'HeyGen API Key',        group:'Image Generation',  type:'secret', placeholder:'…' },
+  IMAGE_PROVIDER_PRIORITY: { label:'Image Provider Priority', group:'Image Generation', type:'text', placeholder:'["google","openai","fal","stability","replicate"]' },
+  IMAGE_MODEL_PREFS:       { label:'Image Model Prefs',       group:'Image Generation', type:'text', placeholder:'{}' },
   // ── Instagram ─────────────────────────────────────────────────────────────
   INSTAGRAM_APP_ID:       { label:'Meta App ID',       group:'Instagram', type:'text',
                             placeholder:'123456789012345' },
@@ -121,6 +139,14 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
   TWITTER_BEARER_TOKEN:      env.TWITTER_BEARER_TOKEN ?? '',
   PRODUCT_HUNT_TOKEN:        process.env.PRODUCT_HUNT_TOKEN ?? '',
   EXPLODING_TOPICS_API_KEY:  process.env.EXPLODING_TOPICS_API_KEY ?? '',
+  GOOGLE_AI_API_KEY:         process.env.GOOGLE_AI_API_KEY         ?? '',
+  STABILITY_API_KEY:         process.env.STABILITY_API_KEY         ?? '',
+  FAL_API_KEY:               process.env.FAL_API_KEY               ?? '',
+  REPLICATE_API_TOKEN:       process.env.REPLICATE_API_TOKEN       ?? '',
+  RUNWAY_API_KEY:            process.env.RUNWAY_API_KEY            ?? '',
+  HEYGEN_API_KEY:            process.env.HEYGEN_API_KEY            ?? '',
+  IMAGE_PROVIDER_PRIORITY:   process.env.IMAGE_PROVIDER_PRIORITY   ?? '["google","openai","fal","stability","replicate"]',
+  IMAGE_MODEL_PREFS:         process.env.IMAGE_MODEL_PREFS         ?? '{}',
   INSTAGRAM_ACCESS_TOKEN:    env.INSTAGRAM_ACCESS_TOKEN ?? '',
   YOUTUBE_API_KEY:           (process.env.YOUTUBE_API_KEY) ?? '',
   YOUTUBE_CHANNEL_ID:        (process.env.YOUTUBE_CHANNEL_ID) ?? '',
@@ -202,6 +228,7 @@ class ConfigStore {
     const SECRETS: ConfigKey[] = [
       "LLM_API_KEY","REDDIT_CLIENT_SECRET","TWITTER_BEARER_TOKEN",
       "PRODUCT_HUNT_TOKEN","EXPLODING_TOPICS_API_KEY",
+      "GOOGLE_AI_API_KEY","STABILITY_API_KEY","FAL_API_KEY","REPLICATE_API_TOKEN","RUNWAY_API_KEY","HEYGEN_API_KEY",
       "INSTAGRAM_ACCESS_TOKEN","CANVA_CLIENT_SECRET",
       "YOUTUBE_API_KEY","YOUTUBE_CLIENT_SECRET","YOUTUBE_ACCESS_TOKEN","YOUTUBE_REFRESH_TOKEN",
     ];

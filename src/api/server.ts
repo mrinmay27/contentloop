@@ -28,6 +28,7 @@ import { queues } from "../worker/queues.js";
 import * as canva from "../services/canva.js";
 import * as instagram from "../services/instagram.js";
 import { configStore, CONFIG_META, type ConfigKey } from "../config/configStore.js";
+import { generateImage as genImage } from "../config/generationProviders.js";
 import { llmConfigStore, LLM_PROVIDERS } from "../config/llmConfigStore.js";
 
 // In-memory OAuth state store (keyed by state param for CSRF protection)
@@ -98,6 +99,31 @@ app.patch("/api/config", (req, res, next) => {
     res.json({ ok: true, saved: Object.keys(safe) });
   } catch (error) {
     next(error);
+  }
+});
+
+// ── AI Image generation ───────────────────────────────────────────────────────
+
+app.post("/api/generate/image", async (req, res, next) => {
+  try {
+    const { prompt, provider, model, contentId } = req.body as {
+      prompt: string; provider?: string; model?: string; contentId?: string;
+    };
+    if (!prompt?.trim()) return void res.status(400).json({ error: 'prompt is required' });
+    const result = await genImage(prompt.trim(), provider as any, model);
+    if (contentId) {
+      await query(
+        `UPDATE content_items
+         SET payload = jsonb_set(coalesce(payload, '{}'), '{generatedImageUrl}', $1::jsonb),
+             updated_at = now()
+         WHERE id = $2`,
+        [JSON.stringify(result.url), contentId]
+      );
+    }
+    res.json({ ok: true, url: result.url, provider: result.provider, model: result.model });
+  } catch (err: any) {
+    console.error('[generate/image]', err?.message);
+    res.status(500).json({ error: err?.message ?? 'Generation failed' });
   }
 });
 

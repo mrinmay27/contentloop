@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Icon } from '../components/ui/Icon';
 import { api } from '../lib/api';
 import { LLMManager } from '../components/settings/LLMManager';
+import { ImageGenManager } from '../components/settings/ImageGenManager';
+import { BrandKitLogoGenerator } from '../components/settings/BrandKitLogoGenerator';
 import { OAuthConnectCard, type OAuthProvider } from '../components/settings/OAuthConnectCard';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -53,6 +55,7 @@ const PREMIUM_GROUPS = new Set(['Twitter / X', 'Exploding Topics']);
 // Navigation sections — defines order and visual grouping in the left panel
 const NAV_SECTIONS: { label: string; groups: string[] }[] = [
   { label: 'System',               groups: ['AI / LLM', 'Branding', 'Content Sources', 'Pipeline'] },
+  { label: 'Generation',           groups: ['Image Generation'] },
   { label: 'Ingestion — Free',     groups: ['Reddit', 'Product Hunt'] },
   { label: 'Ingestion — Premium',  groups: ['Twitter / X', 'Exploding Topics'] },
   { label: 'Publishing',           groups: ['Instagram', 'YouTube', 'Canva'] },
@@ -207,8 +210,73 @@ const BRAND_DEFAULTS: BrandValues = {
   hashtags:    '',
 };
 
-const FONTS        = ['DM Sans','Inter','Satoshi','Clash Display','Poppins','Outfit'];
-const TONES        = ['Educational','Bold & Direct','Casual & Friendly','Professional','Storytelling'];
+const FONTS = [
+  'DM Sans','DM Serif Display',
+  'Inter','Playfair Display',
+  'Satoshi','Cabinet Grotesk',
+  'Clash Display','Clash Grotesk',
+  'Outfit','Merriweather',
+  'Plus Jakarta Sans','Cormorant Garamond',
+  'Geist','Geist Mono',
+  'Poppins','Nunito','Raleway','Lato','Montserrat','Source Sans 3',
+  'Manrope','Figtree','Syne','Space Grotesk',
+  'Fraunces','Libre Baskerville','Lora','PT Serif','Crimson Pro','EB Garamond',
+  'JetBrains Mono','Fira Code','IBM Plex Mono',
+];
+
+const FONT_PAIRS = [
+  { heading: 'DM Serif Display',   body: 'DM Sans',           label: 'Modern Editorial' },
+  { heading: 'Playfair Display',   body: 'Inter',             label: 'Classic & Clean'  },
+  { heading: 'Clash Display',      body: 'Clash Grotesk',     label: 'Bold Brand'       },
+  { heading: 'Fraunces',           body: 'Plus Jakarta Sans', label: 'Warm & Trustworthy'},
+  { heading: 'Cormorant Garamond', body: 'Outfit',            label: 'Luxury Minimal'   },
+  { heading: 'Syne',               body: 'Manrope',           label: 'Creative Studio'  },
+];
+
+const TONES = ['Educational','Bold & Direct','Casual & Friendly','Professional','Storytelling'];
+
+function hexToHsl(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1,3),16)/255;
+  const g = parseInt(hex.slice(3,5),16)/255;
+  const b = parseInt(hex.slice(5,7),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  let h = 0, s = 0;
+  const l = (max+min)/2;
+  if (max !== min) {
+    const d = max-min;
+    s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max) {
+      case r: h=((g-b)/d+(g<b?6:0))/6; break;
+      case g: h=((b-r)/d+2)/6; break;
+      case b: h=((r-g)/d+4)/6; break;
+    }
+  }
+  return [Math.round(h*360), Math.round(s*100), Math.round(l*100)];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  s/=100; l/=100;
+  const a = s*Math.min(l,1-l);
+  const f = (n: number) => {
+    const k=(n+h/30)%12;
+    return Math.round((l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1))))*255)
+      .toString(16).padStart(2,'0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function generatePalette(accent: string): string[] {
+  try {
+    const [h,s,l] = hexToHsl(accent);
+    return [
+      accent,
+      hslToHex((h+30)%360, s, Math.min(l+10,90)),
+      hslToHex((h+180)%360, Math.max(s-20,20), Math.min(l+15,90)),
+      hslToHex(h, Math.max(s-40,10), Math.min(l+30,92)),
+      hslToHex(h, s, Math.max(l-30,10)),
+    ];
+  } catch { return [accent,'#F5A623','#4A90E2','#F0EDE8','#1A1A2E']; }
+}
 
 function BrandingSection() {
   const [pages,    setPages]    = useState<any[]>([]);
@@ -247,6 +315,7 @@ function BrandingSection() {
   };
 
   const selectedPage = pages.find(p => p.id === pageId);
+  const palette      = generatePalette(brand.accent);
 
   return (
     <div>
@@ -304,6 +373,24 @@ function BrandingSection() {
           </div>
         </div>
 
+        {/* Generated Palette */}
+        <div style={{ display:'flex', alignItems:'center', gap:16, padding:'12px 0',
+          borderBottom:'1px solid var(--border)' }}>
+          <div style={{ minWidth:200, flexShrink:0 }}>
+            <div style={{ fontSize:13, fontWeight:500 }}>Generated Palette</div>
+            <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:2 }}>Auto-generated from primary color</div>
+          </div>
+          <div style={{ display:'flex', gap:6, alignItems:'center', flex:1 }}>
+            {palette.map((hex, i) => (
+              <div key={i} title={`${hex} — click to copy`}
+                onClick={() => navigator.clipboard?.writeText(hex)}
+                style={{ width:32, height:32, borderRadius:'var(--radius-sm)',
+                  background:hex, border:'1px solid var(--border)', cursor:'pointer', flexShrink:0 }}/>
+            ))}
+            <div style={{ fontSize:10, color:'var(--text-muted)', marginLeft:4 }}>Click to copy hex</div>
+          </div>
+        </div>
+
         {/* Font */}
         <div style={{ display:'flex', alignItems:'center', gap:16, padding:'12px 0',
           borderBottom:'1px solid var(--border)' }}>
@@ -311,10 +398,22 @@ function BrandingSection() {
             <div style={{ fontSize:13, fontWeight:500 }}>Default Font</div>
             <div style={{ fontSize:10, color:'var(--text-muted)', fontFamily:'var(--mono)', marginTop:2 }}>font</div>
           </div>
-          <select value={brand.font} style={{ width:200 }}
-            onChange={e => setBrand(b => ({ ...b, font: e.target.value }))}>
-            {FONTS.map(f => <option key={f}>{f}</option>)}
-          </select>
+          <div style={{ flex:1 }}>
+            <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:8 }}>
+              {FONT_PAIRS.map(pair => (
+                <button key={pair.label}
+                  onClick={() => setBrand(b => ({ ...b, font: pair.body }))}
+                  className={`btn btn-sm ${brand.font === pair.body ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ fontSize:10 }} title={`${pair.heading} / ${pair.body}`}>
+                  {pair.label}
+                </button>
+              ))}
+            </div>
+            <select value={brand.font} style={{ width:220 }}
+              onChange={e => setBrand(b => ({ ...b, font: e.target.value }))}>
+              {FONTS.map(f => <option key={f}>{f}</option>)}
+            </select>
+          </div>
         </div>
 
         {/* Caption Tone */}
@@ -383,6 +482,8 @@ function BrandingSection() {
           </span>
         )}
       </div>
+
+      <BrandKitLogoGenerator brandAccent={brand.accent} brandFont={brand.font} />
     </div>
   );
 }
@@ -1029,11 +1130,16 @@ function ContentSourcesSection() {
 
 const GROUP_ORDER_WITH_BRANDING = [
   'AI / LLM', 'Branding', 'Content Sources', 'Pipeline',
+  'Image Generation',
   'Reddit', 'Product Hunt',
   'Twitter / X', 'Exploding Topics',
   'Instagram', 'YouTube', 'Canva',
 ];
-const ALL_GROUP_ICONS: Record<string, string> = { ...GROUP_ICONS, 'Branding': '🎨' };
+const ALL_GROUP_ICONS: Record<string, string> = {
+  ...GROUP_ICONS,
+  'Branding':         '🎨',
+  'Image Generation': '🖼️',
+};
 
 export const SettingsView: React.FC = () => {
   const [config,      setConfig]     = useState<ConfigData | null>(null);
@@ -1147,6 +1253,8 @@ export const SettingsView: React.FC = () => {
             <BrandingSection/>
           ) : activeGroup === 'Content Sources' ? (
             <ContentSourcesSection />
+          ) : activeGroup === 'Image Generation' ? (
+            <ImageGenManager />
           ) : loading ? (
             <div style={{ color:'var(--text-muted)', fontSize:13 }}>Loading configuration…</div>
           ) : !config ? (
