@@ -127,6 +127,52 @@ app.post("/api/generate/image", async (req, res, next) => {
   }
 });
 
+// ── Google AI model discovery ─────────────────────────────────────────────────
+
+app.get("/api/providers/google/models", async (_req, res, next) => {
+  try {
+    const apiKey = configStore.get('GOOGLE_AI_API_KEY');
+    if (!apiKey) return void res.json({ models: [] });
+
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=200`,
+      { signal: AbortSignal.timeout(10_000) }
+    );
+    if (!r.ok) throw new Error(`Google models API ${r.status}: ${await r.text()}`);
+    const data: any = await r.json();
+
+    const IMAGE_PATTERN = /imagen|image-generation|flash.*image|image.*flash/i;
+    const models = (data.models ?? [])
+      .filter((m: any) =>
+        IMAGE_PATTERN.test(m.name) &&
+        (m.supportedGenerationMethods ?? []).some((x: string) => x === 'generateContent' || x === 'predict')
+      )
+      .map((m: any) => {
+        const id = (m.name as string).replace('models/', '');
+        return {
+          id,
+          label:       m.displayName ?? id,
+          description: m.description ?? '',
+          endpoint:    id.startsWith('imagen') ? 'predict' : 'generateContent',
+        };
+      })
+      // Best first: imagen-3 > imagen-3-fast > gemini flash image
+      .sort((a: any, b: any) => {
+        const rank = (id: string) => {
+          if (/imagen-3\.0-generate/.test(id)) return 0;
+          if (/imagen-3\.0-fast/.test(id))     return 1;
+          if (/imagen/.test(id))               return 2;
+          return 3;
+        };
+        return rank(a.id) - rank(b.id);
+      });
+
+    res.json({ models });
+  } catch (err: any) {
+    next(err);
+  }
+});
+
 // ── Multi-LLM config CRUD ─────────────────────────────────────────────────────
 
 app.get("/api/llm-configs", (_req, res) => {

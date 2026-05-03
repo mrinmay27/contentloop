@@ -108,6 +108,11 @@ export const api = {
     }),
 
   // ── AI Generation ────────────────────────────────────────────────────────
+  getGoogleModels: () =>
+    req<{ models: Array<{ id: string; label: string; description: string; endpoint: string }> }>(
+      '/providers/google/models'
+    ),
+
   generateImage: (body: { prompt: string; provider?: string; model?: string; contentId?: string }) =>
     req<{ ok: boolean; url: string; provider: string; model: string }>(
       '/generate/image',

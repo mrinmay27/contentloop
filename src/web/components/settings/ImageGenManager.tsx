@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { IMAGE_PROVIDER_DEFS, type ImageProviderDef } from '../../lib/generationProviders';
+import { IMAGE_PROVIDER_DEFS, type ImageProviderDef, type ModelOption } from '../../lib/generationProviders';
 
 export const ImageGenManager: React.FC = () => {
-  const [config,     setConfig]     = useState<Record<string, { value: string; masked: boolean }>>({});
-  const [priority,   setPriority]   = useState<string[]>(['google', 'openai', 'fal', 'stability', 'replicate']);
-  const [modelPrefs, setModelPrefs] = useState<Record<string, string>>({});
-  const [dirty,      setDirty]      = useState<Record<string, string>>({});
-  const [expanded,   setExpanded]   = useState<string | null>(null);
-  const [saving,     setSaving]     = useState(false);
-  const [saveMsg,    setSaveMsg]    = useState<string | null>(null);
+  const [config,        setConfig]        = useState<Record<string, { value: string; masked: boolean }>>({});
+  const [priority,      setPriority]      = useState<string[]>(['google', 'openai', 'fal', 'stability', 'replicate']);
+  const [modelPrefs,    setModelPrefs]    = useState<Record<string, string>>({});
+  const [dirty,         setDirty]         = useState<Record<string, string>>({});
+  const [expanded,      setExpanded]      = useState<string | null>(null);
+  const [saving,        setSaving]        = useState(false);
+  const [saveMsg,       setSaveMsg]       = useState<string | null>(null);
+  const [googleModels,  setGoogleModels]  = useState<ModelOption[] | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     api.getConfig().then((cfg: any) => {
@@ -22,6 +24,23 @@ export const ImageGenManager: React.FC = () => {
       try { setModelPrefs(JSON.parse(vals.IMAGE_MODEL_PREFS?.value || '{}')); } catch {}
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (expanded !== 'google') return;
+    const key = dirty['GOOGLE_AI_API_KEY'] ?? config['GOOGLE_AI_API_KEY']?.value ?? '';
+    if (!key) return;
+    setGoogleLoading(true);
+    api.getGoogleModels()
+      .then(({ models }) => {
+        setGoogleModels(models.length > 0 ? models : null);
+        if (models.length > 0 && !modelPrefs['google']) {
+          handleModelPrefChange('google', models[0].id);
+        }
+      })
+      .catch(() => setGoogleModels(null))
+      .finally(() => setGoogleLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, config['GOOGLE_AI_API_KEY']?.value]);
 
   const getKeyValue = (keyName: string) =>
     dirty[keyName] ?? config[keyName]?.value ?? '';
@@ -162,13 +181,32 @@ export const ImageGenManager: React.FC = () => {
                     <div>
                       <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
                         Preferred model (used when this provider is selected by the chain)
+                        {def.id === 'google' && googleLoading && (
+                          <span style={{ marginLeft: 6, opacity: 0.6 }}>— detecting available models…</span>
+                        )}
                       </label>
-                      <select value={prefModel} style={{ fontSize: 11, width: '100%' }}
-                        onChange={e => handleModelPrefChange(def.id, e.target.value)}>
-                        {def.models.map(m => (
-                          <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
-                        ))}
-                      </select>
+                      {def.id === 'google' && googleModels ? (
+                        <>
+                          <select value={prefModel} style={{ fontSize: 11, width: '100%' }}
+                            onChange={e => handleModelPrefChange(def.id, e.target.value)}>
+                            {googleModels.map(m => (
+                              <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
+                            ))}
+                          </select>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                            {googleModels[0]?.id.startsWith('imagen')
+                              ? '✓ Imagen 3 detected — your Pro subscription unlocks the best image quality'
+                              : `${googleModels.length} image model${googleModels.length > 1 ? 's' : ''} available on your key`}
+                          </div>
+                        </>
+                      ) : (
+                        <select value={prefModel} style={{ fontSize: 11, width: '100%' }}
+                          onChange={e => handleModelPrefChange(def.id, e.target.value)}>
+                          {def.models.map(m => (
+                            <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   )}
                 </div>
