@@ -385,7 +385,7 @@ export function LLMManager() {
 
   // ── Add ──────────────────────────────────────────────────────────
   const handleAdd = async (form: FormState) => {
-    await api.addLLMConfig({
+    const result = await api.addLLMConfig({
       provider: form.provider, model: form.model,
       apiKey: form.apiKey, task: form.task,
       label:   form.label   || undefined,
@@ -394,6 +394,11 @@ export function LLMManager() {
     });
     setAdding(false);
     load();
+    // Fire-and-forget probe for the newly added config
+    const newId = result?.config?.id;
+    if (newId) {
+      api.probeLLMConfig(newId).catch(() => {});
+    }
   };
 
   // ── Edit save ────────────────────────────────────────────────────
@@ -412,6 +417,8 @@ export function LLMManager() {
     await api.updateLLMConfig(id, updates);
     setEditingId(null);
     load();
+    // Fire-and-forget probe after edit
+    api.probeLLMConfig(id).catch(() => {});
   };
 
   // ── Toggle enable ────────────────────────────────────────────────

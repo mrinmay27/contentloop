@@ -30,6 +30,7 @@ import * as instagram from "../services/instagram.js";
 import { configStore, CONFIG_META, type ConfigKey } from "../config/configStore.js";
 import { generateImage as genImage } from "../config/generationProviders.js";
 import { llmConfigStore, LLM_PROVIDERS } from "../config/llmConfigStore.js";
+import { probeProvider, loadCapabilities } from "../config/modelDiscovery.js";
 
 // In-memory OAuth state store (keyed by state param for CSRF protection)
 const oauthStateStore = new Map<string, { pageId: string; provider: string }>();
@@ -96,6 +97,23 @@ app.patch("/api/config", (req, res, next) => {
       if (allowed.includes(k as ConfigKey)) safe[k as ConfigKey] = v as string;
     }
     configStore.set(safe);
+
+    // Fire background probes for any API key that was saved
+    const KEY_TO_PROVIDER: Partial<Record<ConfigKey, string>> = {
+      LLM_API_KEY:         'openai',
+      GOOGLE_AI_API_KEY:   'google',
+      FAL_API_KEY:         'fal',
+      STABILITY_API_KEY:   'stability',
+      REPLICATE_API_TOKEN: 'replicate',
+      RUNWAY_API_KEY:      'runway',
+      HEYGEN_API_KEY:      'heygen',
+    };
+    for (const [k, providerId] of Object.entries(KEY_TO_PROVIDER)) {
+      if (safe[k as ConfigKey]) {
+        probeProvider(providerId!, safe[k as ConfigKey]!).catch(() => {});
+      }
+    }
+
     res.json({ ok: true, saved: Object.keys(safe) });
   } catch (error) {
     next(error);
@@ -127,48 +145,65 @@ app.post("/api/generate/image", async (req, res, next) => {
   }
 });
 
-// ── Google AI model discovery ─────────────────────────────────────────────────
+// ── Universal provider capabilities ──────────────────────────────────────────
 
-app.get("/api/providers/google/models", async (_req, res, next) => {
+// GET /api/providers/capabilities — return full capabilities map from cache
+app.get("/api/providers/capabilities", (_req, res) => {
+  res.json({ capabilities: loadCapabilities() });
+});
+
+// Map of configStore keys → provider IDs (for image/video providers)
+const IMGPROV_KEY_MAP: Partial<Record<ConfigKey, string>> = {
+  LLM_API_KEY:         'openai',
+  GOOGLE_AI_API_KEY:   'google',
+  FAL_API_KEY:         'fal',
+  STABILITY_API_KEY:   'stability',
+  REPLICATE_API_TOKEN: 'replicate',
+  RUNWAY_API_KEY:      'runway',
+  HEYGEN_API_KEY:      'heygen',
+};
+
+// POST /api/providers/:providerId/probe — probe a provider by ID
+app.post("/api/providers/:providerId/probe", async (req, res, next) => {
   try {
-    const apiKey = configStore.get('GOOGLE_AI_API_KEY');
-    if (!apiKey) return void res.json({ models: [] });
+    const { providerId } = req.params;
 
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=200`,
-      { signal: AbortSignal.timeout(10_000) }
-    );
-    if (!r.ok) throw new Error(`Google models API ${r.status}: ${await r.text()}`);
-    const data: any = await r.json();
+    let apiKey  = '';
+    let baseUrl: string | undefined;
 
-    const IMAGE_PATTERN = /imagen|image-generation|flash.*image|image.*flash/i;
-    const models = (data.models ?? [])
-      .filter((m: any) =>
-        IMAGE_PATTERN.test(m.name) &&
-        (m.supportedGenerationMethods ?? []).some((x: string) => x === 'generateContent' || x === 'predict')
-      )
-      .map((m: any) => {
-        const id = (m.name as string).replace('models/', '');
-        return {
-          id,
-          label:       m.displayName ?? id,
-          description: m.description ?? '',
-          endpoint:    id.startsWith('imagen') ? 'predict' : 'generateContent',
-        };
-      })
-      // Best first: imagen-3 > imagen-3-fast > gemini flash image
-      .sort((a: any, b: any) => {
-        const rank = (id: string) => {
-          if (/imagen-3\.0-generate/.test(id)) return 0;
-          if (/imagen-3\.0-fast/.test(id))     return 1;
-          if (/imagen/.test(id))               return 2;
-          return 3;
-        };
-        return rank(a.id) - rank(b.id);
-      });
+    // Check image/video providers first
+    const configKey = Object.entries(IMGPROV_KEY_MAP).find(([, id]) => id === providerId)?.[0] as ConfigKey | undefined;
+    if (configKey) {
+      apiKey = configStore.get(configKey);
+    } else {
+      // LLM provider — find in llmConfigStore
+      const cfg = llmConfigStore.list().find(c => c.enabled && c.provider === (providerId as any));
+      if (cfg) {
+        apiKey  = cfg.apiKey;
+        baseUrl = cfg.baseUrl;
+      }
+    }
 
-    res.json({ models });
-  } catch (err: any) {
+    if (!apiKey) {
+      return void res.status(400).json({ error: 'No API key configured for this provider' });
+    }
+
+    const result = await probeProvider(providerId, apiKey, baseUrl);
+    res.json({ ok: true, capabilities: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/llm-configs/:id/probe — probe a specific LLM config entry
+app.post("/api/llm-configs/:id/probe", async (req, res, next) => {
+  try {
+    const cfg = llmConfigStore.list().find(c => c.id === req.params.id);
+    if (!cfg) return void res.status(404).json({ error: 'LLM config not found' });
+
+    const result = await probeProvider(cfg.provider, cfg.apiKey, cfg.baseUrl);
+    res.json({ ok: true, capabilities: result });
+  } catch (err) {
     next(err);
   }
 });

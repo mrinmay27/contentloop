@@ -107,12 +107,17 @@ export const api = {
       body: JSON.stringify(toggles),
     }),
 
-  // ── AI Generation ────────────────────────────────────────────────────────
-  getGoogleModels: () =>
-    req<{ models: Array<{ id: string; label: string; description: string; endpoint: string }> }>(
-      '/providers/google/models'
-    ),
+  // ── Provider capabilities ─────────────────────────────────────────────────────
+  getProviderCapabilities: () =>
+    req<{ capabilities: Record<string, any> }>('/providers/capabilities'),
 
+  probeImageProvider: (providerId: string) =>
+    req<{ ok: boolean; capabilities: any }>(`/providers/${providerId}/probe`, { method: 'POST' }),
+
+  probeLLMConfig: (id: string) =>
+    req<{ ok: boolean; capabilities: any }>(`/llm-configs/${id}/probe`, { method: 'POST' }),
+
+  // ── AI Generation ────────────────────────────────────────────────────────
   generateImage: (body: { prompt: string; provider?: string; model?: string; contentId?: string }) =>
     req<{ ok: boolean; url: string; provider: string; model: string }>(
       '/generate/image',

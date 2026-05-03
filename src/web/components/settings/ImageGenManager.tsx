@@ -1,18 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { IMAGE_PROVIDER_DEFS, type ImageProviderDef, type ModelOption } from '../../lib/generationProviders';
+import { IMAGE_PROVIDER_DEFS, type ImageProviderDef } from '../../lib/generationProviders';
+
+const KEY_TO_PROVIDER: Record<string, string> = {
+  LLM_API_KEY:         'openai',
+  GOOGLE_AI_API_KEY:   'google',
+  FAL_API_KEY:         'fal',
+  STABILITY_API_KEY:   'stability',
+  REPLICATE_API_TOKEN: 'replicate',
+  RUNWAY_API_KEY:      'runway',
+  HEYGEN_API_KEY:      'heygen',
+};
 
 export const ImageGenManager: React.FC = () => {
-  const [config,        setConfig]        = useState<Record<string, { value: string; masked: boolean }>>({});
-  const [priority,      setPriority]      = useState<string[]>(['google', 'openai', 'fal', 'stability', 'replicate']);
-  const [modelPrefs,    setModelPrefs]    = useState<Record<string, string>>({});
-  const [dirty,         setDirty]         = useState<Record<string, string>>({});
-  const [expanded,      setExpanded]      = useState<string | null>(null);
-  const [saving,        setSaving]        = useState(false);
-  const [saveMsg,       setSaveMsg]       = useState<string | null>(null);
-  const [googleModels,  setGoogleModels]  = useState<ModelOption[] | null>(null);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [config,     setConfig]     = useState<Record<string, { value: string; masked: boolean }>>({});
+  const [priority,   setPriority]   = useState<string[]>(['google', 'openai', 'fal', 'stability', 'replicate']);
+  const [modelPrefs, setModelPrefs] = useState<Record<string, string>>({});
+  const [dirty,      setDirty]      = useState<Record<string, string>>({});
+  const [expanded,   setExpanded]   = useState<string | null>(null);
+  const [saving,     setSaving]     = useState(false);
+  const [saveMsg,    setSaveMsg]    = useState<string | null>(null);
 
+  // Capability discovery state
+  const [capabilities, setCapabilities] = useState<Record<string, any>>({});
+  const [probing,      setProbing]      = useState<Record<string, boolean>>({});
+
+  // Load config + cached capabilities on mount
   useEffect(() => {
     api.getConfig().then((cfg: any) => {
       const vals = cfg.values ?? {};
@@ -23,24 +36,11 @@ export const ImageGenManager: React.FC = () => {
       } catch {}
       try { setModelPrefs(JSON.parse(vals.IMAGE_MODEL_PREFS?.value || '{}')); } catch {}
     }).catch(() => {});
-  }, []);
 
-  useEffect(() => {
-    if (expanded !== 'google') return;
-    const key = dirty['GOOGLE_AI_API_KEY'] ?? config['GOOGLE_AI_API_KEY']?.value ?? '';
-    if (!key) return;
-    setGoogleLoading(true);
-    api.getGoogleModels()
-      .then(({ models }) => {
-        setGoogleModels(models.length > 0 ? models : null);
-        if (models.length > 0 && !modelPrefs['google']) {
-          handleModelPrefChange('google', models[0].id);
-        }
-      })
-      .catch(() => setGoogleModels(null))
-      .finally(() => setGoogleLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, config['GOOGLE_AI_API_KEY']?.value]);
+    api.getProviderCapabilities().then(({ capabilities: caps }) => {
+      setCapabilities(caps ?? {});
+    }).catch(() => {});
+  }, []);
 
   const getKeyValue = (keyName: string) =>
     dirty[keyName] ?? config[keyName]?.value ?? '';
@@ -72,10 +72,37 @@ export const ImageGenManager: React.FC = () => {
     setSaving(true);
     try {
       await api.patchConfig(dirty);
+
+      // Identify which API-key providers changed and probe them
+      const affectedProviders = Object.keys(dirty)
+        .map(k => KEY_TO_PROVIDER[k])
+        .filter((id): id is string => !!id);
+
       setDirty({});
       setSaveMsg('✓ Saved');
-    } catch { setSaveMsg('✗ Save failed'); }
-    finally { setSaving(false); setTimeout(() => setSaveMsg(null), 2500); }
+
+      for (const providerId of affectedProviders) {
+        setProbing(p => ({ ...p, [providerId]: true }));
+        api.probeImageProvider(providerId)
+          .then(({ capabilities: caps }) => {
+            setCapabilities(prev => ({ ...prev, [providerId]: caps }));
+            // Auto-set preferred model to first recommended image model if not yet set
+            if (caps?.status === 'ok' && caps.image?.length > 0 && !modelPrefs[providerId]) {
+              const recommended = caps.image.find((m: any) => m.recommended) ?? caps.image[0];
+              if (recommended) {
+                handleModelPrefChange(providerId, recommended.id);
+              }
+            }
+          })
+          .catch(() => {})
+          .finally(() => setProbing(p => ({ ...p, [providerId]: false })));
+      }
+    } catch {
+      setSaveMsg('✗ Save failed');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(null), 2500);
+    }
   };
 
   const orderedDefs = priority
@@ -107,6 +134,12 @@ export const ImageGenManager: React.FC = () => {
           const connected = isConnected(def);
           const isOpen    = expanded === def.id;
           const prefModel = modelPrefs[def.id] || def.models[0]?.id || '';
+          const caps      = capabilities[def.id];
+
+          // Determine model options: discovered > static fallback
+          const discoveredImageModels: Array<{ id: string; label: string; description?: string }> =
+            caps?.image ?? [];
+          const modelOptions = discoveredImageModels.length > 0 ? discoveredImageModels : def.models;
 
           return (
             <div key={def.id} style={{
@@ -181,32 +214,77 @@ export const ImageGenManager: React.FC = () => {
                     <div>
                       <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
                         Preferred model (used when this provider is selected by the chain)
-                        {def.id === 'google' && googleLoading && (
-                          <span style={{ marginLeft: 6, opacity: 0.6 }}>— detecting available models…</span>
+                        {probing[def.id] && (
+                          <span style={{ marginLeft: 6, opacity: 0.6 }}>— 🔍 Detecting models…</span>
                         )}
                       </label>
-                      {def.id === 'google' && googleModels ? (
-                        <>
-                          <select value={prefModel} style={{ fontSize: 11, width: '100%' }}
-                            onChange={e => handleModelPrefChange(def.id, e.target.value)}>
-                            {googleModels.map(m => (
-                              <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
-                            ))}
-                          </select>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                            {googleModels[0]?.id.startsWith('imagen')
-                              ? '✓ Imagen 3 detected — your Pro subscription unlocks the best image quality'
-                              : `${googleModels.length} image model${googleModels.length > 1 ? 's' : ''} available on your key`}
-                          </div>
-                        </>
-                      ) : (
-                        <select value={prefModel} style={{ fontSize: 11, width: '100%' }}
-                          onChange={e => handleModelPrefChange(def.id, e.target.value)}>
-                          {def.models.map(m => (
-                            <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
-                          ))}
-                        </select>
-                      )}
+
+                      <select value={prefModel} style={{ fontSize: 11, width: '100%' }}
+                        onChange={e => handleModelPrefChange(def.id, e.target.value)}>
+                        {modelOptions.map((m: { id: string; label: string; description?: string }) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}{m.description ? ` — ${m.description}` : ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Capability chips */}
+                      <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {probing[def.id] && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            🔍 Detecting models…
+                          </span>
+                        )}
+                        {!probing[def.id] && caps?.status === 'error' && (
+                          <span style={{ fontSize: 10, color: 'var(--red)' }}>
+                            ⚠ Probe failed: {caps.error}
+                          </span>
+                        )}
+                        {!probing[def.id] && caps?.status === 'ok' && (
+                          <>
+                            {caps.text?.length > 0 && (
+                              <span style={{
+                                fontSize: 10, padding: '2px 7px', borderRadius: 10,
+                                background: 'color-mix(in srgb, var(--blue) 12%, transparent)',
+                                color: 'var(--blue)',
+                                border: '1px solid color-mix(in srgb, var(--blue) 25%, transparent)',
+                              }}>
+                                {caps.text.length} text model{caps.text.length !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {caps.image?.length > 0 && (
+                              <span style={{
+                                fontSize: 10, padding: '2px 7px', borderRadius: 10,
+                                background: 'color-mix(in srgb, var(--green) 12%, transparent)',
+                                color: 'var(--green)',
+                                border: '1px solid color-mix(in srgb, var(--green) 25%, transparent)',
+                              }}>
+                                {caps.image.length} image model{caps.image.length !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {caps.video?.length > 0 && (
+                              <span style={{
+                                fontSize: 10, padding: '2px 7px', borderRadius: 10,
+                                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                                color: 'var(--accent)',
+                                border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                              }}>
+                                {caps.video.length} video model{caps.video.length !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {caps.image?.[0]?.id?.startsWith('imagen') && (
+                              <span style={{
+                                fontSize: 10, padding: '2px 7px', borderRadius: 10,
+                                background: 'color-mix(in srgb, var(--green) 18%, transparent)',
+                                color: 'var(--green)', fontWeight: 600,
+                                border: '1px solid color-mix(in srgb, var(--green) 35%, transparent)',
+                              }}>
+                                ✓ Imagen 3 detected — Pro tier
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
