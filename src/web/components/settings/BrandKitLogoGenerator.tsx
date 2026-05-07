@@ -30,6 +30,27 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({
   const [saving,        setSaving]        = useState(false);
   const [saveMsg,       setSaveMsg]       = useState<string | null>(null);
   const [error,         setError]         = useState<string | null>(null);
+  const [lightboxOpen,  setLightboxOpen]  = useState(false);
+
+  // Close lightbox on Escape
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxOpen(false); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [lightboxOpen]);
+
+  const handleDownload = () => {
+    if (!logoUrl) return;
+    const ext  = (logoUrl.match(/^data:image\/(\w+)/)?.[1] ?? 'png').replace('jpeg', 'jpg');
+    const slug = brandName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'logo';
+    const a = document.createElement('a');
+    a.href = logoUrl;
+    a.download = `${slug}-logo.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // Sync incoming saved logo from parent (e.g. when brand reloads)
   useEffect(() => {
@@ -277,8 +298,10 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({
                 style={{ width: '100%', maxHeight: 280, objectFit: 'contain', background: '#fff',
                   borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
               <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <a href={logoUrl} target="_blank" rel="noopener noreferrer"
-                  className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}>Open full size ↗</a>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                  onClick={() => setLightboxOpen(true)}>👁 View full size</button>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                  onClick={handleDownload}>↓ Download</button>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   onClick={() => { setLogoUrl(''); setLogoDirty(false); setError(null); }}>Clear</button>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
@@ -307,6 +330,38 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({
             </div>
           )}
         </>
+      )}
+
+      {lightboxOpen && logoUrl && (
+        <div onClick={() => setLightboxOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.88)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'zoom-out',
+            padding: 40,
+            animation: 'fadeIn 0.15s ease-out',
+          }}>
+          <img src={logoUrl} alt="Logo full size"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '95vw', maxHeight: '95vh', objectFit: 'contain',
+              background: '#fff', borderRadius: 8,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+              cursor: 'default',
+            }} />
+          <button onClick={() => setLightboxOpen(false)}
+            style={{
+              position: 'absolute', top: 24, right: 24,
+              background: 'rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.25)',
+              borderRadius: 6, padding: '8px 14px',
+              color: '#fff', fontSize: 12, cursor: 'pointer',
+              backdropFilter: 'blur(10px)',
+            }}>
+            ✕ Close (Esc)
+          </button>
+        </div>
       )}
     </div>
   );
