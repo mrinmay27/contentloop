@@ -4,9 +4,11 @@ import { IMAGE_PROVIDER_DEFS } from '../../lib/generationProviders';
 import { ManualGenerateBridge } from './ManualGenerateBridge';
 
 interface Props {
-  brandAccent: string;
-  brandFont:   string;
-  brandName:   string;
+  brandAccent:   string;
+  brandFont:     string;
+  brandName:     string;
+  pageId?:       string;
+  brandLogoUrl?: string;
 }
 
 function buildPrompt(name: string, accent: string, font: string): string {
@@ -14,15 +16,40 @@ function buildPrompt(name: string, accent: string, font: string): string {
   return `Clean minimal logo for "${safeName}". Primary accent color ${accent}. Typography inspired by ${font}. Geometric lettermark or wordmark, professional and modern, suitable for a social media theme page. White or transparent background. No gradients, no drop shadows, no complex illustrations. High contrast, scalable.`;
 }
 
-export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont, brandName }) => {
+export const BrandKitLogoGenerator: React.FC<Props> = ({
+  brandAccent, brandFont, brandName, pageId, brandLogoUrl,
+}) => {
   const [config,        setConfig]        = useState<Record<string, { value: string }>>({});
   const [selected,      setSelected]      = useState('');
   const [selectedModel, setSelectedModel] = useState('');
   const [prompt,        setPrompt]        = useState('');
   const [promptEdited,  setPromptEdited]  = useState(false);
   const [generating,    setGenerating]    = useState(false);
-  const [logoUrl,       setLogoUrl]       = useState('');
+  const [logoUrl,       setLogoUrl]       = useState(brandLogoUrl ?? '');
+  const [logoDirty,     setLogoDirty]     = useState(false);
+  const [saving,        setSaving]        = useState(false);
+  const [saveMsg,       setSaveMsg]       = useState<string | null>(null);
   const [error,         setError]         = useState<string | null>(null);
+
+  // Sync incoming saved logo from parent (e.g. when brand reloads)
+  useEffect(() => {
+    if (!logoDirty) setLogoUrl(brandLogoUrl ?? '');
+  }, [brandLogoUrl, logoDirty]);
+
+  const handleSaveLogo = async () => {
+    if (!logoUrl || !pageId) return;
+    setSaving(true); setSaveMsg(null);
+    try {
+      await api.patchBranding(pageId, { logoUrl });
+      setLogoDirty(false);
+      setSaveMsg('✓ Saved to brand');
+    } catch {
+      setSaveMsg('✗ Save failed');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(null), 2500);
+    }
+  };
 
   const [capabilities, setCapabilities] = useState<Record<string, any>>({});
 
@@ -85,6 +112,7 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
     try {
       const result = await api.generateImage({ prompt: prompt.trim(), provider: selected, model: selectedModel });
       setLogoUrl(result.url);
+      setLogoDirty(true);
     } catch (err: any) {
       const raw = err?.message ?? '';
       let friendly = raw;
@@ -232,7 +260,7 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
 
           <ManualGenerateBridge
             prompt={prompt}
-            onImage={(dataUrl) => { setLogoUrl(dataUrl); setError(null); }}
+            onImage={(dataUrl) => { setLogoUrl(dataUrl); setLogoDirty(true); setError(null); }}
           />
 
           {error && (
@@ -248,15 +276,33 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
               <img src={logoUrl} alt="Generated logo"
                 style={{ width: '100%', maxHeight: 280, objectFit: 'contain', background: '#fff',
                   borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
-              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 <a href={logoUrl} target="_blank" rel="noopener noreferrer"
                   className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}>Open full size ↗</a>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                  onClick={() => { setLogoUrl(''); setError(null); }}>Clear</button>
-                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, marginLeft: 'auto' }}
+                  onClick={() => { setLogoUrl(''); setLogoDirty(false); setError(null); }}>Clear</button>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   onClick={handleGenerate} disabled={generating}>
                   ↻ Regenerate
                 </button>
+                {pageId && logoDirty && (
+                  <button className="btn btn-primary btn-sm"
+                    style={{ fontSize: 10, marginLeft: 'auto' }}
+                    onClick={handleSaveLogo} disabled={saving}>
+                    {saving ? '⏳ Saving…' : '✓ Save logo to brand'}
+                  </button>
+                )}
+                {pageId && !logoDirty && logoUrl && (
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto', fontStyle: 'italic' }}>
+                    ● Saved
+                  </span>
+                )}
+                {saveMsg && (
+                  <span style={{ fontSize: 10,
+                    color: saveMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)' }}>
+                    {saveMsg}
+                  </span>
+                )}
               </div>
             </div>
           )}

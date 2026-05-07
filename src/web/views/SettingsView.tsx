@@ -487,6 +487,8 @@ function BrandingSection() {
         brandAccent={brand.accent}
         brandFont={brand.font}
         brandName={selectedPage?.name ?? selectedPage?.handle ?? ''}
+        pageId={selectedPage?.id}
+        brandLogoUrl={brand.logoUrl}
       />
     </div>
   );
