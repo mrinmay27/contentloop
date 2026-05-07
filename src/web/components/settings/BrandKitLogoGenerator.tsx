@@ -42,7 +42,11 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({
 
   const handleDownload = () => {
     if (!logoUrl) return;
-    const ext  = (logoUrl.match(/^data:image\/(\w+)/)?.[1] ?? 'png').replace('jpeg', 'jpg');
+    const ext = (
+      logoUrl.match(/^data:image\/(\w+)/)?.[1]
+      ?? logoUrl.match(/\.(\w+)(?:\?|$)/)?.[1]
+      ?? 'png'
+    ).replace('jpeg', 'jpg');
     const slug = brandName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'logo';
     const a = document.createElement('a');
     a.href = logoUrl;
@@ -65,7 +69,14 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({
     if (!logoUrl || !pageId) return;
     setSaving(true); setSaveMsg(null);
     try {
-      await api.patchBranding(pageId, { logoUrl });
+      if (logoUrl.startsWith('data:')) {
+        // Upload data URL → server saves to disk and updates pages.brand.logoUrl atomically
+        const { url } = await api.uploadBrandLogo(pageId, logoUrl);
+        setLogoUrl(url);
+      } else {
+        // Already a file URL — just persist via the regular branding patch
+        await api.patchBranding(pageId, { logoUrl });
+      }
       setLogoDirty(false);
       setSaveMsg('✓ Saved to brand');
     } catch {

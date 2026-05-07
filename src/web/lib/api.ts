@@ -124,6 +124,24 @@ export const api = {
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
     ),
 
+  // ── Image storage (file-based, replaces stuffing data URLs into JSONB) ────────
+  uploadBrandLogo: (pageId: string, dataUrl: string) =>
+    req<{ ok: boolean; url: string; bytes: number }>(`/pages/${pageId}/branding/logo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl }),
+    }),
+
+  uploadContentImage: (
+    contentId: string,
+    body: { dataUrl: string; slideIndex?: number; source?: string; prompt?: string },
+  ) =>
+    req<{ ok: boolean; url: string; slideIndex: number; bytes: number }>(`/content/${contentId}/images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
   // ── Danger zone ───────────────────────────────────────────────────────────
   resetPipeline: () => req<{ ok: boolean }>('/reset/pipeline', { method: 'POST' }),
 };

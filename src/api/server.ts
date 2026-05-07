@@ -31,6 +31,7 @@ import { configStore, CONFIG_META, type ConfigKey } from "../config/configStore.
 import { generateImage as genImage } from "../config/generationProviders.js";
 import { llmConfigStore, LLM_PROVIDERS } from "../config/llmConfigStore.js";
 import { probeProvider, loadCapabilities } from "../config/modelDiscovery.js";
+import { saveBrandImage, saveContentImage, UPLOADS_DIR } from "../services/imageStorage.js";
 
 // In-memory OAuth state store (keyed by state param for CSRF protection)
 const oauthStateStore = new Map<string, { pageId: string; provider: string }>();
@@ -42,7 +43,17 @@ function storeOAuthState(state: string, pageId: string, provider: string) {
 const app = express();
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+// Bumped to 25mb so we can accept image data URLs — a 1080×1920 PNG is ~3MB base64,
+// and a carousel batch can include several of them in one request.
+app.use(express.json({ limit: "25mb" }));
+
+// Serve user-generated images: data/uploads/<pageId>/... → /uploads/<pageId>/...
+app.use("/uploads", express.static(UPLOADS_DIR, {
+  // Cache for an hour — every URL we hand out has ?v=<timestamp> for cache-busting,
+  // so this is safe and saves repeated downloads of the same logo on each render.
+  maxAge: '1h',
+  fallthrough: false,
+}));
 
 const boardServer = new ExpressAdapter();
 boardServer.setBasePath("/queues");
@@ -304,6 +315,62 @@ app.patch("/api/pages/:id/branding", async (req, res, next) => {
     res.json({ ok: true });
   } catch (error) {
     next(error);
+  }
+});
+
+// Branding: upload a brand logo (data URL → file on disk → URL stored in pages.brand.logoUrl).
+// Atomic — saves the file and updates the brand JSONB in one round-trip.
+app.post("/api/pages/:id/branding/logo", async (req, res, next) => {
+  try {
+    const { dataUrl } = req.body as { dataUrl?: string };
+    if (!dataUrl?.startsWith('data:image/')) {
+      return void res.status(400).json({ error: 'dataUrl (image) is required' });
+    }
+    const stored = saveBrandImage(req.params.id, 'logo', dataUrl);
+    await query(
+      `UPDATE pages SET brand = brand || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ logoUrl: stored.url }), req.params.id]
+    );
+    res.json({ ok: true, url: stored.url, bytes: stored.bytes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Content: upload an image for a content_item at a specific slide index.
+// payload.images is an array — index N is overwritten in place; gaps fill with null.
+app.post("/api/content/:id/images", async (req, res, next) => {
+  try {
+    const { dataUrl, slideIndex = 0, source = 'paste', prompt } = req.body as {
+      dataUrl?: string; slideIndex?: number; source?: string; prompt?: string;
+    };
+    if (!dataUrl?.startsWith('data:image/')) {
+      return void res.status(400).json({ error: 'dataUrl (image) is required' });
+    }
+
+    const { rows } = await query<{ page_id: string; payload: any }>(
+      `SELECT page_id, payload FROM content_items WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!rows[0]) return void res.status(404).json({ error: 'Content item not found' });
+
+    const stored = saveContentImage(rows[0].page_id, req.params.id, slideIndex, dataUrl);
+
+    const payload = rows[0].payload ?? {};
+    const images: (object | null)[] = Array.isArray(payload.images) ? [...payload.images] : [];
+    while (images.length <= slideIndex) images.push(null);
+    images[slideIndex] = { slideIndex, url: stored.url, source, prompt: prompt ?? null };
+
+    await query(
+      `UPDATE content_items
+       SET payload = $1::jsonb, updated_at = now()
+       WHERE id = $2`,
+      [JSON.stringify({ ...payload, images }), req.params.id]
+    );
+
+    res.json({ ok: true, url: stored.url, slideIndex, bytes: stored.bytes });
+  } catch (err) {
+    next(err);
   }
 });
 
