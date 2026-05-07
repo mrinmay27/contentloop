@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
 import { IMAGE_PROVIDER_DEFS } from '../../lib/generationProviders';
+import { ManualGenerateBridge } from './ManualGenerateBridge';
 
 interface Props {
   brandAccent: string;
@@ -228,6 +229,11 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({ brandAccent, brandFont,
             disabled={generating || !selected || !prompt.trim()} onClick={handleGenerate}>
             {generating ? '⏳ Generating logo…' : '✨ Generate Logo'}
           </button>
+
+          <ManualGenerateBridge
+            prompt={prompt}
+            onImage={(dataUrl) => { setLogoUrl(dataUrl); setError(null); }}
+          />
 
           {error && (
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--red)', padding: '6px 10px',
