@@ -132,6 +132,13 @@ export const api = {
       body: JSON.stringify({ dataUrl }),
     }),
 
+  // Find-or-create a draft content_item for a (topic, page, type) tuple — idempotent
+  ensureDraftContent: (body: { topicId: string; pageId: string; type: 'post' | 'carousel' | 'reel' }) =>
+    req<{ ok: boolean; content: { id: string; payload: any; type: string; status: string } }>(
+      '/content/draft',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    ),
+
   uploadContentImage: (
     contentId: string,
     body: { dataUrl: string; slideIndex?: number; source?: string; prompt?: string },

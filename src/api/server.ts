@@ -337,6 +337,38 @@ app.post("/api/pages/:id/branding/logo", async (req, res, next) => {
   }
 });
 
+// Content: find or create a draft content_item for a (topic, page, type) tuple.
+// Idempotent — repeated calls return the same row. Used by ContentEditor on open
+// to get a stable contentId before any image uploads or saves.
+app.post("/api/content/draft", async (req, res, next) => {
+  try {
+    const { topicId, pageId, type } = req.body as {
+      topicId?: string; pageId?: string; type?: 'post' | 'carousel' | 'reel';
+    };
+    if (!topicId || !pageId || !type) {
+      return void res.status(400).json({ error: 'topicId, pageId, type are required' });
+    }
+
+    const existing = await query<{ id: string; payload: any; type: string; status: string }>(
+      `SELECT id, payload, type, status FROM content_items
+       WHERE topic_id = $1 AND page_id = $2 AND type = $3 AND status = 'draft'
+       ORDER BY created_at DESC LIMIT 1`,
+      [topicId, pageId, type]
+    );
+    if (existing.rows[0]) return void res.json({ ok: true, content: existing.rows[0] });
+
+    const created = await query<{ id: string; payload: any; type: string; status: string }>(
+      `INSERT INTO content_items (topic_id, page_id, type, status, payload)
+       VALUES ($1, $2, $3, 'draft', '{}'::jsonb)
+       RETURNING id, payload, type, status`,
+      [topicId, pageId, type]
+    );
+    res.json({ ok: true, content: created.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Content: upload an image for a content_item at a specific slide index.
 // payload.images is an array — index N is overwritten in place; gaps fill with null.
 app.post("/api/content/:id/images", async (req, res, next) => {

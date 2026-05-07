@@ -1,8 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '../ui/Icon';
 import { CanvaPanel } from './CanvaPanel';
+import { ContentImageGenerator } from './ContentImageGenerator';
 import { api } from '../../lib/api';
 import type { NavKey, SuggestedFormat, Topic, ThemePage } from '../../lib/types';
+
+// Build an image prompt that incorporates brand context. The user can override per-image.
+function buildContentImagePrompt(opts: {
+  topic:        string;
+  slideText?:   string;
+  brandAccent?: string;
+  brandFont?:   string;
+  niche?:       string;
+}): string {
+  const { topic, slideText, brandAccent, brandFont, niche } = opts;
+  const subject = slideText?.trim() ? `"${slideText.trim()}"` : `"${topic}"`;
+  return [
+    `Vivid, editorial-style social media image illustrating ${subject}.`,
+    niche       && `Theme: ${niche}.`,
+    brandAccent && `Use accent color ${brandAccent} as the dominant color.`,
+    brandFont   && `If text appears in the image, use a font similar to ${brandFont}.`,
+    'High contrast, modern, clean composition, suitable for Instagram, square 1:1 aspect ratio.',
+    'No watermarks, no logos other than what is described.',
+  ].filter(Boolean).join(' ');
+}
 
 type Slide = { id: number; text: string };
 
@@ -55,6 +76,36 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
   const [reelScript, setReelScript] = useState(
     `Hook: ${topic.title}\n\n[Body: 3 key points about this topic]\n\nCTA: Follow for daily insights`
   );
+
+  // Brand kit + content_item draft for image generation
+  const [brand,     setBrand]     = useState<Record<string, any>>({});
+  const [draftId,   setDraftId]   = useState<string | null>(null);
+  const [savedImages, setSavedImages] = useState<Record<number, string>>({});
+
+  // Load brand + ensure a draft content_item exists for this (topic, page, format)
+  useEffect(() => {
+    api.getBranding(page.id).then(({ brand }) => setBrand(brand ?? {})).catch(() => {});
+  }, [page.id]);
+
+  useEffect(() => {
+    setDraftId(null);
+    setSavedImages({});
+    api.ensureDraftContent({ topicId: topic.id, pageId: page.id, type: previewTab })
+      .then(({ content }) => {
+        setDraftId(content.id);
+        // Hydrate any existing images from prior sessions
+        const imgs: any[] = Array.isArray(content.payload?.images) ? content.payload.images : [];
+        const hydrated: Record<number, string> = {};
+        imgs.forEach((img, i) => {
+          if (img && typeof img === 'object' && img.url) hydrated[i] = img.url;
+        });
+        setSavedImages(hydrated);
+      })
+      .catch(() => {});
+  }, [topic.id, page.id, previewTab]);
+
+  const handleSavedImage = (slideIndex: number) => (url: string) =>
+    setSavedImages(prev => ({ ...prev, [slideIndex]: url }));
 
   const addSlide    = () => setSlides(s => [...s, { id: Date.now(), text: `Slide ${s.length + 1}` }]);
   const removeSlide = (id: number) => setSlides(s => s.filter(sl => sl.id !== id));
@@ -236,6 +287,23 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
             </div>
           )}
 
+          {/* Image Generator — Post format gets a single image */}
+          {previewTab === 'post' && (
+            <ContentImageGenerator
+              contentId={draftId}
+              slideIndex={0}
+              label="Post image"
+              defaultPrompt={buildContentImagePrompt({
+                topic: topic.title,
+                brandAccent: brand.accent,
+                brandFont:   brand.font,
+                niche:       page.niche,
+              })}
+              initialUrl={savedImages[0]}
+              onSaved={handleSavedImage(0)}
+            />
+          )}
+
           {/* Carousel Slides — Task 3.2: only visible on Carousel tab */}
           {previewTab === 'carousel' && (
             <>
@@ -249,16 +317,32 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
                   {slides.map((slide, i) => (
-                    <div key={slide.id} className="slide-item">
-                      <div className="slide-num">{i+1}</div>
-                      <input type="text" value={slide.text}
-                        onChange={e => updateSlide(slide.id, e.target.value)}
-                        style={{ flex:1, background:'transparent', border:'none', outline:'none',
-                          fontSize:12, color:'var(--text-primary)', fontFamily:'var(--font)', padding:'2px 0' }}/>
-                      <button onClick={() => removeSlide(slide.id)}
-                        style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', padding:'0 2px' }}>
-                        <Icon name="x" size={10}/>
-                      </button>
+                    <div key={slide.id}>
+                      <div className="slide-item">
+                        <div className="slide-num">{i+1}</div>
+                        <input type="text" value={slide.text}
+                          onChange={e => updateSlide(slide.id, e.target.value)}
+                          style={{ flex:1, background:'transparent', border:'none', outline:'none',
+                            fontSize:12, color:'var(--text-primary)', fontFamily:'var(--font)', padding:'2px 0' }}/>
+                        <button onClick={() => removeSlide(slide.id)}
+                          style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', padding:'0 2px' }}>
+                          <Icon name="x" size={10}/>
+                        </button>
+                      </div>
+                      <ContentImageGenerator
+                        contentId={draftId}
+                        slideIndex={i}
+                        label={`Slide ${i + 1} image`}
+                        defaultPrompt={buildContentImagePrompt({
+                          topic:       topic.title,
+                          slideText:   slide.text,
+                          brandAccent: brand.accent,
+                          brandFont:   brand.font,
+                          niche:       page.niche,
+                        })}
+                        initialUrl={savedImages[i]}
+                        onSaved={handleSavedImage(i)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -373,13 +457,30 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                   alignItems:'center', justifyContent:'center', position:'relative', padding:10,
                   overflow:'hidden' }}>
 
+                  {/* Background image for current slide if generated */}
+                  {savedImages[currentSlide] && (
+                    <img src={savedImages[currentSlide]} alt={`Slide ${currentSlide + 1}`}
+                      style={{ position:'absolute', inset:0, width:'100%', height:'100%',
+                        objectFit:'cover', zIndex:0 }} />
+                  )}
+                  {/* Subtle gradient for legibility when image is present */}
+                  {savedImages[currentSlide] && (
+                    <div style={{ position:'absolute', inset:0,
+                      background:'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)',
+                      zIndex:0 }} />
+                  )}
+
                   <div style={{ textAlign:'center', padding:'0 28px', zIndex:1 }}>
-                    <div style={{ fontSize:10, color:'var(--accent)', fontWeight:700,
-                      textTransform:'uppercase', letterSpacing:2, marginBottom:8 }}>
+                    <div style={{ fontSize:10,
+                      color: savedImages[currentSlide] ? '#fff' : 'var(--accent)',
+                      fontWeight:700, textTransform:'uppercase', letterSpacing:2, marginBottom:8,
+                      textShadow: savedImages[currentSlide] ? '0 1px 2px rgba(0,0,0,0.5)' : 'none' }}>
                       Slide {currentSlide + 1} of {slides.length}
                     </div>
-                    <div style={{ fontSize:14, fontWeight:700, color:'var(--text-primary)',
-                      lineHeight:1.5, minHeight:60 }}>
+                    <div style={{ fontSize:14, fontWeight:700,
+                      color: savedImages[currentSlide] ? '#fff' : 'var(--text-primary)',
+                      lineHeight:1.5, minHeight:60,
+                      textShadow: savedImages[currentSlide] ? '0 1px 4px rgba(0,0,0,0.6)' : 'none' }}>
                       {currentSlide === 0
                         ? hook.substring(0, 100)
                         : slides[currentSlide]?.text}
@@ -431,10 +532,18 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
               )}
 
               {previewTab === 'post' && (
-                <div style={{ flex:1, background:'var(--bg-elevated)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-                  <div style={{ textAlign:'center', fontSize:14, fontWeight:700, color:'var(--text-primary)', lineHeight:1.6 }}>
-                    {hook.substring(0,100)}…
-                  </div>
+                <div style={{ flex:1, background:'var(--bg-elevated)', display:'flex',
+                  alignItems:'center', justifyContent:'center', padding: savedImages[0] ? 0 : 20,
+                  position:'relative', overflow:'hidden' }}>
+                  {savedImages[0] ? (
+                    <img src={savedImages[0]} alt="Post"
+                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  ) : (
+                    <div style={{ textAlign:'center', fontSize:14, fontWeight:700,
+                      color:'var(--text-primary)', lineHeight:1.6 }}>
+                      {hook.substring(0,100)}…
+                    </div>
+                  )}
                 </div>
               )}
 
