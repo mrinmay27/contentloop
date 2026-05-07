@@ -5,25 +5,35 @@ interface Props {
   onImage: (dataUrl: string) => void;
 }
 
+interface CopiedState { label: string; needsManualPaste: boolean; }
+
 export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage }) => {
   const [dragOver, setDragOver] = useState(false);
-  const [copied,   setCopied]   = useState<string | null>(null);
+  const [copied,   setCopied]   = useState<CopiedState | null>(null);
 
   const enriched = `Generate a high-quality image: ${prompt.trim()}`;
   const disabled = !prompt.trim();
 
-  const openIn = (url: string, label: string) => {
+  const openIn = (url: string, label: string, needsManualPaste: boolean) => {
     if (disabled) return;
     navigator.clipboard?.writeText(enriched).catch(() => {});
-    setCopied(label);
-    setTimeout(() => setCopied(null), 3500);
+    setCopied({ label, needsManualPaste });
+    // Persist longer when user has to manually paste; auto-clear on success
+    setTimeout(() => setCopied(null), needsManualPaste ? 15_000 : 4_000);
     window.open(url, '_blank', 'noopener');
+  };
+
+  const handleCopyPrompt = () => {
+    if (disabled) return;
+    navigator.clipboard?.writeText(enriched).catch(() => {});
+    setCopied({ label: 'clipboard', needsManualPaste: false });
+    setTimeout(() => setCopied(null), 2500);
   };
 
   const captureFile = (file: File) => {
     if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = () => onImage(reader.result as string);
+    reader.onload = () => { onImage(reader.result as string); setCopied(null); };
     reader.readAsDataURL(file);
   };
 
@@ -64,27 +74,59 @@ export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage }) => {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         <button className="btn btn-ghost btn-sm" disabled={disabled}
+          title="Opens ChatGPT with prompt pre-filled and auto-submitted"
           style={{ flex: 1, fontSize: 11 }}
           onClick={() => openIn(
             `https://chatgpt.com/?q=${encodeURIComponent(enriched)}`,
-            'ChatGPT'
+            'ChatGPT', false
           )}>
           🟢 Generate in ChatGPT
         </button>
         <button className="btn btn-ghost btn-sm" disabled={disabled}
+          title="Opens Gemini and copies prompt — paste with Cmd+V into its input"
           style={{ flex: 1, fontSize: 11 }}
           onClick={() => openIn(
             `https://gemini.google.com/app?q=${encodeURIComponent(enriched)}`,
-            'Gemini'
+            'Gemini', true
           )}>
-          🔵 Generate in Gemini
+          🔵 Open Gemini + Copy Prompt
         </button>
       </div>
 
-      {copied && (
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <button className="btn btn-ghost btn-sm" disabled={disabled}
+          style={{ fontSize: 10, padding: '4px 10px' }} onClick={handleCopyPrompt}>
+          📋 Copy prompt only
+        </button>
+      </div>
+
+      {copied && copied.needsManualPaste && (
+        <div style={{
+          fontSize: 11, padding: '10px 12px', marginBottom: 8, lineHeight: 1.6,
+          background:   'color-mix(in srgb, var(--accent) 10%, transparent)',
+          border:       '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+          borderRadius: 'var(--radius-sm)',
+          color:        'var(--text-primary)',
+        }}>
+          <strong style={{ color: 'var(--accent)' }}>📋 Prompt copied to clipboard</strong><br />
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            Gemini doesn't auto-fill prompts. In the new tab, click its input box and press
+            {' '}<kbd style={{ padding: '1px 5px', background: 'var(--bg-elevated)', borderRadius: 3,
+              border: '1px solid var(--border)', fontSize: 9 }}>⌘V</kbd>
+            {' '}to paste, then Enter. After it generates, right-click the image → Copy image → come back here.
+          </span>
+        </div>
+      )}
+
+      {copied && !copied.needsManualPaste && copied.label !== 'clipboard' && (
         <div style={{ fontSize: 10, color: 'var(--green)', marginBottom: 6, lineHeight: 1.5 }}>
-          ✓ Prompt copied to clipboard — paste it in {copied} if it didn't auto-fill,
-          then bring the generated image back here
+          ✓ Sent to {copied.label} — wait for the image, right-click → Copy image → come back here
+        </div>
+      )}
+
+      {copied?.label === 'clipboard' && (
+        <div style={{ fontSize: 10, color: 'var(--green)', marginBottom: 6 }}>
+          ✓ Prompt copied
         </div>
       )}
 
@@ -106,11 +148,11 @@ export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage }) => {
           transition: 'all 0.15s ease',
         }}
       >
-        📋 <strong style={{ color: 'var(--text-primary)' }}>Paste image</strong> (Cmd+V anywhere)
+        📋 <strong style={{ color: 'var(--text-primary)' }}>Paste image</strong> (⌘V anywhere)
         {' '}or <strong style={{ color: 'var(--text-primary)' }}>drag & drop</strong>
         <br />
         <span style={{ fontSize: 10, opacity: 0.75 }}>
-          In ChatGPT/Gemini: right-click the image → Copy image → return here
+          In ChatGPT/Gemini: right-click the generated image → Copy image → return here
         </span>
       </div>
     </div>
