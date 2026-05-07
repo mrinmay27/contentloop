@@ -52,10 +52,14 @@ export const BrandKitLogoGenerator: React.FC<Props> = ({
     document.body.removeChild(a);
   };
 
-  // Sync incoming saved logo from parent (e.g. when brand reloads)
+  // Sync from parent only when brandLogoUrl prop actually changes (page switch / brand reload).
+  // Must NOT depend on logoDirty — that would re-fire on save and clobber local state with
+  // the parent's stale value (parent doesn't refetch branding automatically after PATCH).
   useEffect(() => {
-    if (!logoDirty) setLogoUrl(brandLogoUrl ?? '');
-  }, [brandLogoUrl, logoDirty]);
+    setLogoUrl(brandLogoUrl ?? '');
+    setLogoDirty(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandLogoUrl]);
 
   const handleSaveLogo = async () => {
     if (!logoUrl || !pageId) return;
