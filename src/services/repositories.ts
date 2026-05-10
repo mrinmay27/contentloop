@@ -90,6 +90,27 @@ export async function updateTopicFormat(
   );
 }
 
+export async function createManualTopic(opts: {
+  nicheId:         string;
+  title:           string;
+  keyPoints:       string;
+  sourceUrl?:      string;
+  suggestedFormat?: SuggestedFormat;
+}): Promise<Topic> {
+  const { nicheId, title, keyPoints, sourceUrl, suggestedFormat } = opts;
+  const result = await query(
+    `INSERT INTO topics
+       (niche_id, title, keywords, sources, source_count, first_seen_at, last_seen_at,
+        velocity, score, state, decision, source_url, suggested_format, format_confidence)
+     VALUES
+       ($1, $2, $3, ARRAY['manual'], 1, now(), now(),
+        1.0, 1.0, 'CONTENT_READY', 'selected', $4, $5, 'user')
+     RETURNING *`,
+    [nicheId, title.trim(), keyPoints ? [keyPoints.trim()] : [], sourceUrl ?? null, suggestedFormat ?? null]
+  );
+  return mapTopic(result.rows[0]);
+}
+
 export async function listSelectedTopicsWithoutContent(): Promise<Topic[]> {
   const result = await query(
     `
@@ -303,27 +324,67 @@ export async function listScheduledPostsForMonth(
   month: number   // 1-based
 ): Promise<any[]> {
   const start = new Date(year, month - 1, 1);
-  const end   = new Date(year, month, 1);     // exclusive
+  const end   = new Date(year, month, 1);   // exclusive
+  // Use the canonical date for each job: scheduled_at for scheduled/pending,
+  // published_at for published, created_at as fallback.
   const result = await query(
     `
       SELECT
-        posts.id,
-        posts.state,
-        posts.scheduled_at,
-        posts.platform,
+        pj.id,
+        pj.status,
+        pj.platform,
+        pj.scheduled_at,
+        pj.published_at,
+        pj.external_url,
+        pj.error,
         c.type,
-        t.title AS topic_title
-      FROM posts
-      JOIN content_items c ON c.id = posts.content_item_id
-      JOIN topics t ON t.id = c.topic_id
-      WHERE posts.page_id = $1
-        AND posts.scheduled_at >= $2
-        AND posts.scheduled_at < $3
-      ORDER BY posts.scheduled_at ASC
+        t.title AS topic_title,
+        COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) AS display_at
+      FROM publish_jobs pj
+      JOIN content_items c ON c.id = pj.content_item_id
+      JOIN topics        t ON t.id = c.topic_id
+      WHERE pj.page_id = $1
+        AND COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) >= $2
+        AND COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) <  $3
+      ORDER BY display_at ASC
     `,
     [pageId, start, end]
   );
   return result.rows;
+}
+
+export async function cancelPublishJob(jobId: string): Promise<void> {
+  await query(`DELETE FROM publish_jobs WHERE id=$1 AND status='scheduled'`, [jobId]);
+}
+
+export async function reschedulePublishJob(jobId: string, scheduledAt: Date): Promise<void> {
+  await query(
+    `UPDATE publish_jobs SET scheduled_at=$2, status='scheduled', updated_at=now() WHERE id=$1`,
+    [jobId, scheduledAt]
+  );
+}
+
+export async function getTopicPreview(topicId: string, pageId: string): Promise<any | null> {
+  const { rows } = await query(
+    `SELECT id, status, type, payload
+     FROM content_items
+     WHERE topic_id = $1 AND page_id = $2
+     ORDER BY updated_at DESC LIMIT 1`,
+    [topicId, pageId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function scheduleContentBatch(
+  jobs: Array<{ contentItemId: string; pageId: string; platform: string; scheduledAt: Date; formattedCaption: string }>
+): Promise<void> {
+  for (const job of jobs) {
+    await query(
+      `INSERT INTO publish_jobs (content_item_id, page_id, platform, status, scheduled_at, formatted_caption)
+       VALUES ($1, $2, $3, 'scheduled', $4, $5)`,
+      [job.contentItemId, job.pageId, job.platform, job.scheduledAt, job.formattedCaption]
+    );
+  }
 }
 
 /**

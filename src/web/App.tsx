@@ -185,7 +185,7 @@ function App() {
                   busy={busy} onOpenEditor={openEditor} onRunJob={runJob}/>
               )}
               {activeNav==='pipeline' && (
-                <PipelineView topics={topics} stats={stats} busy={busy}
+                <PipelineView topics={topics} stats={stats} busy={busy} page={currentPage}
                   onOpenEditor={openEditor} onRunJob={runJob}/>
               )}
               {activeNav==='scheduler' && <SchedulerView page={currentPage}/>}

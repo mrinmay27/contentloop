@@ -99,6 +99,38 @@ CREATE INDEX IF NOT EXISTS idx_topics_state_score ON topics(state, score DESC);
 CREATE INDEX IF NOT EXISTS idx_content_items_status ON content_items(status);
 CREATE INDEX IF NOT EXISTS idx_posts_state_scheduled ON posts(state, scheduled_at);
 
+-- Phase 2: publish_jobs — tracks per-platform publish attempts for each content_item
+CREATE TABLE IF NOT EXISTS publish_jobs (
+  id               UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  content_item_id  UUID        NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+  page_id          UUID        NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+  platform         TEXT        NOT NULL,
+  status           TEXT        NOT NULL DEFAULT 'pending'
+                               CHECK (status IN ('pending','scheduled','publishing','published','failed')),
+  scheduled_at     TIMESTAMPTZ,
+  published_at     TIMESTAMPTZ,
+  external_post_id TEXT,
+  external_url     TEXT,
+  error            TEXT,
+  formatted_caption TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_publish_jobs_content ON publish_jobs(content_item_id);
+CREATE INDEX IF NOT EXISTS idx_publish_jobs_status  ON publish_jobs(status, scheduled_at);
+
+-- Migration: ensure content_items.type allows all three formats.
+-- The original constraint may have been created with only ('reel','carousel') before
+-- 'post' was added. DROP + ADD is idempotent — safe to run on every boot.
+ALTER TABLE content_items DROP CONSTRAINT IF EXISTS content_items_type_check;
+ALTER TABLE content_items ADD CONSTRAINT content_items_type_check
+  CHECK (type IN ('post', 'reel', 'carousel'));
+
+-- Migration: ensure content_items.status allows all expected states.
+ALTER TABLE content_items DROP CONSTRAINT IF EXISTS content_items_status_check;
+ALTER TABLE content_items ADD CONSTRAINT content_items_status_check
+  CHECK (status IN ('draft', 'qa_failed', 'qa_passed', 'approved', 'rejected'));
+
 -- Canva OAuth tokens (one per page, upserted on connect)
 CREATE TABLE IF NOT EXISTS canva_tokens (
   id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

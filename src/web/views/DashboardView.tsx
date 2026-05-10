@@ -558,7 +558,7 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
           <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:8 }} className="stagger">
             {filtered.length > 0
               ? filtered.map(topic => (
-                <TopicCard key={topic.id} topic={topic}
+                <TopicCard key={topic.id} topic={topic} pageId={page.id}
                   selected={selectedTopics.has(topic.id)}
                   onSelect={toggle} onEdit={onOpenEditor}
                   onDiscard={requestDiscard}

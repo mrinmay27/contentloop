@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Player } from '@remotion/player';
 import { Icon } from '../ui/Icon';
 import { CanvaPanel } from './CanvaPanel';
 import { ContentImageGenerator } from './ContentImageGenerator';
 import { api } from '../../lib/api';
 import type { NavKey, SuggestedFormat, Topic, ThemePage } from '../../lib/types';
+import { ReelComposition, reelDurationFrames, REEL_FPS, REEL_WIDTH, REEL_HEIGHT } from '../../../remotion/ReelComposition';
+import { parseReelScript } from '../../../remotion/parseReelScript';
+import { ReelScriptGenerator } from './ReelScriptGenerator';
+import { PublishPanel } from './PublishPanel';
 
 // Build an image prompt that incorporates brand context. The user can override per-image.
 function buildContentImagePrompt(opts: {
@@ -12,15 +17,23 @@ function buildContentImagePrompt(opts: {
   brandAccent?: string;
   brandFont?:   string;
   niche?:       string;
+  aspectRatio?: '1:1' | '9:16';   // default 1:1 for posts/carousel, 9:16 for reel
 }): string {
-  const { topic, slideText, brandAccent, brandFont, niche } = opts;
-  const subject = slideText?.trim() ? `"${slideText.trim()}"` : `"${topic}"`;
+  const { topic, slideText, brandAccent, brandFont, niche, aspectRatio = '1:1' } = opts;
+  const slideNote = slideText?.trim() && slideText.trim() !== topic
+    ? ` Slide angle: "${slideText.trim()}".`
+    : '';
+  const isReel = aspectRatio === '9:16';
   return [
-    `Vivid, editorial-style social media image illustrating ${subject}.`,
+    `Vivid, cinematic${isReel ? ', portrait-orientation' : ''} social media image illustrating "${topic}".${slideNote}`,
     niche       && `Theme: ${niche}.`,
-    brandAccent && `Use accent color ${brandAccent} as the dominant color.`,
+    // For reel slides: keep the background dark/moody so text overlaid at the bottom stays legible.
+    // Don't make the whole image the accent colour — use it as an accent only.
+    isReel
+      ? `Moody, dramatic lighting. Dark background preferred — the image will have text overlaid at the bottom. ${brandAccent ? `Accent color hint: ${brandAccent}.` : ''}`
+      : brandAccent && `Use accent color ${brandAccent} as the dominant color.`,
     brandFont   && `If text appears in the image, use a font similar to ${brandFont}.`,
-    'High contrast, modern, clean composition, suitable for Instagram, square 1:1 aspect ratio.',
+    `High contrast, modern, clean composition. ${isReel ? 'Portrait 9:16 vertical format.' : 'Square 1:1 aspect ratio.'}`,
     'No watermarks, no logos other than what is described.',
   ].filter(Boolean).join(' ');
 }
@@ -59,7 +72,15 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
   const [hasUserOverridden, setHasUserOverridden] = useState(
     topic.formatConfidence === 'user'
   );
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saveStatus,    setSaveStatus]    = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [approveStatus, setApproveStatus] = useState<'idle' | 'approving' | 'done'>('idle');
+  const [isDirty,       setIsDirty]       = useState(false);
+  const [renderStatus,    setRenderStatus]    = useState<'idle' | 'rendering' | 'done'>('idle');
+  const [reelVideoUrl,    setReelVideoUrl]    = useState<string | null>(null);
+  const [reelSavedImages, setReelSavedImages] = useState<Record<number, string>>({});
+
+  const handleReelSavedImage = (idx: number) => (url: string) =>
+    setReelSavedImages(prev => ({ ...prev, [idx]: url }));
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -78,39 +99,68 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
   );
 
   // Brand kit + content_item draft for image generation
-  const [brand,     setBrand]     = useState<Record<string, any>>({});
-  const [draftId,   setDraftId]   = useState<string | null>(null);
+  const [brand, setBrand] = useState<Record<string, any>>({
+    accent: '#F5A623',
+    font:   'DM Sans',
+  });
+  const [draftId,      setDraftId]      = useState<string | null>(null);
+  const [draftLoading, setDraftLoading] = useState(true);
+  const [draftError,   setDraftError]   = useState<string | null>(null);
   const [savedImages, setSavedImages] = useState<Record<number, string>>({});
 
   // Load brand + ensure a draft content_item exists for this (topic, page, format)
   useEffect(() => {
-    api.getBranding(page.id).then(({ brand }) => setBrand(brand ?? {})).catch(() => {});
+    api.getBranding(page.id)
+      .then(({ brand: b }) => setBrand({ accent: '#F5A623', font: 'DM Sans', ...(b ?? {}) }))
+      .catch(() => {});
   }, [page.id]);
 
-  useEffect(() => {
+  const loadDraft = () => {
     setDraftId(null);
     setSavedImages({});
+    setDraftLoading(true);
+    setDraftError(null);
+    setApproveStatus('idle');
+    setIsDirty(false);
     api.ensureDraftContent({ topicId: topic.id, pageId: page.id, type: previewTab })
       .then(({ content }) => {
         setDraftId(content.id);
-        // Hydrate any existing images from prior sessions
-        const imgs: any[] = Array.isArray(content.payload?.images) ? content.payload.images : [];
+        if (content.status === 'approved') setApproveStatus('done');
+        const p = content.payload ?? {};
+
+        // Hydrate text fields saved from a previous session
+        if (p.hook)    setHook(p.hook);
+        if (p.caption) setCaption(p.caption);
+        if (Array.isArray(p.slides) && p.slides.length > 0) setSlides(p.slides);
+        if (p.reelScript) setReelScript(p.reelScript);
+        if (p.reelTarget) setReelTarget(p.reelTarget as any);
+
+        // Hydrate saved image URLs
+        const imgs: any[] = Array.isArray(p.images) ? p.images : [];
         const hydrated: Record<number, string> = {};
-        imgs.forEach((img, i) => {
-          if (img && typeof img === 'object' && img.url) hydrated[i] = img.url;
+        imgs.forEach((img: any) => {
+          if (img && typeof img === 'object' && typeof img.slideIndex === 'number' && img.url)
+            hydrated[img.slideIndex] = img.url;
         });
         setSavedImages(hydrated);
       })
-      .catch(() => {});
-  }, [topic.id, page.id, previewTab]);
+      .catch((err: any) => {
+        setDraftError(err?.message ?? 'Failed to initialise content draft');
+      })
+      .finally(() => setDraftLoading(false));
+  };
+
+  useEffect(() => { loadDraft(); }, [topic.id, page.id, previewTab]);
 
   const handleSavedImage = (slideIndex: number) => (url: string) =>
     setSavedImages(prev => ({ ...prev, [slideIndex]: url }));
 
-  const addSlide    = () => setSlides(s => [...s, { id: Date.now(), text: `Slide ${s.length + 1}` }]);
-  const removeSlide = (id: number) => setSlides(s => s.filter(sl => sl.id !== id));
-  const updateSlide = (id: number, text: string) =>
+  const addSlide    = () => { setSlides(s => [...s, { id: Date.now(), text: `Slide ${s.length + 1}` }]); setIsDirty(true); };
+  const removeSlide = (id: number) => { setSlides(s => s.filter(sl => sl.id !== id)); setIsDirty(true); };
+  const updateSlide = (id: number, text: string) => {
     setSlides(s => s.map(sl => sl.id === id ? { ...sl, text } : sl));
+    setIsDirty(true);
+  };
 
   const prevSlide = () => setCurrentSlide(i => Math.max(0, i - 1));
   const nextSlide = () => setCurrentSlide(i => Math.min(slides.length - 1, i + 1));
@@ -144,20 +194,72 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Task 3.3: Save Draft / Approve — persist format+confidence to DB
+  const handleRenderReel = async () => {
+    if (!draftId || renderStatus === 'rendering') return;
+    setRenderStatus('rendering');
+    showToast('🎬 Rendering reel — this takes ~30-60s…');
+    try {
+      const slides = parseReelScript(reelScript);
+      const { url } = await api.renderReel(draftId, {
+        slides,
+        handle:           page.niche ?? page.name,
+        accent:           brand.accent,
+        font:             brand.font,
+        reelTarget,
+        backgroundImages: slides.map((_, i) => {
+          const imgUrl = reelSavedImages[i];
+          // Make absolute for server-side renderer (Node.js can't resolve relative paths)
+          return imgUrl ? `http://localhost:4000${imgUrl.split('?')[0]}` : '';
+        }),
+      });
+      setReelVideoUrl(url);
+      setRenderStatus('done');
+      showToast('✓ Reel rendered — click Download to save');
+    } catch (err: any) {
+      setRenderStatus('idle');
+      showToast(`Render failed: ${err?.message ?? 'unknown error'}`);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!draftId || approveStatus !== 'idle') return;
+    setApproveStatus('approving');
+    try {
+      // Auto-save current content first, then flip status to approved
+      const contentPayload: Record<string, unknown> = { hook, caption };
+      if (previewTab === 'carousel') contentPayload.slides = slides;
+      if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; }
+      await api.patchContent(draftId, contentPayload);
+      await api.approveContent(draftId);
+      setApproveStatus('done');
+      showToast('✓ Approved — content queued for scheduling');
+      setTimeout(() => onBack(), 1200);
+    } catch {
+      setApproveStatus('idle');
+      showToast('Approval failed — try again');
+    }
+  };
+
   const handleSaveDraft = async () => {
+    if (!draftId) return;
     setSaveStatus('saving');
     try {
-      // If user overrode the format, persist as 'user' confidence
+      // Persist hook + caption + format-specific fields
+      const contentPayload: Record<string, unknown> = { hook, caption };
+      if (previewTab === 'carousel') contentPayload.slides = slides;
+      if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; }
+      await api.patchContent(draftId, contentPayload);
+
+      // Persist format override if the user changed it
       if (hasUserOverridden && previewTab !== topic.suggestedFormat) {
         await api.patch(`/api/topics/${topic.id}/format`, {
           suggested_format: previewTab,
           format_confidence: 'user',
         });
       }
-      await new Promise(r => setTimeout(r, 400)); // simulate save
+
       setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      setTimeout(() => setSaveStatus('idle'), 2500);
     } catch {
       setSaveStatus('idle');
     }
@@ -197,7 +299,9 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
           <span className="topbar-title" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {topic.title}
           </span>
-          <span className="badge badge-amber" style={{ flexShrink:0 }}>Review</span>
+          <span className={`badge ${approveStatus === 'done' && !isDirty ? 'badge-green' : isDirty && approveStatus === 'done' ? 'badge-amber' : 'badge-amber'}`} style={{ flexShrink:0 }}>
+            {approveStatus === 'done' && !isDirty ? 'Approved' : isDirty ? 'Edited' : 'Review'}
+          </span>
           {/* Task 3.1: Show "🤖 Suggested" chip on pre-selected tab */}
           {topic.suggestedFormat && (
             <span style={{
@@ -215,12 +319,24 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
         {/* Actions */}
         <div className="topbar-right">
           <button className="btn btn-surface btn-sm" onClick={handleSaveDraft}
-            disabled={saveStatus === 'saving'}>
+            disabled={!draftId || saveStatus === 'saving'}>
             {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Save Draft'}
           </button>
-          <button className="btn btn-primary btn-sm">
-            <Icon name="check" size={11}/> Approve
-          </button>
+          {approveStatus === 'done' && !isDirty ? (
+            <button className="btn btn-sm" disabled style={{
+              background: 'var(--green, #22c55e)', color: '#fff',
+              border: '1px solid var(--green, #22c55e)', opacity: 1,
+              cursor: 'default',
+            }}>
+              ✓ Approved
+            </button>
+          ) : (
+            <button className="btn btn-primary btn-sm" onClick={handleApprove}
+              disabled={!draftId || approveStatus === 'approving'}>
+              <Icon name="check" size={11}/>
+              {approveStatus === 'approving' ? 'Approving…' : 'Approve'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -229,6 +345,37 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
 
         {/* LEFT: Editor — Task 3.2: panel adapts to selected format */}
         <div className="editor-sidebar" style={{ overflowY:'auto' }}>
+
+          {/* Draft status banner */}
+          {draftLoading && (
+            <div style={{
+              display:'flex', alignItems:'center', gap:8,
+              padding:'8px 12px', marginBottom:12,
+              background:'var(--bg-elevated)', border:'1px solid var(--border)',
+              borderRadius:'var(--radius-sm)', fontSize:11, color:'var(--text-muted)',
+            }}>
+              <span style={{ animation:'spin 1s linear infinite', display:'inline-block' }}>⏳</span>
+              Initialising draft… image paste will be ready in a moment.
+            </div>
+          )}
+          {draftError && (
+            <div style={{
+              display:'flex', alignItems:'center', gap:10,
+              padding:'8px 12px', marginBottom:12,
+              background:'color-mix(in srgb, var(--red, #ef4444) 10%, transparent)',
+              border:'1px solid var(--red, #ef4444)',
+              borderRadius:'var(--radius-sm)', fontSize:11,
+            }}>
+              <span style={{ color:'var(--red, #ef4444)', flex:1 }}>
+                ⚠ Draft init failed: {draftError}
+              </span>
+              <button onClick={loadDraft}
+                style={{ background:'none', border:'none', cursor:'pointer',
+                  fontSize:11, color:'var(--accent)', fontWeight:700, padding:0, flexShrink:0 }}>
+                ↺ Retry
+              </button>
+            </div>
+          )}
 
           {/* Source reference banner */}
           {topic.sourceUrl && (
@@ -275,7 +422,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
           <div>
             <div className="editor-section-title">Hook</div>
             <textarea className="editor-textarea" value={hook}
-              onChange={e => setHook(e.target.value)} rows={3} style={{ marginTop:8 }}/>
+              onChange={e => { setHook(e.target.value); setIsDirty(true); }} rows={3} style={{ marginTop:8 }}/>
           </div>
 
           {/* Caption — visible for Post and Reel */}
@@ -283,7 +430,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
             <div>
               <div className="editor-section-title">Caption</div>
               <textarea className="editor-textarea" value={caption}
-                onChange={e => setCaption(e.target.value)} rows={4} style={{ marginTop:8 }}/>
+                onChange={e => { setCaption(e.target.value); setIsDirty(true); }} rows={4} style={{ marginTop:8 }}/>
             </div>
           )}
 
@@ -354,15 +501,43 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
             </>
           )}
 
-          {/* Reel Script — Task 3.2: only visible on Reel tab */}
+          {/* Reel Script — only visible on Reel tab */}
           {previewTab === 'reel' && (
             <div>
               <div className="editor-section-title">Reel Script</div>
+
+              <ReelScriptGenerator
+                topic={topic.title}
+                niche={page.name}
+                handle={page.niche ?? page.name}
+                onScript={setReelScript}
+              />
+
               <textarea className="editor-textarea" value={reelScript}
-                onChange={e => setReelScript(e.target.value)}
-                rows={8} style={{ marginTop:8, fontFamily:'var(--mono)', fontSize:11 }}
+                onChange={e => { setReelScript(e.target.value); setIsDirty(true); }}
+                rows={8} style={{ fontFamily:'var(--mono)', fontSize:11 }}
                 placeholder="Hook: [attention-grabbing opener]&#10;&#10;Body: [3 punchy points]&#10;&#10;CTA: [follow/save/comment ask]"
               />
+              {/* Per-slide background images — shown after script is written */}
+              {parseReelScript(reelScript).filter(s => s !== 'No script yet').map((slideText, i) => (
+                <ContentImageGenerator
+                  key={i}
+                  contentId={draftId}
+                  slideIndex={100 + i}
+                  label={`Slide ${i + 1} background`}
+                  defaultPrompt={buildContentImagePrompt({
+                    topic:       topic.title,
+                    slideText,
+                    brandAccent: brand.accent,
+                    brandFont:   brand.font,
+                    niche:       page.niche,
+                    aspectRatio: '9:16',
+                  })}
+                  initialUrl={reelSavedImages[i]}
+                  onSaved={handleReelSavedImage(i)}
+                />
+              ))}
+
               {/* Platform selector for Reel */}
               <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
                 <span style={{ fontSize:11, color:'var(--text-muted)', alignSelf:'center' }}>Publish to:</span>
@@ -381,6 +556,37 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                     <span style={{ fontSize:13 }}>{icon}</span> {label}
                   </button>
                 ))}
+              </div>
+
+              {/* Render to MP4 */}
+              <div style={{ marginTop:16, padding:14,
+                border:'1px solid var(--border)', borderRadius:'var(--radius-sm)',
+                background:'var(--bg-elevated)' }}>
+                <div style={{ fontSize:11, fontWeight:700, marginBottom:8, color:'var(--text-primary)' }}>
+                  🎬 Export Reel
+                </div>
+                <div style={{ fontSize:10, color:'var(--text-muted)', marginBottom:10, lineHeight:1.5 }}>
+                  Renders an MP4 (1080×1920, H.264) using your script and brand colors.
+                  Takes ~30–60s on first render.
+                </div>
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={!draftId || renderStatus === 'rendering'}
+                    onClick={handleRenderReel}
+                    style={{ fontSize:11 }}>
+                    {renderStatus === 'rendering' ? '⏳ Rendering…' :
+                     renderStatus === 'done'      ? '✓ Re-render'  : '🎬 Render to MP4'}
+                  </button>
+                  {reelVideoUrl && renderStatus !== 'rendering' && (
+                    <a href={reelVideoUrl} download
+                      style={{ fontSize:11, fontWeight:600, color:'var(--accent)',
+                        padding:'4px 12px', borderRadius:'var(--radius-sm)',
+                        border:'1px solid var(--accent)', textDecoration:'none' }}>
+                      ↓ Download MP4
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -457,11 +663,11 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                   alignItems:'center', justifyContent:'center', position:'relative', padding:10,
                   overflow:'hidden' }}>
 
-                  {/* Background image for current slide if generated */}
+                  {/* Background image — contain keeps the square image uncropped */}
                   {savedImages[currentSlide] && (
                     <img src={savedImages[currentSlide]} alt={`Slide ${currentSlide + 1}`}
                       style={{ position:'absolute', inset:0, width:'100%', height:'100%',
-                        objectFit:'cover', zIndex:0 }} />
+                        objectFit:'contain', background:'#000', zIndex:0 }} />
                   )}
                   {/* Subtle gradient for legibility when image is present */}
                   {savedImages[currentSlide] && (
@@ -532,12 +738,12 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
               )}
 
               {previewTab === 'post' && (
-                <div style={{ flex:1, background:'var(--bg-elevated)', display:'flex',
+                <div style={{ flex:1, background:'#000', display:'flex',
                   alignItems:'center', justifyContent:'center', padding: savedImages[0] ? 0 : 20,
                   position:'relative', overflow:'hidden' }}>
                   {savedImages[0] ? (
                     <img src={savedImages[0]} alt="Post"
-                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      style={{ width:'100%', height:'100%', objectFit:'contain' }} />
                   ) : (
                     <div style={{ textAlign:'center', fontSize:14, fontWeight:700,
                       color:'var(--text-primary)', lineHeight:1.6 }}>
@@ -547,38 +753,33 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                 </div>
               )}
 
-              {previewTab === 'reel' && (
-                <div style={{ flex:1, position:'relative', overflow:'hidden',
-                  background: reelTarget === 'youtube_shorts'
-                    ? 'linear-gradient(160deg,#1a0000,#0d0d0d)'
-                    : 'linear-gradient(160deg, var(--bg-elevated), var(--bg-base))' }}>
-                  <div style={{ position:'absolute', top:8, right:8, fontSize:9,
-                    background:'rgba(0,0,0,0.5)', color:'#fff', padding:'2px 6px',
-                    borderRadius:4, fontFamily:'var(--mono)' }}>
-                    {reelTarget === 'youtube_shorts' ? '9:16 · 60s' : '9:16 · 90s'}
+              {previewTab === 'reel' && (() => {
+                const reelSlides = parseReelScript(reelScript);
+                const totalFrames = reelDurationFrames(reelSlides.length);
+                return (
+                  <div style={{ flex:1, position:'relative', overflow:'hidden', background:'#000',
+                    display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <Player
+                      component={ReelComposition}
+                      inputProps={{
+                        slides:           reelSlides,
+                        handle:           page.niche ?? page.name,
+                        accent:           brand.accent,
+                        font:             brand.font,
+                        target:           reelTarget,
+                        backgroundImages: reelSlides.map((_, i) => reelSavedImages[i] ?? '').filter(Boolean),
+                      }}
+                      durationInFrames={totalFrames}
+                      compositionWidth={REEL_WIDTH}
+                      compositionHeight={REEL_HEIGHT}
+                      fps={REEL_FPS}
+                      style={{ width:'100%', height:'100%' }}
+                      controls
+                      loop
+                    />
                   </div>
-                  <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <div style={{ width:48, height:48, borderRadius:'50%', background:'var(--bg-hover)',
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>▶</div>
-                  </div>
-                  {reelTarget !== 'instagram' && (
-                    <div style={{ position:'absolute', right:8, bottom:60, display:'flex', flexDirection:'column', gap:16, alignItems:'center' }}>
-                      {['👍','💬','↗️','⋯'].map(ic => (
-                        <div key={ic} style={{ fontSize:18, opacity:0.7 }}>{ic}</div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ position:'absolute', bottom:10, left:10, right: reelTarget !== 'instagram' ? 50 : 10 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:'#fff', lineHeight:1.5 }}>
-                      {hook.substring(0,80)}…
-                    </div>
-                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.6)', marginTop:4 }}>
-                      {reelTarget === 'youtube_shorts' ? '▶️ ' : '📸 '}
-                      {reelTarget !== 'youtube_shorts' ? `@${page.niche.replace(/\s+/g,'').toLowerCase()}` : page.name}
-                    </div>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div style={{ padding:'10px 14px', display:'flex', gap:10, borderTop:'0.5px solid var(--border)' }}>
                 {(previewTab === 'reel' && reelTarget !== 'instagram'
@@ -597,6 +798,13 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
             pageId={page.id}
             hook={hook}
             slides={slides.map(s => s.text)}
+          />
+
+          {/* Publish panel — Phase 2 */}
+          <PublishPanel
+            contentId={draftId}
+            pageId={page.id}
+            approved={approveStatus === 'done' && !isDirty}
           />
         </div>
       </div>

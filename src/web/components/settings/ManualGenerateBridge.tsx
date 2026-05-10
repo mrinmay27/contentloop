@@ -1,25 +1,82 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+// ── Module-level paste router ─────────────────────────────────────────────────
+// Only ONE slide is the "active paste target" at a time — whichever the user
+// most recently clicked "Generate" for (or clicked the drop zone to focus).
+// This prevents multiple carousel slides from all receiving the same Cmd+V.
+let _activeOnImage: ((dataUrl: string) => void) | null = null;
+let _activeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function setActivePasteTarget(onImage: (dataUrl: string) => void, durationMs = 45_000) {
+  if (_activeTimeout) clearTimeout(_activeTimeout);
+  _activeOnImage = onImage;
+  _activeTimeout = setTimeout(() => { _activeOnImage = null; }, durationMs);
+}
+function clearActivePasteTarget() {
+  if (_activeTimeout) clearTimeout(_activeTimeout);
+  _activeOnImage = null;
+}
+
+// Register the single global paste listener once per page load
+let _listenerRegistered = false;
+function ensureGlobalPasteListener() {
+  if (_listenerRegistered || typeof window === 'undefined') return;
+  _listenerRegistered = true;
+  window.addEventListener('paste', (e: ClipboardEvent) => {
+    if (!_activeOnImage) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (blob) {
+          const reader = new FileReader();
+          const handler = _activeOnImage;   // capture before clearing
+          clearActivePasteTarget();
+          reader.onload = () => { handler(reader.result as string); };
+          reader.readAsDataURL(blob);
+          e.preventDefault();
+        }
+        break;
+      }
+    }
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
-  prompt:  string;
-  onImage: (dataUrl: string) => void;
+  prompt:     string;
+  onImage:    (dataUrl: string) => void;
+  draftReady?: boolean;   // false = draft still initialising, disable paste zone
 }
 
 interface CopiedState { label: string; needsManualPaste: boolean; }
 
-export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage }) => {
+export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage, draftReady = true }) => {
   const [dragOver, setDragOver] = useState(false);
   const [copied,   setCopied]   = useState<CopiedState | null>(null);
+  const [zoneActive, setZoneActive] = useState(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   const enriched = `Generate a high-quality image: ${prompt.trim()}`;
   const disabled = !prompt.trim();
+  const zoneDisabled = !draftReady;
+
+  // Register the global listener once on first render
+  useEffect(() => { ensureGlobalPasteListener(); }, []);
+
+  const activate = (durationMs?: number) => {
+    setActivePasteTarget(onImage, durationMs);
+    setZoneActive(true);
+  };
 
   const openIn = (url: string, label: string, needsManualPaste: boolean) => {
     if (disabled) return;
     navigator.clipboard?.writeText(enriched).catch(() => {});
     setCopied({ label, needsManualPaste });
-    // Persist longer when user has to manually paste; auto-clear on success
-    setTimeout(() => setCopied(null), needsManualPaste ? 15_000 : 4_000);
+    activate(45_000);
+    setTimeout(() => { setCopied(null); setZoneActive(false); },
+      needsManualPaste ? 45_000 : 30_000);
     window.open(url, '_blank', 'noopener');
   };
 
@@ -33,32 +90,36 @@ export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage }) => {
   const captureFile = (file: File) => {
     if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = () => { onImage(reader.result as string); setCopied(null); };
+    reader.onload = () => {
+      onImage(reader.result as string);
+      setCopied(null);
+      setZoneActive(false);
+      clearActivePasteTarget();
+    };
     reader.readAsDataURL(file);
   };
-
-  // Global paste listener while mounted — user can Cmd+V anywhere on the page
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          const blob = item.getAsFile();
-          if (blob) { captureFile(blob); e.preventDefault(); }
-          break;
-        }
-      }
-    };
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onImage]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
     const file = e.dataTransfer.files[0];
     if (file) captureFile(file);
+  };
+
+  // When drop zone is clicked/focused → become the active paste target
+  const handleZoneFocus = () => { activate(60_000); setZoneActive(true); };
+  const handleZoneBlur  = () => { setZoneActive(false); };
+
+  // Allow paste directly on the focused drop zone div
+  const handleZonePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (blob) { captureFile(blob); e.preventDefault(); }
+        break;
+      }
+    }
   };
 
   return (
@@ -120,7 +181,7 @@ export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage }) => {
 
       {copied && !copied.needsManualPaste && copied.label !== 'clipboard' && (
         <div style={{ fontSize: 10, color: 'var(--green)', marginBottom: 6, lineHeight: 1.5 }}>
-          ✓ Sent to {copied.label} — wait for the image, right-click → Copy image → come back here
+          ✓ Sent to {copied.label} — wait for the image, right-click → Copy image → come back here and ⌘V
         </div>
       )}
 
@@ -131,29 +192,56 @@ export const ManualGenerateBridge: React.FC<Props> = ({ prompt, onImage }) => {
       )}
 
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
+        ref={dropZoneRef}
+        tabIndex={zoneDisabled ? -1 : 0}
+        onFocus={zoneDisabled ? undefined : handleZoneFocus}
+        onBlur={handleZoneBlur}
+        onPaste={zoneDisabled ? undefined : handleZonePaste}
+        onDragOver={zoneDisabled ? undefined : (e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={zoneDisabled ? undefined : () => setDragOver(false)}
+        onDrop={zoneDisabled ? undefined : handleDrop}
+        onClick={zoneDisabled ? undefined : () => dropZoneRef.current?.focus()}
         style={{
           padding: '14px 14px',
           textAlign: 'center',
-          border: `1.5px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`,
+          border: `1.5px dashed ${zoneDisabled ? 'var(--border)' : dragOver || zoneActive ? 'var(--accent)' : 'var(--border)'}`,
           borderRadius: 'var(--radius-sm)',
-          background: dragOver
-            ? 'color-mix(in srgb, var(--accent) 8%, transparent)'
-            : 'color-mix(in srgb, var(--bg-elevated) 50%, transparent)',
+          background: zoneDisabled
+            ? 'var(--bg-base)'
+            : dragOver || zoneActive
+              ? 'color-mix(in srgb, var(--accent) 8%, transparent)'
+              : 'color-mix(in srgb, var(--bg-elevated) 50%, transparent)',
           fontSize: 11,
-          color: 'var(--text-muted)',
+          color: zoneDisabled ? 'var(--text-muted)' : 'var(--text-muted)',
           lineHeight: 1.7,
           transition: 'all 0.15s ease',
+          outline: zoneActive ? '2px solid color-mix(in srgb, var(--accent) 40%, transparent)' : 'none',
+          cursor: zoneDisabled ? 'not-allowed' : 'pointer',
+          opacity: zoneDisabled ? 0.5 : 1,
         }}
       >
-        📋 <strong style={{ color: 'var(--text-primary)' }}>Paste image</strong> (⌘V anywhere)
-        {' '}or <strong style={{ color: 'var(--text-primary)' }}>drag & drop</strong>
-        <br />
-        <span style={{ fontSize: 10, opacity: 0.75 }}>
-          In ChatGPT/Gemini: right-click the generated image → Copy image → return here
-        </span>
+        {zoneDisabled ? (
+          <>
+            ⏳ <strong style={{ color: 'var(--text-secondary)' }}>Initialising draft…</strong>
+            <br />
+            <span style={{ fontSize: 10, opacity: 0.7 }}>Paste will be ready in a moment</span>
+          </>
+        ) : (
+          <>
+            📋 <strong style={{ color: 'var(--text-primary)' }}>Paste image</strong>
+            {zoneActive
+              ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}> — ⌘V now!</span>
+              : <span> (⌘V) or <strong style={{ color: 'var(--text-primary)' }}>drag & drop</strong></span>
+            }
+            <br />
+            <span style={{ fontSize: 10, opacity: 0.75 }}>
+              {zoneActive
+                ? 'Listening for paste — come back from ChatGPT/Gemini and ⌘V'
+                : 'In ChatGPT/Gemini: right-click the generated image → Copy image → return here'
+              }
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

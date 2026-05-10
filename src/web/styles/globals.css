@@ -102,7 +102,7 @@ input::placeholder,textarea::placeholder { color:var(--text-muted); }
 .topic-check { width:16px;height:16px;border:1.5px solid var(--border-strong);border-radius:4px;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:all 0.12s;cursor:pointer; }
 .topic-check.checked { background:var(--accent);border-color:var(--accent);color:#000; }
 .topic-title { font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px;line-height:1.4; }
-.topic-meta { display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;overflow:hidden; }
+.topic-meta { display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;overflow:visible; }
 
 /* ─── TABS ─── */
 .tabs { display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 4px;background:var(--bg-surface);overflow:hidden;flex-shrink:0; }

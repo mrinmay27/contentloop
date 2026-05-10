@@ -22,7 +22,11 @@ import {
   listScheduledTimesForPage,
   listTopics,
   rejectContentItem,
-  updateTopicFormat
+  updateTopicFormat,
+  cancelPublishJob,
+  reschedulePublishJob,
+  getTopicPreview,
+  scheduleContentBatch,
 } from "../services/repositories.js";
 import { queues } from "../worker/queues.js";
 import * as canva from "../services/canva.js";
@@ -349,10 +353,13 @@ app.post("/api/content/draft", async (req, res, next) => {
       return void res.status(400).json({ error: 'topicId, pageId, type are required' });
     }
 
+    // Find any existing content_item for this (topic, page, type) — draft OR approved.
+    // Dropping the status filter means reopening after Approve still loads the same item
+    // with all saved images and text, instead of silently creating a blank new draft.
     const existing = await query<{ id: string; payload: any; type: string; status: string }>(
       `SELECT id, payload, type, status FROM content_items
-       WHERE topic_id = $1 AND page_id = $2 AND type = $3 AND status = 'draft'
-       ORDER BY created_at DESC LIMIT 1`,
+       WHERE topic_id = $1 AND page_id = $2 AND type = $3
+       ORDER BY updated_at DESC LIMIT 1`,
       [topicId, pageId, type]
     );
     if (existing.rows[0]) return void res.json({ ok: true, content: existing.rows[0] });
@@ -429,7 +436,20 @@ app.get("/api/pages/:id/analytics", async (req, res, next) => {
 app.get("/api/topics", async (req, res, next) => {
   try {
     const nicheId = req.query.nicheId?.toString();
-    res.json(await listTopics(nicheId));
+    const topics = await listTopics(nicheId);
+    // Enrich each topic with its latest content_item status so the UI can
+    // show "approved" badge when content has been approved.
+    const { rows: ciRows } = await query(
+      `SELECT DISTINCT ON (topic_id) topic_id, status
+       FROM content_items
+       ORDER BY topic_id, updated_at DESC`
+    );
+    const topicContentStatus = new Map(ciRows.map((r: any) => [r.topic_id, r.status]));
+    const enriched = topics.map(t => ({
+      ...t,
+      status: topicContentStatus.get(t.id) === 'approved' ? 'approved' : undefined,
+    }));
+    res.json(enriched);
   } catch (error) {
     next(error);
   }
@@ -450,6 +470,53 @@ app.patch("/api/topics/:id/format", async (req, res, next) => {
   }
 });
 
+
+// GET topic preview — latest content_item payload for a topic+page (no editor needed)
+app.get("/api/topics/:topicId/preview", async (req, res, next) => {
+  try {
+    const pageId = req.query.pageId?.toString();
+    if (!pageId) return void res.status(400).json({ error: 'pageId required' });
+    const preview = await getTopicPreview(req.params.topicId, pageId);
+    res.json({ preview: preview ?? null });
+  } catch (err) { next(err); }
+});
+
+// POST schedule-batch — create scheduled publish_jobs for multiple content items at once
+app.post("/api/content/schedule-batch", async (req, res, next) => {
+  try {
+    const { jobs } = req.body as {
+      jobs: Array<{ contentItemId: string; pageId: string; platform: string; scheduledAt: string }>;
+    };
+    if (!Array.isArray(jobs) || jobs.length === 0)
+      return void res.status(400).json({ error: 'jobs[] is required' });
+
+    const now = new Date();
+    const pastJob = jobs.find(j => new Date(j.scheduledAt) <= now);
+    if (pastJob)
+      return void res.status(400).json({ error: `Scheduled time must be in the future (got ${pastJob.scheduledAt})` });
+
+    const { formatCaption } = await import('../services/platformFormatter.js');
+    const batchJobs: Array<{ contentItemId: string; pageId: string; platform: string; scheduledAt: Date; formattedCaption: string }> = [];
+
+    for (const job of jobs) {
+      const { rows } = await query(
+        `SELECT ci.payload FROM content_items ci WHERE ci.id = $1`,
+        [job.contentItemId]
+      );
+      const payload = rows[0]?.payload ?? {};
+      const formattedCaption = formatCaption({
+        platform: job.platform as any,
+        hook:     payload.hook     ?? '',
+        caption:  payload.caption  ?? '',
+        hashtags: payload.hashtags ?? [],
+      });
+      batchJobs.push({ ...job, scheduledAt: new Date(job.scheduledAt), formattedCaption });
+    }
+
+    await scheduleContentBatch(batchJobs);
+    res.json({ ok: true, count: batchJobs.length });
+  } catch (err) { next(err); }
+});
 
 app.get("/api/content", async (req, res, next) => {
   try {
@@ -490,11 +557,13 @@ app.patch("/api/content/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
     const body = z.object({
-      hook:     z.string().optional(),
-      caption:  z.string().optional(),
-      slides:   z.array(z.object({ id: z.number(), text: z.string() })).optional(),
-      cta:      z.string().optional(),
-      branding: z.record(z.string(), z.unknown()).optional(),
+      hook:       z.string().optional(),
+      caption:    z.string().optional(),
+      slides:     z.array(z.object({ id: z.number(), text: z.string() })).optional(),
+      cta:        z.string().optional(),
+      branding:   z.record(z.string(), z.unknown()).optional(),
+      reelScript: z.string().optional(),
+      reelTarget: z.enum(['instagram', 'youtube_shorts', 'both']).optional(),
     }).parse(req.body);
     const { query } = await import("../db/pool.js");
     await query(
@@ -821,6 +890,338 @@ app.post("/api/pages/:id/canva/export", async (req, res, next) => {
   }
 });
 
+
+// ─── Reel script generation via connected LLM ────────────────────────────────
+app.post("/api/generate/reel-script", async (req, res, next) => {
+  try {
+    const { topic, niche, handle, tone = 'educational', slideCount = 5 } = req.body as {
+      topic: string; niche?: string; handle?: string; tone?: string; slideCount?: number;
+    };
+    if (!topic) return void res.status(400).json({ error: 'topic is required' });
+
+    const cfg = llmConfigStore.forTask('generation') ?? llmConfigStore.forTask('all');
+    if (!cfg) return void res.status(503).json({ error: 'no_llm', message: 'No LLM configured — use ChatGPT/Gemini/Claude browser option' });
+
+    const { default: OpenAI } = await import('openai');
+    const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl });
+
+    const bare         = handle?.replace(/^@+/, '');
+    const nicheDisplay = (niche ?? 'content').replace(/^@+/, '');
+    const ctaLine      = bare ? `Follow @${bare} for daily ${nicheDisplay} breakdowns.` : `Follow for more daily ${nicheDisplay} insights.`;
+
+    const prompt = [
+      `Write a ${slideCount}-slide short-form video script (Instagram Reel / YouTube Shorts) about:`,
+      `"${topic}"`,
+      ``,
+      `Rules:`,
+      `- Each slide = 1–2 short punchy sentences (text will appear large on screen)`,
+      `- Slide 1: Hook — bold claim, surprising stat, or provocative question`,
+      `- Slides 2-${slideCount - 1}: Key insights, tips, or steps — no filler, no fluff`,
+      `- Slide ${slideCount}: CTA — "${ctaLine}"`,
+      `- Tone: ${tone}, conversational, high-retention`,
+      ``,
+      `Output ONLY the slide text. Separate each slide with a blank line. No labels, no numbering.`,
+    ].join('\n');
+
+    const completion = await client.chat.completions.create({
+      model: cfg.model,
+      messages: [
+        { role: 'system', content: 'You write punchy short-form video scripts. No filler words. Mobile-first. Each slide is 1-2 sentences max.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 600,
+    });
+
+    const script = completion.choices[0]?.message.content?.trim() ?? '';
+    res.json({ ok: true, script, provider: cfg.provider, model: cfg.model });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Reel render (Remotion server-side MP4 export) ──────────────────────────
+app.post("/api/content/:id/render-reel", async (req, res, next) => {
+  try {
+    const { rows } = await query<{ payload: any; page_id: string }>(
+      `SELECT payload, page_id FROM content_items WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!rows[0]) return void res.status(404).json({ error: 'Content item not found' });
+
+    const payload  = rows[0].payload ?? {};
+    const { slides, handle, accent, font, reelTarget, backgroundImages } = req.body as {
+      slides: string[]; handle: string; accent: string; font: string; reelTarget: string;
+      backgroundImages?: string[];
+    };
+
+    if (!slides?.length) return void res.status(400).json({ error: 'slides array is required' });
+
+    // Lazy-import Remotion renderer (heavy — only loaded when needed)
+    const { bundle }     = await import('@remotion/bundler');
+    const { renderMedia, selectComposition } = await import('@remotion/renderer');
+    const path  = await import('path');
+    const { fileURLToPath } = await import('url');
+    const fs    = await import('fs');
+
+    const __dirname = path.default.dirname(fileURLToPath(import.meta.url));
+    const reelRootPath = path.default.resolve(__dirname, '../../src/remotion/ReelRoot.tsx');
+
+    // Bundle the composition (cached by Remotion after first run)
+    const bundleLocation = await bundle({
+      entryPoint: reelRootPath,
+      onProgress: () => {},
+    });
+
+    const inputProps = {
+      slides,
+      handle:           handle ?? '@handle',
+      accent:           accent ?? '#F5A623',
+      font:             font   ?? 'DM Sans',
+      target:           reelTarget ?? 'both',
+      backgroundImages: (backgroundImages ?? []).filter(Boolean),
+    };
+
+    const { reelDurationFrames, REEL_FPS, REEL_WIDTH, REEL_HEIGHT } =
+      await import('../../src/remotion/ReelComposition.js');
+
+    const composition = await selectComposition({
+      serveUrl: bundleLocation,
+      id: 'Reel',
+      inputProps,
+    });
+
+    const outDir  = path.default.join(UPLOADS_DIR, rows[0].page_id, req.params.id);
+    fs.default.mkdirSync(outDir, { recursive: true });
+    const outFile = path.default.join(outDir, `reel-${Date.now()}.mp4`);
+
+    await renderMedia({
+      composition: {
+        ...composition,
+        durationInFrames: reelDurationFrames(slides.length),
+        fps:    REEL_FPS,
+        width:  REEL_WIDTH,
+        height: REEL_HEIGHT,
+      },
+      serveUrl:  bundleLocation,
+      codec:     'h264',
+      outputLocation: outFile,
+      inputProps,
+    });
+
+    const url = `/uploads/${rows[0].page_id}/${req.params.id}/${path.default.basename(outFile)}`;
+    res.json({ ok: true, url });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Phase 2: Multi-platform publishing ──────────────────────────────────────
+
+// GET connected publish platforms for a page
+app.get("/api/pages/:id/publish-platforms", async (req, res, next) => {
+  try {
+    const igInfo = await instagram.isConnected(req.params.id);
+    const igConnected = igInfo !== false;
+    res.json({
+      platforms: {
+        instagram: { connected: igConnected, label: 'Instagram', icon: '📸' },
+        facebook:  { connected: igConnected, label: 'Facebook',  icon: '👍' },
+        linkedin:  { connected: false, label: 'LinkedIn',   icon: '💼' },
+        twitter:   { connected: !!(configStore.get('TWITTER_BEARER_TOKEN')), label: 'Twitter / X', icon: '𝕏' },
+        reddit:    { connected: !!(configStore.get('REDDIT_CLIENT_ID') && configStore.get('REDDIT_CLIENT_SECRET')), label: 'Reddit', icon: '🤖' },
+      }
+    });
+  } catch (err) { next(err); }
+});
+
+// GET publish jobs for a content item
+app.get("/api/content/:id/publish-jobs", async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, platform, status, scheduled_at, published_at, external_post_id, external_url, error, created_at, updated_at
+       FROM publish_jobs WHERE content_item_id = $1 ORDER BY created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ jobs: rows });
+  } catch (err) { next(err); }
+});
+
+// POST — create publish jobs and fire immediately (or schedule)
+app.post("/api/content/:id/publish", async (req, res, next) => {
+  try {
+    const { platforms, scheduledAt } = req.body as {
+      platforms: string[];
+      scheduledAt?: string;   // ISO string — if omitted, publish immediately
+    };
+    if (!Array.isArray(platforms) || platforms.length === 0)
+      return void res.status(400).json({ error: 'platforms[] is required' });
+
+    // Load content item + page for formatting
+    const { rows: ciRows } = await query(
+      `SELECT c.*, p.id AS page_uuid, p.brand, p.handle FROM content_items c
+       JOIN pages p ON p.id = c.page_id WHERE c.id = $1`,
+      [req.params.id]
+    );
+    if (!ciRows[0]) return void res.status(404).json({ error: 'Content item not found' });
+    const ci = ciRows[0];
+    const payload = ci.payload ?? {};
+    const hook    = payload.hook    ?? '';
+    const caption = payload.caption ?? '';
+    const images: string[] = (Array.isArray(payload.images) ? payload.images : [])
+      .filter(Boolean)
+      .map((img: any) => typeof img === 'object' ? img.url : img)
+      .filter(Boolean);
+
+    const { formatCaption } = await import('../services/platformFormatter.js');
+    const { dispatchPublishJob } = await import('../services/platforms/publisher.js');
+    const { env } = await import('../config/env.js');
+
+    const jobs: any[] = [];
+
+    for (const platform of platforms) {
+      const formattedCaption = formatCaption({
+        platform: platform as any,
+        hook,
+        caption,
+        hashtags: payload.hashtags ?? [],
+      });
+
+      const isScheduled = !!scheduledAt;
+      const { rows: jobRows } = await query(
+        `INSERT INTO publish_jobs
+           (content_item_id, page_id, platform, status, scheduled_at, formatted_caption)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [
+          req.params.id,
+          ci.page_id,
+          platform,
+          isScheduled ? 'scheduled' : 'pending',
+          scheduledAt ?? null,
+          formattedCaption,
+        ]
+      );
+      jobs.push(jobRows[0]);
+
+      // Fire immediately in background if not scheduled
+      if (!isScheduled) {
+        const jobInput = {
+          jobId:            jobRows[0].id,
+          contentItemId:    req.params.id,
+          pageId:           ci.page_id,
+          platform:         platform as any,
+          formattedCaption,
+          imageUrls:        images,
+          hook,
+        };
+        dispatchPublishJob(jobInput, env.POSTING_DRY_RUN).catch(() => {});
+      }
+    }
+
+    res.json({ ok: true, jobs });
+  } catch (err) { next(err); }
+});
+
+// ── Publish job management ────────────────────────────────────────────────────
+
+// PATCH /api/publish-jobs/:id  — cancel or reschedule a scheduled job
+app.patch("/api/publish-jobs/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const body = req.body as { action: 'cancel' | 'reschedule' | 'publish-now'; scheduledAt?: string };
+    if (body.action === 'cancel') {
+      await cancelPublishJob(id);
+      return void res.json({ ok: true });
+    }
+    if (body.action === 'reschedule' && body.scheduledAt) {
+      await reschedulePublishJob(id, new Date(body.scheduledAt));
+      return void res.json({ ok: true });
+    }
+    if (body.action === 'publish-now') {
+      // Load the job and fire it immediately
+      const { rows } = await query(
+        `SELECT pj.*, c.page_id, c.payload FROM publish_jobs pj
+         JOIN content_items c ON c.id = pj.content_item_id
+         WHERE pj.id = $1`,
+        [id]
+      );
+      if (!rows[0]) return void res.status(404).json({ error: 'Job not found' });
+      const job = rows[0];
+      const payload   = job.payload ?? {};
+      const images: string[] = (payload.images ?? []).map((img: any) => img?.url ?? img).filter(Boolean);
+      const jobInput = {
+        jobId:            job.id,
+        contentItemId:    job.content_item_id,
+        pageId:           job.page_id,
+        platform:         job.platform,
+        formattedCaption: job.formatted_caption ?? '',
+        imageUrls:        images,
+        hook:             payload.hook ?? '',
+      };
+      const { dispatchPublishJob } = await import('../services/platforms/publisher.js');
+      dispatchPublishJob(jobInput, env.POSTING_DRY_RUN).catch(() => {});
+      return void res.json({ ok: true });
+    }
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (err) { next(err); }
+});
+
+// ─── Phase 1.5: Manual topic creation ────────────────────────────────────────
+
+app.post("/api/topics/extract-url", async (req, res, next) => {
+  try {
+    const { url } = req.body as { url?: string };
+    if (!url) return void res.status(400).json({ error: 'url is required' });
+
+    const { extractArticle } = await import("../services/articleExtractor.js");
+    const article = await extractArticle(url);
+
+    // Optionally use LLM to extract 3-5 key points from the body text
+    let keyPoints = '';
+    const cfg = llmConfigStore.forTask('generation') ?? llmConfigStore.forTask('all');
+    if (cfg && article.bodyText.length > 200) {
+      try {
+        const { OpenAI } = await import('openai');
+        const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl ?? undefined });
+        const resp = await client.chat.completions.create({
+          model: cfg.model,
+          max_tokens: 300,
+          messages: [{
+            role: 'user',
+            content: `Extract 3-5 punchy key points from this article text as a bullet list (no intro, just the bullets):\n\n${article.bodyText}`,
+          }],
+        });
+        keyPoints = resp.choices[0]?.message?.content?.trim() ?? '';
+      } catch { /* LLM optional — silently fall back */ }
+    }
+
+    res.json({ ok: true, article: { ...article, keyPoints } });
+  } catch (err: any) {
+    // Surface extraction errors as 422 so the UI can show "fill in manually"
+    res.status(422).json({ error: err?.message ?? 'extraction_failed' });
+  }
+});
+
+app.post("/api/topics/manual", async (req, res, next) => {
+  try {
+    const { nicheId, title, keyPoints, sourceUrl, suggestedFormat } = req.body as {
+      nicheId: string; title: string; keyPoints?: string;
+      sourceUrl?: string; suggestedFormat?: string;
+    };
+    if (!nicheId) return void res.status(400).json({ error: 'nicheId is required' });
+    if (!title?.trim()) return void res.status(400).json({ error: 'title is required' });
+
+    const { createManualTopic } = await import("../services/repositories.js");
+    const topic = await createManualTopic({
+      nicheId, title, keyPoints: keyPoints ?? '',
+      sourceUrl, suggestedFormat: suggestedFormat as any,
+    });
+    res.json({ ok: true, topic });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── Pipeline reset (danger zone) ───────────────────────────────────────────
 app.post("/api/reset/pipeline", async (_req, res, next) => {

@@ -149,6 +149,77 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  // ── Reel script generation ────────────────────────────────────────────────
+  generateReelScript: (body: { topic: string; niche?: string; handle?: string; tone?: string; slideCount?: number }) =>
+    req<{ ok: boolean; script: string; provider: string; model: string }>('/generate/reel-script', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  // ── Reel render ───────────────────────────────────────────────────────────
+  renderReel: (contentId: string, body: {
+    slides: string[]; handle: string; accent: string; font: string; reelTarget: string;
+    backgroundImages?: string[];
+  }) =>
+    req<{ ok: boolean; url: string }>(`/content/${contentId}/render-reel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  // ── Phase 2: Multi-platform publishing ───────────────────────────────────
+  getPublishPlatforms: (pageId: string) =>
+    req<{ platforms: Record<string, import('./types').PublishPlatformInfo> }>(`/pages/${pageId}/publish-platforms`),
+
+  getPublishJobs: (contentId: string) =>
+    req<{ jobs: import('./types').PublishJob[] }>(`/content/${contentId}/publish-jobs`),
+
+  publishContent: (contentId: string, body: { platforms: string[]; scheduledAt?: string }) =>
+    req<{ ok: boolean; jobs: import('./types').PublishJob[] }>(`/content/${contentId}/publish`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
+
+  // ── Phase 1.5: Manual topic creation ─────────────────────────────────────
+  extractUrl: (url: string) =>
+    req<{ ok: boolean; article: { title: string; description: string; imageUrl: string | null; bodyText: string; canonicalUrl: string; keyPoints: string } }>(
+      '/topics/extract-url',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) }
+    ),
+
+  createManualTopic: (body: { nicheId: string; title: string; keyPoints?: string; sourceUrl?: string; suggestedFormat?: string }) =>
+    req<{ ok: boolean; topic: import('./types').Topic }>('/topics/manual', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
+
+  // ── Topic preview (no editor needed) ─────────────────────────────────────────
+  getTopicPreview: (topicId: string, pageId: string) =>
+    req<{ preview: { id: string; status: string; type: string; payload: any } | null }>(
+      `/topics/${topicId}/preview?pageId=${pageId}`
+    ),
+
+  scheduleBatch: (jobs: Array<{ contentItemId: string; pageId: string; platform: string; scheduledAt: string }>) =>
+    req<{ ok: boolean; count: number }>('/content/schedule-batch', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobs }),
+    }),
+
+  // ── Publish job management ────────────────────────────────────────────────
+  cancelPublishJob: (jobId: string) =>
+    req<{ ok: boolean }>(`/publish-jobs/${jobId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel' }),
+    }),
+  reschedulePublishJob: (jobId: string, scheduledAt: string) =>
+    req<{ ok: boolean }>(`/publish-jobs/${jobId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reschedule', scheduledAt }),
+    }),
+  publishJobNow: (jobId: string) =>
+    req<{ ok: boolean }>(`/publish-jobs/${jobId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'publish-now' }),
+    }),
+
   // ── Danger zone ───────────────────────────────────────────────────────────
   resetPipeline: () => req<{ ok: boolean }>('/reset/pipeline', { method: 'POST' }),
 };
