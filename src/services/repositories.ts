@@ -431,3 +431,108 @@ export async function listAnalyticsForPage(pageId: string): Promise<any> {
 
   return { posts: postsResult.rows, byType: typeResult.rows };
 }
+
+// ── Media pipeline repositories ───────────────────────────────────────────────
+
+/** Update the TTS audio fields on a content item after synthesis. */
+export async function updateContentAudio(
+  contentItemId: string,
+  audioUrl: string,
+  audioDurationSec: number,
+  subtitleUrl: string | null,
+  ttsVoice: string,
+  wordBoundaries: object[],
+): Promise<void> {
+  await query(
+    `UPDATE content_items
+     SET audio_url = $2,
+         audio_duration_sec = $3,
+         subtitle_url = $4,
+         tts_voice = $5,
+         word_boundaries = $6,
+         updated_at = now()
+     WHERE id = $1`,
+    [contentItemId, audioUrl, audioDurationSec, subtitleUrl, ttsVoice, JSON.stringify(wordBoundaries)],
+  );
+}
+
+/** Update the stock footage URLs on a content item. */
+export async function updateContentFootage(
+  contentItemId: string,
+  footageUrls: object[],
+): Promise<void> {
+  await query(
+    `UPDATE content_items SET footage_urls = $2, updated_at = now() WHERE id = $1`,
+    [contentItemId, JSON.stringify(footageUrls)],
+  );
+}
+
+/** Update the rendered video URL and status on a content item. */
+export async function updateContentVideo(
+  contentItemId: string,
+  videoUrl: string | null,
+  renderStatus: string,
+  bgmUrl?: string | null,
+): Promise<void> {
+  await query(
+    `UPDATE content_items
+     SET video_url = $2,
+         render_status = $3,
+         bgm_url = COALESCE($4, bgm_url),
+         updated_at = now()
+     WHERE id = $1`,
+    [contentItemId, videoUrl, renderStatus, bgmUrl ?? null],
+  );
+}
+
+/** List reel content items that have been approved but have no audio yet. */
+export async function listReelsWithoutAudio(): Promise<any[]> {
+  const result = await query(
+    `SELECT c.*, t.title AS topic_title, t.keywords, p.handle, p.platform, p.brand,
+            n.name AS niche_name
+     FROM content_items c
+     JOIN topics t ON t.id = c.topic_id
+     JOIN pages p ON p.id = c.page_id
+     JOIN niches n ON n.id = t.niche_id
+     WHERE c.type = 'reel'
+       AND c.audio_url IS NULL
+       AND c.status IN ('qa_passed', 'approved')
+     ORDER BY c.created_at ASC
+     LIMIT 20`,
+  );
+  return result.rows;
+}
+
+/** List reel content items that have audio but no rendered video. */
+export async function listReelsWithoutVideo(): Promise<any[]> {
+  const result = await query(
+    `SELECT c.*, t.title AS topic_title, t.keywords, p.handle, p.platform, p.brand,
+            n.name AS niche_name
+     FROM content_items c
+     JOIN topics t ON t.id = c.topic_id
+     JOIN pages p ON p.id = c.page_id
+     JOIN niches n ON n.id = t.niche_id
+     WHERE c.type = 'reel'
+       AND c.audio_url IS NOT NULL
+       AND (c.video_url IS NULL OR c.render_status = 'pending')
+       AND c.status IN ('qa_passed', 'approved')
+     ORDER BY c.created_at ASC
+     LIMIT 10`,
+  );
+  return result.rows;
+}
+
+/** Get a single content item by ID with full join data. */
+export async function getContentItemFull(contentItemId: string): Promise<any | null> {
+  const result = await query(
+    `SELECT c.*, t.title AS topic_title, t.keywords, p.handle, p.platform, p.brand,
+            n.name AS niche_name
+     FROM content_items c
+     JOIN topics t ON t.id = c.topic_id
+     JOIN pages p ON p.id = c.page_id
+     JOIN niches n ON n.id = t.niche_id
+     WHERE c.id = $1`,
+    [contentItemId],
+  );
+  return result.rows[0] ?? null;
+}

@@ -144,3 +144,25 @@ CREATE TABLE IF NOT EXISTS canva_tokens (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(page_id)
 );
+
+-- ── Media pipeline migrations ─────────────────────────────────────────────────
+-- TTS audio, stock footage, BGM, and rendered video tracking on content_items.
+
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS audio_url TEXT;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS audio_duration_sec NUMERIC;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS subtitle_url TEXT;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS footage_urls JSONB;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS bgm_url TEXT;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS render_status TEXT DEFAULT 'pending'
+  CHECK (render_status IN ('pending', 'rendering', 'muxing', 'done', 'failed'));
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS tts_voice TEXT;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS word_boundaries JSONB;
+
+-- Batch generation: variant tracking for A/B video testing
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS variant_index INT DEFAULT 0;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS variant_group UUID;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS aspect_ratio TEXT DEFAULT 'portrait'
+  CHECK (aspect_ratio IN ('portrait', 'landscape', 'square'));
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS transition_type TEXT DEFAULT 'fade'
+  CHECK (transition_type IN ('fade', 'slide', 'zoom', 'wipe', 'none'));

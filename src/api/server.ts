@@ -27,6 +27,7 @@ import {
   reschedulePublishJob,
   getTopicPreview,
   scheduleContentBatch,
+  getContentItemFull,
 } from "../services/repositories.js";
 import { queues } from "../worker/queues.js";
 import * as canva from "../services/canva.js";
@@ -36,6 +37,8 @@ import { generateImage as genImage } from "../config/generationProviders.js";
 import { llmConfigStore, LLM_PROVIDERS } from "../config/llmConfigStore.js";
 import { probeProvider, loadCapabilities } from "../config/modelDiscovery.js";
 import { saveBrandImage, saveContentImage, UPLOADS_DIR } from "../services/imageStorage.js";
+import { listVoices, previewVoice, VOICE_PRESETS } from "../services/tts.js";
+import path from 'path';
 
 // In-memory OAuth state store (keyed by state param for CSRF protection)
 const oauthStateStore = new Map<string, { pageId: string; provider: string }>();
@@ -57,6 +60,13 @@ app.use("/uploads", express.static(UPLOADS_DIR, {
   // so this is safe and saves repeated downloads of the same logo on each render.
   maxAge: '1h',
   fallthrough: false,
+}));
+
+// Serve generated media: data/media/<contentId>/... → /media/<contentId>/...
+const MEDIA_DIR = path.resolve(process.cwd(), 'data/media');
+app.use("/media", express.static(MEDIA_DIR, {
+  maxAge: '1h',
+  fallthrough: true,
 }));
 
 const boardServer = new ExpressAdapter();
@@ -639,12 +649,153 @@ app.patch("/api/pages/:id/sources/toggles", async (req, res, next) => {
 
 app.post("/api/jobs/:name", async (req, res, next) => {
   try {
-    const params = z.object({ name: z.enum(["ingest", "score", "generate", "schedule", "post", "analyze"]) }).parse(req.params);
+    const params = z.object({ name: z.enum(["ingest", "score", "generate", "media", "render", "schedule", "post", "analyze"]) }).parse(req.params);
     await queues[params.name].add(`manual-${params.name}`, {}, { removeOnComplete: 25, removeOnFail: 25 });
     res.json({ ok: true, queued: params.name });
   } catch (error) {
     next(error);
   }
+});
+
+// ── Media Pipeline: TTS + Stock Footage + Video Rendering ─────────────────────
+
+// GET available TTS voices
+app.get("/api/tts/voices", async (req, res, next) => {
+  try {
+    const locale = req.query.locale?.toString();
+    const voices = await listVoices(locale);
+    res.json({ voices, presets: VOICE_PRESETS });
+  } catch (err) { next(err); }
+});
+
+// POST preview TTS — returns audio buffer for a short text snippet
+app.post("/api/tts/preview", async (req, res, next) => {
+  try {
+    const { text, voice } = req.body as { text?: string; voice?: string };
+    if (!text?.trim()) return void res.status(400).json({ error: 'text is required' });
+    if (!voice?.trim()) return void res.status(400).json({ error: 'voice is required' });
+
+    const audioBuffer = await previewVoice(text.trim().slice(0, 500), voice.trim());
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Disposition': 'inline; filename="preview.mp3"',
+      'Content-Length': String(audioBuffer.length),
+    });
+    res.send(audioBuffer);
+  } catch (err) { next(err); }
+});
+
+// GET media info for a content item (audio, footage, video status)
+app.get("/api/content/:id/media", async (req, res, next) => {
+  try {
+    const item = await getContentItemFull(req.params.id);
+    if (!item) return void res.status(404).json({ error: 'Content item not found' });
+    res.json({
+      audio: item.audio_url ? { url: item.audio_url, durationSec: item.audio_duration_sec, voice: item.tts_voice } : null,
+      subtitles: item.subtitle_url ? { url: item.subtitle_url } : null,
+      footage: item.footage_urls ?? [],
+      video: item.video_url ? { url: item.video_url, status: item.render_status } : null,
+      renderStatus: item.render_status ?? 'pending',
+    });
+  } catch (err) { next(err); }
+});
+
+// POST trigger TTS synthesis for a specific content item
+app.post("/api/content/:id/synthesize", async (req, res, next) => {
+  try {
+    const { voice, rate } = req.body as { voice?: string; rate?: string };
+    // Enqueue media job with specific content ID
+    await queues.media.add(`manual-tts-${req.params.id}`, { contentId: req.params.id, voice, rate }, {
+      removeOnComplete: 25, removeOnFail: 25,
+    });
+    res.json({ ok: true, queued: 'media', contentId: req.params.id });
+  } catch (err) { next(err); }
+});
+
+// POST trigger video render for a specific content item
+app.post("/api/content/:id/render", async (req, res, next) => {
+  try {
+    await queues.render.add(`manual-render-${req.params.id}`, { contentId: req.params.id }, {
+      removeOnComplete: 25, removeOnFail: 25,
+    });
+    res.json({ ok: true, queued: 'render', contentId: req.params.id });
+  } catch (err) { next(err); }
+});
+
+// POST batch render — generate N video variants with different transitions
+app.post("/api/content/:id/batch-render", async (req, res, next) => {
+  try {
+    const { transitions, aspects } = req.body as {
+      transitions?: string[]; aspects?: string[];
+    };
+    const variantTransitions = transitions ?? ['fade', 'slide', 'zoom'];
+    const variantAspects = aspects ?? ['portrait'];
+
+    // Create variant render jobs
+    const jobs: Array<{ transition: string; aspect: string }> = [];
+    for (const t of variantTransitions) {
+      for (const a of variantAspects) {
+        jobs.push({ transition: t, aspect: a });
+      }
+    }
+
+    const variantGroup = crypto.randomUUID();
+    for (let i = 0; i < jobs.length; i++) {
+      await queues.render.add(`batch-render-${req.params.id}-v${i}`, {
+        contentId: req.params.id,
+        variantIndex: i,
+        variantGroup,
+        transition: jobs[i].transition,
+        aspect: jobs[i].aspect,
+      }, { removeOnComplete: 25, removeOnFail: 25 });
+    }
+
+    res.json({
+      ok: true,
+      variantGroup,
+      variantCount: jobs.length,
+      variants: jobs.map((j, i) => ({
+        index: i,
+        transition: j.transition,
+        aspect: j.aspect,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
+// GET list variants for a content item
+app.get("/api/content/:id/variants", async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, variant_index, variant_group, aspect_ratio, transition_type,
+              video_url, render_status, audio_url, created_at
+       FROM content_items
+       WHERE variant_group = (
+         SELECT variant_group FROM content_items WHERE id = $1
+       )
+       ORDER BY variant_index ASC`,
+      [req.params.id],
+    );
+    res.json({ variants: rows });
+  } catch (err) { next(err); }
+});
+
+// GET available aspect ratios and transitions
+app.get("/api/media/options", (_req, res) => {
+  res.json({
+    aspects: [
+      { value: 'portrait',  label: '9:16 Portrait (Reels/Shorts)', width: 1080, height: 1920 },
+      { value: 'landscape', label: '16:9 Landscape (YouTube)',      width: 1920, height: 1080 },
+      { value: 'square',    label: '1:1 Square (Feed)',             width: 1080, height: 1080 },
+    ],
+    transitions: [
+      { value: 'fade',  label: 'Fade',      description: 'Smooth opacity crossfade' },
+      { value: 'slide', label: 'Slide',     description: 'Horizontal slide left' },
+      { value: 'zoom',  label: 'Zoom',      description: 'Scale in/out transition' },
+      { value: 'wipe',  label: 'Wipe',      description: 'Directional wipe reveal' },
+      { value: 'none',  label: 'Hard Cut',  description: 'Instant cut between slides' },
+    ],
+  });
 });
 
 // ─── Canva OAuth ─────────────────────────────────────────────────────────────

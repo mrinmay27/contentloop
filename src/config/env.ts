@@ -29,6 +29,12 @@ const envSchema = z.object({
   CANVA_CLIENT_ID:     z.string().optional(),
   CANVA_CLIENT_SECRET: z.string().optional(),
   CANVA_REDIRECT_URI:  z.string().default('http://localhost:4000/auth/canva/callback'),
+  // Media pipeline — TTS, stock footage, BGM
+  TTS_VOICE:           z.string().default('en-US-AriaNeural'),
+  TTS_RATE:            z.string().default('+5%'),
+  PEXELS_API_KEY:      z.string().optional(),
+  BGM_MODE:            z.enum(['random', 'none']).default('random'),
+  BGM_VOLUME:          z.coerce.number().default(0.15),
 });
 
 export const env = envSchema.parse(process.env);

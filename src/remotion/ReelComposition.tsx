@@ -8,6 +8,23 @@ import {
   Img,
 } from 'remotion';
 
+// ── Aspect ratio presets ──────────────────────────────────────────────────────
+
+export type VideoAspect = 'portrait' | 'landscape' | 'square';
+export type TransitionType = 'fade' | 'slide' | 'zoom' | 'wipe' | 'none';
+
+export interface AspectConfig {
+  width: number;
+  height: number;
+  label: string;
+}
+
+export const ASPECT_CONFIGS: Record<VideoAspect, AspectConfig> = {
+  portrait:  { width: 1080, height: 1920, label: '9:16 Portrait (Reels/Shorts)' },
+  landscape: { width: 1920, height: 1080, label: '16:9 Landscape (YouTube)' },
+  square:    { width: 1080, height: 1080, label: '1:1 Square (Feed)' },
+};
+
 export interface ReelProps {
   slides:           string[];
   handle:           string;
@@ -15,18 +32,26 @@ export interface ReelProps {
   font:             string;
   target:           'instagram' | 'youtube_shorts' | 'both';
   backgroundImages?: string[];   // one URL per slide (may be shorter than slides array)
+  aspect?:          VideoAspect;
+  transition?:      TransitionType;
 }
 
 export const REEL_FPS    = 30;
 export const REEL_WIDTH  = 1080;
 export const REEL_HEIGHT = 1920;
 export const FRAMES_PER_SLIDE = 90; // 3s
+const TRANSITION_FRAMES = 15; // 0.5s for transitions
 
 export function reelDurationFrames(slideCount: number) {
   return slideCount * FRAMES_PER_SLIDE;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+/** Resolve actual width/height from aspect prop */
+export function resolveAspect(aspect?: VideoAspect): AspectConfig {
+  return ASPECT_CONFIGS[aspect ?? 'portrait'];
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function hexToRgb(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -35,13 +60,18 @@ function hexToRgb(hex: string) {
   return { r, g, b };
 }
 
-function fontSizeFor(text: string): number {
+/** Responsive font size based on text length and aspect ratio */
+function fontSizeFor(text: string, aspect: VideoAspect = 'portrait'): number {
   const len = text.replace(/\n/g, '').length;
-  if (len < 30)  return 96;
-  if (len < 60)  return 76;
-  if (len < 100) return 60;
-  if (len < 150) return 48;
-  return 40;
+  // Scale factor: landscape has wider but shorter canvas
+  const scale = aspect === 'landscape' ? 0.75 : aspect === 'square' ? 0.85 : 1;
+  let size: number;
+  if (len < 30)  size = 96;
+  else if (len < 60)  size = 76;
+  else if (len < 100) size = 60;
+  else if (len < 150) size = 48;
+  else size = 40;
+  return Math.round(size * scale);
 }
 
 // Split on first sentence boundary or \n — first chunk = headline, rest = body
@@ -58,7 +88,47 @@ function splitLines(text: string): [string, string] {
   return [text.trim(), ''];
 }
 
-// ─── Word-by-word animated block ─────────────────────────────────────────────
+// ── Transition calculations ──────────────────────────────────────────────────
+
+function getTransitionStyle(
+  transition: TransitionType,
+  frameInSlide: number,
+  isEntry: boolean,
+): React.CSSProperties {
+  const t = isEntry
+    ? interpolate(frameInSlide, [0, TRANSITION_FRAMES], [0, 1], {
+        extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
+        easing: Easing.out(Easing.cubic),
+      })
+    : interpolate(frameInSlide, [FRAMES_PER_SLIDE - TRANSITION_FRAMES, FRAMES_PER_SLIDE], [1, 0], {
+        extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
+        easing: Easing.in(Easing.cubic),
+      });
+
+  switch (transition) {
+    case 'fade':
+      return { opacity: t };
+
+    case 'slide':
+      return isEntry
+        ? { opacity: 1, transform: `translateX(${(1 - t) * 100}%)` }
+        : { opacity: 1, transform: `translateX(${(1 - t) * -100}%)` };
+
+    case 'zoom':
+      return isEntry
+        ? { opacity: t, transform: `scale(${0.85 + t * 0.15})` }
+        : { opacity: t, transform: `scale(${1 + (1 - t) * 0.15})` };
+
+    case 'wipe':
+      return { clipPath: isEntry ? `inset(0 ${(1 - t) * 100}% 0 0)` : `inset(0 0 0 ${(1 - t) * 100}%)` };
+
+    case 'none':
+    default:
+      return { opacity: frameInSlide < 2 ? 0 : 1 };
+  }
+}
+
+// ── Word-by-word animated block ─────────────────────────────────────────────
 
 function AnimatedWords({
   text, frame, startFrame, color, fontSize, bold = true, stagger = 3,
@@ -93,18 +163,19 @@ function AnimatedWords({
   );
 }
 
-// ─── Bottom-third slide text ──────────────────────────────────────────────────
+// ── Bottom-third slide text ──────────────────────────────────────────────────
 // Text lives in the bottom 40% of the frame — image fills top, text sits in a
 // guaranteed dark scrim. Accent colour is used only for the small pill/bar
 // decoration, never for the main headline (avoids colour clash with background).
 
 function SlideContent({
-  text, frame, accent, isLast, hasImage,
+  text, frame, accent, isLast, hasImage, aspect = 'portrait',
 }: {
-  text: string; frame: number; accent: string; isLast: boolean; hasImage: boolean;
+  text: string; frame: number; accent: string; isLast: boolean;
+  hasImage: boolean; aspect?: VideoAspect;
 }) {
   const [headline, body] = splitLines(text);
-  const fs = fontSizeFor(text);
+  const fs = fontSizeFor(text, aspect);
 
   const slideOut = interpolate(frame, [FRAMES_PER_SLIDE - 12, FRAMES_PER_SLIDE], [1, 0], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
@@ -119,11 +190,14 @@ function SlideContent({
   const headlineWords = headline.split(' ').length;
   const bodyStartFrame = headlineWords * 3 + 8;
 
+  // Responsive padding based on aspect ratio
+  const hPadding = aspect === 'landscape' ? 120 : aspect === 'square' ? 56 : 72;
+
   return (
     <div style={{
       opacity: slideOut,
       display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-      textAlign: 'left', padding: '0 72px',
+      textAlign: 'left', padding: `0 ${hPadding}px`,
       width: '100%', boxSizing: 'border-box',
     }}>
       {/* Accent pill */}
@@ -153,7 +227,7 @@ function SlideContent({
       {/* Save nudge on last slide */}
       {isLast && (
         <div style={{
-          marginTop: 32, fontSize: 30,
+          marginTop: 32, fontSize: aspect === 'landscape' ? 24 : 30,
           color: 'rgba(255,255,255,0.55)', fontWeight: 600,
           opacity: interpolate(frame, [12, 28], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
         }}>
@@ -164,7 +238,7 @@ function SlideContent({
   );
 }
 
-// ─── Background layers ────────────────────────────────────────────────────────
+// ── Background layers ────────────────────────────────────────────────────────
 
 function Background({
   accent, frame, totalFrames, imageUrl, frameInSlide,
@@ -249,10 +323,11 @@ function Background({
   );
 }
 
-// ─── Main composition ─────────────────────────────────────────────────────────
+// ── Main composition ─────────────────────────────────────────────────────────
 
 export const ReelComposition: React.FC<ReelProps> = ({
   slides, handle, accent, target, backgroundImages = [],
+  aspect = 'portrait', transition = 'fade',
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -264,28 +339,39 @@ export const ReelComposition: React.FC<ReelProps> = ({
   const displayHandle = handle.startsWith('@') ? handle : `@${handle}`;
   const { r, g, b }   = hexToRgb(accent.startsWith('#') ? accent : '#F5A623');
 
-  // Slide-in transition: each new slide flashes in from black
-  const slideEntryOpacity = interpolate(frameInSlide, [0, 8], [0, 1], {
-    extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
-  });
+  // Transition styles
+  const entryStyle = getTransitionStyle(transition, frameInSlide, true);
+  const isFirstFrame = frameInSlide === 0;
+
+  // Layout adjustments per aspect ratio
+  const isLandscape = aspect === 'landscape';
+  const isSquare = aspect === 'square';
+  const bottomOffset = isLandscape
+    ? (target === 'youtube_shorts' ? 100 : 80)
+    : isSquare
+      ? (target === 'youtube_shorts' ? 160 : 130)
+      : (target === 'youtube_shorts' ? 240 : 200);
+  const topHudY = isLandscape ? 28 : isSquare ? 36 : 56;
+  const dotHudY = isLandscape ? 64 : isSquare ? 80 : 112;
+  const handleSize = isLandscape ? 22 : isSquare ? 24 : 28;
+  const counterBottom = bottomOffset - 40;
 
   return (
     <AbsoluteFill style={{
       fontFamily: `'DM Sans','Inter',system-ui,sans-serif`,
       overflow: 'hidden',
     }}>
-      <Background
-        accent={accent} frame={frame} totalFrames={durationInFrames}
-        imageUrl={backgroundImages[slideIndex] || undefined}
-        frameInSlide={frameInSlide}
-      />
-
-      {/* Flash transition on slide cut */}
-      <AbsoluteFill style={{
-        background: '#000',
-        opacity: 1 - slideEntryOpacity,
-        pointerEvents: 'none',
-      }} />
+      {/* Background with transition */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        ...entryStyle,
+      }}>
+        <Background
+          accent={accent} frame={frame} totalFrames={durationInFrames}
+          imageUrl={backgroundImages[slideIndex] || undefined}
+          frameInSlide={frameInSlide}
+        />
+      </div>
 
       {/* ── Top HUD ─────────────────────────────────────────── */}
 
@@ -298,13 +384,13 @@ export const ReelComposition: React.FC<ReelProps> = ({
 
       {/* Handle */}
       <div style={{
-        position: 'absolute', top: 56, left: 0, right: 0,
+        position: 'absolute', top: topHudY, left: 0, right: 0,
         display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10,
       }}>
         {/* Dot before handle */}
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: accent }} />
         <span style={{
-          fontSize: 28, fontWeight: 700,
+          fontSize: handleSize, fontWeight: 700,
           color: `rgba(${r},${g},${b},0.9)`,
           letterSpacing: '0.02em',
         }}>
@@ -314,7 +400,7 @@ export const ReelComposition: React.FC<ReelProps> = ({
 
       {/* Slide progress dots */}
       <div style={{
-        position: 'absolute', top: 112, left: 0, right: 0,
+        position: 'absolute', top: dotHudY, left: 0, right: 0,
         display: 'flex', justifyContent: 'center', gap: 8,
       }}>
         {slides.map((_, i) => (
@@ -336,20 +422,26 @@ export const ReelComposition: React.FC<ReelProps> = ({
       {/* Extra gradient scrim specifically under the text — guarantees legibility
           regardless of what the background image looks like */}
       <AbsoluteFill style={{
-        background: `linear-gradient(to top,
-          rgba(0,0,0,0.88) 0%,
-          rgba(0,0,0,0.72) 28%,
-          rgba(0,0,0,0.30) 48%,
-          transparent     65%)`,
-        opacity: slideEntryOpacity,
+        background: isLandscape
+          ? `linear-gradient(to top,
+              rgba(0,0,0,0.88) 0%,
+              rgba(0,0,0,0.60) 35%,
+              rgba(0,0,0,0.20) 55%,
+              transparent     70%)`
+          : `linear-gradient(to top,
+              rgba(0,0,0,0.88) 0%,
+              rgba(0,0,0,0.72) 28%,
+              rgba(0,0,0,0.30) 48%,
+              transparent     65%)`,
+        ...entryStyle,
       }} />
 
       {/* ── Main text — anchored to bottom third ────────────── */}
       <div style={{
         position: 'absolute',
-        bottom: target === 'youtube_shorts' ? 240 : 200,
+        bottom: bottomOffset,
         left: 0, right: 0,
-        opacity: slideEntryOpacity,
+        ...entryStyle,
       }}>
         <SlideContent
           text={slides[slideIndex] ?? ''}
@@ -357,6 +449,7 @@ export const ReelComposition: React.FC<ReelProps> = ({
           accent={accent}
           isLast={isLastSlide}
           hasImage={!!backgroundImages[slideIndex]}
+          aspect={aspect}
         />
       </div>
 
@@ -365,9 +458,9 @@ export const ReelComposition: React.FC<ReelProps> = ({
       {/* Slide counter */}
       <div style={{
         position: 'absolute',
-        bottom: target === 'youtube_shorts' ? 200 : 160,
+        bottom: counterBottom,
         right: 44,
-        fontSize: 24, fontWeight: 700,
+        fontSize: isLandscape ? 18 : 24, fontWeight: 700,
         color: 'rgba(255,255,255,0.25)',
         fontVariantNumeric: 'tabular-nums',
       }}>
@@ -375,13 +468,14 @@ export const ReelComposition: React.FC<ReelProps> = ({
       </div>
 
       {/* YouTube Shorts side icons */}
-      {target === 'youtube_shorts' && (
+      {target === 'youtube_shorts' && !isLandscape && (
         <div style={{
-          position: 'absolute', right: 32, bottom: 260,
+          position: 'absolute', right: 32,
+          bottom: isSquare ? 180 : 260,
           display: 'flex', flexDirection: 'column', gap: 36, alignItems: 'center',
         }}>
           {['👍','💬','↗️','⋯'].map(ic => (
-            <div key={ic} style={{ fontSize: 44, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))' }}>
+            <div key={ic} style={{ fontSize: isSquare ? 36 : 44, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))' }}>
               {ic}
             </div>
           ))}
@@ -389,14 +483,14 @@ export const ReelComposition: React.FC<ReelProps> = ({
       )}
 
       {/* Instagram bottom actions */}
-      {target !== 'youtube_shorts' && (
+      {target !== 'youtube_shorts' && !isLandscape && (
         <div style={{
-          position: 'absolute', bottom: 64, left: 44,
+          position: 'absolute', bottom: isSquare ? 40 : 64, left: 44,
           display: 'flex', gap: 28, alignItems: 'center',
         }}>
           {['♥', '💬', '↗'].map(ic => (
             <div key={ic} style={{
-              fontSize: 40, opacity: 0.7,
+              fontSize: isSquare ? 32 : 40, opacity: 0.7,
               filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
             }}>{ic}</div>
           ))}
@@ -405,14 +499,18 @@ export const ReelComposition: React.FC<ReelProps> = ({
 
       {/* Corner accent element */}
       <div style={{
-        position: 'absolute', bottom: 52, right: 44,
-        width: 48, height: 48, borderRadius: '50%',
+        position: 'absolute',
+        bottom: isLandscape ? 28 : isSquare ? 36 : 52,
+        right: 44,
+        width: isLandscape ? 36 : 48, height: isLandscape ? 36 : 48,
+        borderRadius: '50%',
         border: `3px solid rgba(${r},${g},${b},0.5)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 20,
+        fontSize: isLandscape ? 16 : 20,
       }}>
         ⊕
       </div>
     </AbsoluteFill>
   );
 };
+
