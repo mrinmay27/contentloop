@@ -21,11 +21,15 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
     await client.query("BEGIN");
     const result = await fn(client);
     await client.query("COMMIT");
+    client.release();
     return result;
   } catch (err) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* connection may be dead — don't mask the original error */
+    }
+    client.release(err as Error); // destroy the possibly-poisoned client
     throw err;
-  } finally {
-    client.release();
   }
 }

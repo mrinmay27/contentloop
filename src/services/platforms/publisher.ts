@@ -127,16 +127,41 @@ export function buildPublishJobInput(job: {
 
 /** Publish every scheduled job whose time has come. */
 export async function publishDueJobs(dryRun: boolean): Promise<number> {
-  const { rows } = await query<any>(
-    `SELECT pj.id, pj.content_item_id, pj.page_id, pj.platform, pj.formatted_caption, c.payload
-     FROM publish_jobs pj
-     JOIN content_items c ON c.id = pj.content_item_id
-     WHERE pj.status = 'scheduled' AND pj.scheduled_at <= now()
-     ORDER BY pj.scheduled_at ASC
-     LIMIT 25`
+  // Self-heal: requeue claims stuck in 'publishing' (e.g. a crashed dispatch).
+  // In the rare crash-after-publish-before-mark case this can publish the same
+  // content twice — accepted for now.
+  await query(
+    `UPDATE publish_jobs SET status='scheduled', updated_at=now()
+     WHERE status='publishing' AND updated_at < now() - interval '15 minutes'`
   );
-  for (const job of rows) {
-    await dispatchPublishJob(buildPublishJobInput(job), dryRun);
+
+  // Atomic claim: FOR UPDATE SKIP LOCKED ensures two overlapping ticks can
+  // never select the same job. dispatchPublishJob's own markPublishing then
+  // re-runs harmlessly (idempotent UPDATE to the same values).
+  const { rows: claimed } = await query<any>(
+    `UPDATE publish_jobs SET status='publishing', dry_run=$1, updated_at=now()
+     WHERE id IN (
+       SELECT id FROM publish_jobs
+       WHERE status='scheduled' AND scheduled_at <= now()
+       ORDER BY scheduled_at ASC LIMIT 25
+       FOR UPDATE SKIP LOCKED
+     )
+     RETURNING id, content_item_id, page_id, platform, formatted_caption`,
+    [dryRun]
+  );
+  if (claimed.length === 0) return 0;
+
+  const { rows: payloadRows } = await query<any>(
+    `SELECT id, payload FROM content_items WHERE id = ANY($1::uuid[])`,
+    [claimed.map((j: any) => j.content_item_id)]
+  );
+  const payloads = new Map(payloadRows.map((r: any) => [r.id, r.payload]));
+
+  for (const job of claimed) {
+    await dispatchPublishJob(
+      buildPublishJobInput({ ...job, payload: payloads.get(job.content_item_id) }),
+      dryRun
+    );
   }
-  return rows.length;
+  return claimed.length;
 }

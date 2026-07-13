@@ -46,17 +46,6 @@ export type ContentItem = {
   handle: string;
 };
 
-export type Post = {
-  id: string;
-  state: string;
-  scheduled_at: string;
-  platform: string;
-  page_name: string;
-  topic_title: string;
-  dry_run: boolean;
-  type: string;
-};
-
 export type Stats = {
   topics: number;
   selected_topics: number;

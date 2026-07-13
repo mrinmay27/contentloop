@@ -256,7 +256,7 @@ new Worker(
     const published = await publishDueJobs(env.POSTING_DRY_RUN);
     if (published > 0) console.log(`[post] Published ${published} due job(s)`);
   },
-  workerOptions
+  { connection, concurrency: 1 } // atomic claim + no self-overlap: defense in depth
 );
 
 new Worker(

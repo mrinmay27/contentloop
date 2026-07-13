@@ -1295,13 +1295,15 @@ app.patch("/api/publish-jobs/:id", async (req, res, next) => {
     }
     if (body.action === 'publish-now') {
       const { rows } = await query<any>(
-        `SELECT pj.id, pj.content_item_id, pj.page_id, pj.platform, pj.formatted_caption, c.payload
+        `SELECT pj.id, pj.content_item_id, pj.page_id, pj.platform, pj.formatted_caption, pj.status, c.payload
          FROM publish_jobs pj
          JOIN content_items c ON c.id = pj.content_item_id
          WHERE pj.id = $1`,
         [id]
       );
       if (!rows[0]) return void res.status(404).json({ error: 'Job not found' });
+      if (!['scheduled', 'failed', 'pending'].includes(rows[0].status))
+        return void res.status(409).json({ error: 'Job already published or publishing' });
       const { dispatchPublishJob, buildPublishJobInput } = await import('../services/platforms/publisher.js');
       dispatchPublishJob(buildPublishJobInput(rows[0]), env.POSTING_DRY_RUN).catch(() => {});
       return void res.json({ ok: true });

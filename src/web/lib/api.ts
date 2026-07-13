@@ -1,4 +1,4 @@
-import type { Stats, Topic, ContentItem, Post } from './types';
+import type { Stats, Topic, ContentItem } from './types';
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, opts);
@@ -17,7 +17,6 @@ export const api = {
   getTopics: (nicheId?: string) =>
     req<Topic[]>(`/topics${nicheId ? `?nicheId=${nicheId}` : ''}`),
   getContent: (status?: string)        => req<ContentItem[]>(`/content${status ? `?status=${status}` : ''}`),
-  getPosts: (state?: string)           => req<Post[]>(`/posts${state ? `?state=${state}` : ''}`),
   getNiches: ()                        => req<any[]>('/niches'),
   getPages: (nicheId?: string)         => req<any[]>(`/pages${nicheId ? `?nicheId=${nicheId}` : ''}`),
   getHealth: ()                        => req<any>('/health'),
