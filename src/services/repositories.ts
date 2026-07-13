@@ -227,10 +227,10 @@ export async function dashboardStats(nicheId?: string, pageId?: string): Promise
           FROM content_items WHERE status = 'approved' AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'scheduled', count(*)::int
-          FROM posts WHERE state = 'SCHEDULED' AND ($2::uuid IS NULL OR page_id = $2)
+          FROM publish_jobs WHERE status = 'scheduled' AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'posted', count(*)::int
-          FROM posts WHERE state = 'POSTED' AND ($2::uuid IS NULL OR page_id = $2)
+          FROM publish_jobs WHERE status = 'published' AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'topics_today', count(*)::int
           FROM topics WHERE created_at >= current_date AND ($1::uuid IS NULL OR niche_id = $1)
@@ -245,13 +245,13 @@ export async function dashboardStats(nicheId?: string, pageId?: string): Promise
           FROM content_items WHERE status = 'approved' AND updated_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'posted_today', count(*)::int
-          FROM posts WHERE state = 'POSTED' AND posted_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
+          FROM publish_jobs WHERE status = 'published' AND published_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
       `,
       [nicheId ?? null, pageId ?? null]
     ),
     query(
-      `SELECT scheduled_at FROM posts
-       WHERE state = 'SCHEDULED' AND scheduled_at > now()
+      `SELECT scheduled_at FROM publish_jobs
+       WHERE status = 'scheduled' AND scheduled_at > now()
          AND ($1::uuid IS NULL OR page_id = $1)
        ORDER BY scheduled_at ASC LIMIT 1`,
       [pageId ?? null]
@@ -348,41 +348,46 @@ export async function listAnalyticsForPage(pageId: string): Promise<any> {
   const postsResult = await query(
     `
       SELECT
-        posts.id,
-        posts.posted_at,
-        posts.state,
+        pj.id,
+        pj.published_at AS posted_at,
+        pj.status,
         c.type,
         t.title AS topic_title,
-        COALESCE(pm.views_24h, 0)       AS views,
-        COALESCE(pm.saves, 0)           AS saves,
-        COALESCE(pm.engagement_rate, 0) AS engagement_rate
-      FROM posts
-      JOIN content_items c ON c.id = posts.content_item_id
+        COALESCE(m24.views, m1.views, 0)::int   AS views,
+        COALESCE(m24.reach, m1.reach, 0)::int   AS reach,
+        COALESCE(m24.saves, m1.saves, 0)::int   AS saves,
+        COALESCE(m7.views, 0)::int              AS views_7d,
+        COALESCE(m24.engagement_rate, m1.engagement_rate, 0)::float8 AS engagement_rate,
+        COALESCE(m24.source, m1.source)         AS metric_source
+      FROM publish_jobs pj
+      JOIN content_items c ON c.id = pj.content_item_id
       JOIN topics t ON t.id = c.topic_id
-      LEFT JOIN performance_metrics pm ON pm.post_id = posts.id
-      WHERE posts.page_id = $1
-        AND posts.state IN ('POSTED','ANALYZED')
-      ORDER BY posts.posted_at DESC
+      LEFT JOIN performance_metrics m1  ON m1.publish_job_id  = pj.id AND m1.capture_point  = '1h'
+      LEFT JOIN performance_metrics m24 ON m24.publish_job_id = pj.id AND m24.capture_point = '24h'
+      LEFT JOIN performance_metrics m7  ON m7.publish_job_id  = pj.id AND m7.capture_point  = '7d'
+      WHERE pj.page_id = $1 AND pj.status = 'published'
+      ORDER BY pj.published_at DESC
       LIMIT 30
     `,
     [pageId]
   );
 
-  // Content-type breakdown
   const typeResult = await query(
     `
-      SELECT c.type, count(*)::int AS total,
-             COALESCE(avg(pm.engagement_rate),0)::numeric(5,4) AS avg_engagement
-      FROM posts
-      JOIN content_items c ON c.id = posts.content_item_id
-      LEFT JOIN performance_metrics pm ON pm.post_id = posts.id
-      WHERE posts.page_id = $1
+      SELECT c.type, count(DISTINCT pj.id)::int AS total,
+             COALESCE(avg(pm.engagement_rate), 0)::float8 AS avg_engagement
+      FROM publish_jobs pj
+      JOIN content_items c ON c.id = pj.content_item_id
+      LEFT JOIN performance_metrics pm
+        ON pm.publish_job_id = pj.id AND pm.capture_point = '24h'
+      WHERE pj.page_id = $1 AND pj.status = 'published'
       GROUP BY c.type
     `,
     [pageId]
   );
 
-  return { posts: postsResult.rows, byType: typeResult.rows };
+  const simulated = postsResult.rows.some((r: any) => r.metric_source === "simulated");
+  return { posts: postsResult.rows, byType: typeResult.rows, simulated };
 }
 
 // ── Media pipeline repositories ───────────────────────────────────────────────

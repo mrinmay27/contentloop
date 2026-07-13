@@ -441,6 +441,34 @@ app.get("/api/pages/:id/analytics", async (req, res, next) => {
   }
 });
 
+// Learning: keyword/format signals learned for the page's niche
+app.get("/api/pages/:id/learning", async (req, res, next) => {
+  try {
+    const { rows } = await query(`SELECT niche_id FROM pages WHERE id = $1`, [req.params.id]);
+    if (!rows[0]) return void res.status(404).json({ error: "Page not found" });
+    const nicheId = rows[0].niche_id;
+    const signals = await query(
+      `SELECT signal_type, label, score::float, sample_size, updated_at
+       FROM learning_signals WHERE niche_id = $1
+       ORDER BY signal_type, score DESC`,
+      [nicheId]
+    );
+    const real = await query(
+      `SELECT 1 FROM performance_metrics pm
+       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
+       JOIN content_items c ON c.id = pj.content_item_id
+       JOIN topics t ON t.id = c.topic_id
+       WHERE t.niche_id = $1 AND pm.source = 'instagram' LIMIT 1`,
+      [nicheId]
+    );
+    res.json({
+      keywords: signals.rows.filter((r: any) => r.signal_type === "keyword").slice(0, 10),
+      formats: signals.rows.filter((r: any) => r.signal_type === "format"),
+      mode: real.rows.length > 0 ? "real" : "simulated",
+    });
+  } catch (err) { next(err); }
+});
+
 app.get("/api/topics", async (req, res, next) => {
   try {
     const nicheId = req.query.nicheId?.toString();

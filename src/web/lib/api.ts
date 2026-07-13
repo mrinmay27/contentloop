@@ -38,6 +38,7 @@ export const api = {
   getSchedule: (pageId: string, year: number, month: number) =>
     req<any[]>(`/pages/${pageId}/schedule?year=${year}&month=${month}`),
   getAnalytics: (pageId: string)       => req<any>(`/pages/${pageId}/analytics`),
+  getLearning: (pageId: string)        => req<any>(`/pages/${pageId}/learning`),
 
   approveContent: (id: string)         => req<{ ok: boolean }>(`/content/${id}/approve`, { method: 'POST' }),
   rejectContent: (id: string)          => req<{ ok: boolean }>(`/content/${id}/reject`, { method: 'POST' }),

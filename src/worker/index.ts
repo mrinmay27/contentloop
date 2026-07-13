@@ -56,12 +56,17 @@ new Worker(
 new Worker(
   "score",
   async () => {
+    const { getLearnedSignals } = await import("../services/learningRepo.js");
     const topics = await listScorableTopics();
+    const learnedCache = new Map<string, Awaited<ReturnType<typeof getLearnedSignals>>>();
     for (const topic of topics) {
       const niche = await getNiche(topic.nicheId);
       if (!niche) continue;
+      if (!learnedCache.has(topic.nicheId)) {
+        learnedCache.set(topic.nicheId, await getLearnedSignals(topic.nicheId));
+      }
       const recentTitles = await listRecentTopicTitles(topic.nicheId, topic.id);
-      const breakdown = scoreTopic(topic, niche, recentTitles);
+      const breakdown = scoreTopic(topic, niche, recentTitles, learnedCache.get(topic.nicheId));
       await updateTopicScore(topic.id, breakdown.score, breakdown.decision, breakdown);
     }
   },
@@ -87,6 +92,15 @@ new Worker(
           finalFormat     = cfgDefault as typeof suggestedFormat;
           finalConfidence = 'page_default';
         }
+      }
+
+      // Learned tiebreak: proven niche format overrides weak decisions
+      if (finalFormat && finalConfidence && (finalConfidence === 'rule' || finalConfidence === 'page_default')) {
+        const { getFormatSignals } = await import("../services/learningRepo.js");
+        const { applyLearnedFormat } = await import("../domain/format-rules.js");
+        const learned = applyLearnedFormat(finalFormat, finalConfidence, await getFormatSignals(topic.nicheId));
+        finalFormat = learned.format;
+        finalConfidence = learned.confidence;
       }
 
       // Persist format decision to topic row before QA
