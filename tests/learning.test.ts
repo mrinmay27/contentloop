@@ -56,4 +56,30 @@ describe("learnedBoost", () => {
   it("matches case-insensitively", () => {
     expect(learnedBoost(["AI"], learned([["ai", 0.08, 5]], 0.04))).toBe(1.10);
   });
+
+  it("returns 1.0 when nicheAvg is NaN", () => {
+    expect(learnedBoost(["ai"], learned([["ai", 0.08, 5]], NaN))).toBe(1.0);
+  });
+
+  it("ignores matched entries with NaN score", () => {
+    expect(learnedBoost(["ai"], learned([["ai", NaN, 5]], 0.04))).toBe(1.0);
+  });
+
+  it("scales mid-range above-average boost without clamping", () => {
+    // ratio 1.1 → 1 + 0.1*0.5 = 1.05
+    expect(learnedBoost(["ai"], learned([["ai", 0.044, 5]], 0.04))).toBeCloseTo(1.05, 10);
+  });
+
+  it("scales mid-range below-average penalty without clamping", () => {
+    // ratio 0.9 → 1 + (-0.1)*0.5 = 0.95
+    expect(learnedBoost(["ai"], learned([["ai", 0.036, 5]], 0.04))).toBeCloseTo(0.95, 10);
+  });
+
+  it("dedupes duplicated topic keywords so they are not double-counted", () => {
+    const data = learned([["ai", 0.044, 5], ["crypto", 0.02, 5]], 0.04);
+    expect(learnedBoost(["AI", "ai", "crypto"], data)).toBeCloseTo(
+      learnedBoost(["ai", "crypto"], data),
+      10
+    );
+  });
 });

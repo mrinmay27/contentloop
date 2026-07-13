@@ -40,10 +40,14 @@ export interface LearnedSignals {
  *  ratio 1.0 (average) → 1.0; each 10% above/below average moves ±5%,
  *  clamped to [0.90, 1.10]. Signals need >= MIN_KEYWORD_SAMPLES to count. */
 export function learnedBoost(keywords: string[], learned?: LearnedSignals): number {
-  if (!learned || learned.nicheAvg <= 0) return 1.0;
-  const matched = keywords
-    .map((k) => learned.keywordScores.get(k.toLowerCase().trim()))
-    .filter((s): s is { score: number; sampleSize: number } => !!s && s.sampleSize >= MIN_KEYWORD_SAMPLES);
+  if (!learned || !Number.isFinite(learned.nicheAvg) || learned.nicheAvg <= 0) return 1.0;
+  const unique = [...new Set(keywords.map((k) => k.toLowerCase().trim()).filter(Boolean))];
+  const matched = unique
+    .map((k) => learned.keywordScores.get(k))
+    .filter(
+      (s): s is { score: number; sampleSize: number } =>
+        !!s && s.sampleSize >= MIN_KEYWORD_SAMPLES && Number.isFinite(s.score)
+    );
   if (matched.length === 0) return 1.0;
   const mean = matched.reduce((sum, m) => sum + m.score, 0) / matched.length;
   const ratio = mean / learned.nicheAvg;
