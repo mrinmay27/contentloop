@@ -52,13 +52,35 @@
    - YouTube Shorts (OAuth, dry-run by default)
    - Dry-run by default — live adapters require credentials and policy review
 
-9. Feedback loop
-   - worker creates performance metric rows
-   - `learning_signals` is reserved for ranking hook patterns and formats as real metrics accumulate
+9. Feedback loop *(Sprint A — real closed loop)*
+   - **Publish model:** `publish_jobs` is the only publish record (legacy `posts` table dropped).
+     The schedule worker creates `scheduled` jobs with formatted captions; the post worker
+     claims due jobs atomically (`FOR UPDATE SKIP LOCKED`, concurrency 1) and publishes via
+     `dispatchPublishJob`. Stale `publishing` claims self-heal back to `scheduled` after 15 min.
+   - **Metrics capture:** hourly `analyze` worker snapshots each published job at 1h / 24h / 7d
+     into `performance_metrics` via a `MetricsProvider` interface — `simulated` (deterministic,
+     seeded by job id, shaped by hook score / format / posting hour) in dry-run,
+     `instagram` (Graph API `/insights`, `views`→`impressions` fallback) automatically for live
+     non-dry-run posts. Real captures skip points staler than 2× their nominal age
+     (IG insights are cumulative-lifetime values).
+   - **Learning:** 24h snapshots fold into `learning_signals` (EMA α=0.3) per niche —
+     `keyword` and `format` engagement signals. Fold is transactional (no double-count on
+     crash). A niche learns from simulated data until its first real snapshot, which triggers
+     a rebuild from real rows only.
+   - **Scoring feedback:** `scoreTopic` applies a learned-keyword multiplier clamped to
+     [0.90, 1.10] (needs sample_size ≥ 3), recorded as `score_breakdown.learnedBoost`.
+     Format suggestion uses the niche's proven winning format (sample_size ≥ 5) as a
+     tiebreak for weak rule/page_default decisions (`format_confidence='learned'`).
+   - **UI:** AnalyticsView shows per-post metrics, a Learning Signals card, and a
+     "simulated data" banner; TopicCard shows a boosted/damped badge.
 
 ## Queue States
 
-`IDEA → SCORED → CONTENT_READY → QA_PASSED → [MEDIA → RENDER] → SCHEDULED → POSTED → ANALYZED`
+`IDEA → SCORED → CONTENT_READY → QA_PASSED → [MEDIA → RENDER] → scheduled → published → analyzed`
+
+(Topic states through QA are unchanged; publish states now live on `publish_jobs.status`:
+`pending → scheduled → publishing → published` (or `failed`), with metrics/learning derived
+from `performance_metrics` rather than a topic state.)
 
 ## API Endpoints (Media)
 
@@ -74,6 +96,14 @@
 | GET | `/api/media/options` | Available aspect ratios and transitions |
 | POST | `/api/jobs/media` | Run media worker manually |
 | POST | `/api/jobs/render` | Run render worker manually |
+
+## API Endpoints (Feedback Loop)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/pages/:id/analytics` | Per-post metrics (1h/24h/7d) + type breakdown + simulated flag |
+| GET | `/api/pages/:id/learning` | Learned keyword/format signals + mode (real/simulated) |
+| POST | `/api/jobs/analyze` | Run metrics capture + learning fold manually |
 
 ## MVP Limits
 

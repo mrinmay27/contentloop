@@ -65,7 +65,9 @@ describe("scoreTopic learned boost", () => {
     const base = scoreTopic(topic, niche, []);
     const boosted = scoreTopic(topic, niche, [], learned);
     expect(boosted.learnedBoost).toBe(1.10);
-    expect(boosted.score).toBeCloseTo(Math.min(1, base.score * 1.10), 10);
+    // Precision 5, not 10: scoreTopic's recency term reads Date.now() at call
+    // time, so the two calls drift apart by ~1e-9 per elapsed ms and flake tighter bounds.
+    expect(boosted.score).toBeCloseTo(Math.min(1, base.score * 1.10), 5);
   });
 
   it("learnedBoost is 1.0 when no learned data passed", () => {
