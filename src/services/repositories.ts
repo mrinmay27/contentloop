@@ -186,14 +186,14 @@ export async function rejectContentItem(contentItemId: string): Promise<void> {
   await query("UPDATE content_items SET status = 'rejected', updated_at = now() WHERE id = $1", [contentItemId]);
 }
 
-export async function listApprovedContentWithoutPost(): Promise<any[]> {
+export async function listApprovedContentWithoutJob(): Promise<any[]> {
   const result = await query(
     `
       SELECT c.*, p.platform, p.id AS page_id
       FROM content_items c
       JOIN pages p ON p.id = c.page_id
       WHERE c.status = 'approved'
-        AND NOT EXISTS (SELECT 1 FROM posts posts WHERE posts.content_item_id = c.id)
+        AND NOT EXISTS (SELECT 1 FROM publish_jobs pj WHERE pj.content_item_id = c.id)
       ORDER BY c.updated_at ASC
       LIMIT 50
     `
@@ -203,22 +203,11 @@ export async function listApprovedContentWithoutPost(): Promise<any[]> {
 
 export async function listScheduledTimesForPage(pageId: string): Promise<Date[]> {
   const result = await query(
-    "SELECT scheduled_at FROM posts WHERE page_id = $1 AND state = 'SCHEDULED' AND scheduled_at IS NOT NULL",
+    `SELECT scheduled_at FROM publish_jobs
+     WHERE page_id = $1 AND status = 'scheduled' AND scheduled_at IS NOT NULL`,
     [pageId]
   );
   return result.rows.map((row: any) => new Date(row.scheduled_at));
-}
-
-export async function createPost(contentItemId: string, pageId: string, platform: string, scheduledAt: Date, dryRun: boolean): Promise<string> {
-  const result = await query<{ id: string }>(
-    `
-      INSERT INTO posts (content_item_id, page_id, platform, state, scheduled_at, approval_required, approved_at, dry_run)
-      VALUES ($1, $2, $3, 'SCHEDULED', $4, true, now(), $5)
-      RETURNING id
-    `,
-    [contentItemId, pageId, platform, scheduledAt, dryRun]
-  );
-  return result.rows[0].id;
 }
 
 export async function listPosts(state?: string): Promise<any[]> {

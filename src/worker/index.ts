@@ -15,10 +15,9 @@ import { parseReelScript } from "../remotion/parseReelScript.js";
 import {
   createContentItems,
   updateTopicFormat,
-  createPost,
   getNiche,
   insertMetric,
-  listApprovedContentWithoutPost,
+  listApprovedContentWithoutJob,
   listNiches,
   listPages,
   listPosts,
@@ -27,6 +26,7 @@ import {
   listScorableTopics,
   listSelectedTopicsWithoutContent,
   markPostPosted,
+  scheduleContentBatch,
   updateTopicScore,
   upsertRawTrend,
   // Media pipeline
@@ -229,11 +229,25 @@ new Worker(
 new Worker(
   "schedule",
   async () => {
-    const approved = await listApprovedContentWithoutPost();
+    const { formatCaption } = await import("../services/platformFormatter.js");
+    const approved = await listApprovedContentWithoutJob();
     for (const item of approved) {
       const existing = await listScheduledTimesForPage(item.page_id);
       const slot = nextAvailableSlot(existing);
-      await createPost(item.id, item.page_id, item.platform, slot, env.POSTING_DRY_RUN);
+      const payload = item.payload ?? {};
+      const formattedCaption = formatCaption({
+        platform: item.platform,
+        hook: payload.hook ?? "",
+        caption: payload.caption ?? "",
+        hashtags: payload.hashtags ?? [],
+      });
+      await scheduleContentBatch([{
+        contentItemId: item.id,
+        pageId: item.page_id,
+        platform: item.platform,
+        scheduledAt: slot,
+        formattedCaption,
+      }]);
     }
   },
   workerOptions

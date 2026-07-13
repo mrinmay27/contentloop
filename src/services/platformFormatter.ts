@@ -1,4 +1,4 @@
-export type PublishPlatform = 'instagram' | 'linkedin' | 'twitter' | 'reddit' | 'facebook';
+export type PublishPlatform = 'instagram' | 'linkedin' | 'twitter' | 'reddit' | 'facebook' | 'youtube_shorts';
 
 const LIMITS: Record<PublishPlatform, { caption: number; maxHashtags: number }> = {
   instagram: { caption: 2200,  maxHashtags: 30 },
@@ -6,6 +6,7 @@ const LIMITS: Record<PublishPlatform, { caption: number; maxHashtags: number }> 
   twitter:   { caption: 280,   maxHashtags: 2  },
   reddit:    { caption: 40000, maxHashtags: 0  },
   facebook:  { caption: 63206, maxHashtags: 10 },
+  youtube_shorts: { caption: 5000, maxHashtags: 15 },
 };
 
 export const PLATFORM_META: Record<PublishPlatform, { label: string; icon: string; color: string }> = {
@@ -14,6 +15,7 @@ export const PLATFORM_META: Record<PublishPlatform, { label: string; icon: strin
   twitter:   { label: 'Twitter / X', icon: '𝕏', color: '#000000' },
   reddit:    { label: 'Reddit',    icon: '🤖', color: '#FF4500' },
   facebook:  { label: 'Facebook',  icon: '👍', color: '#1877F2' },
+  youtube_shorts: { label: 'YouTube Shorts', icon: '▶️', color: '#FF0000' },
 };
 
 export function formatCaption(opts: {
