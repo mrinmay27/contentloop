@@ -15,7 +15,7 @@ export type ContentType = "reel" | "carousel";
 export type SuggestedFormat = "post" | "carousel" | "reel";
 
 /** Which decision tier set the format — higher trust = user > llm > rule > page_default */
-export type FormatConfidence = "user" | "llm" | "rule" | "page_default";
+export type FormatConfidence = "user" | "llm" | "rule" | "page_default" | "learned";
 
 export interface Topic {
   id: string;
