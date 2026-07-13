@@ -1,5 +1,6 @@
 import type { Niche, RawTrend, Topic, TopicDecision } from "./types.js";
 import { seasonalScoreMultiplier } from "./seasonal-context.js";
+import { learnedBoost, type LearnedSignals } from "./learning.js";
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -56,6 +57,7 @@ export interface TopicScoreBreakdown {
   audienceRelevance: number;
   monetizationIntent: number;
   novelty: number;
+  learnedBoost: number;
   score: number;
   decision: TopicDecision;
 }
@@ -69,7 +71,7 @@ export interface HookScoreBreakdown {
   score: number;
 }
 
-export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[]): TopicScoreBreakdown {
+export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[], learned?: LearnedSignals): TopicScoreBreakdown {
   const ageHours = Math.max(0, (Date.now() - topic.lastSeenAt.getTime()) / 36e5);
   const recency = clamp01(1 - ageHours / 72);
 
@@ -89,6 +91,7 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[]): 
     return {
       recency: 0, crossSourceMentions: 0, velocity: 0,
       audienceRelevance: 0, monetizationIntent: 0, novelty: 0,
+      learnedBoost: 1.0,
       score: 0, decision: "discarded" as TopicDecision,
     };
   }
@@ -122,7 +125,8 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[]): 
 
   // Task 2.5.5: Apply seasonal multiplier (+0–10% when topic matches current season)
   const seasonal = seasonalScoreMultiplier(`${topic.title} ${topic.keywords.join(" ")}`);
-  const score = clamp01(rawScore * seasonal);
+  const boost = learnedBoost(topic.keywords, learned);
+  const score = clamp01(rawScore * seasonal * boost);
 
   const decision = hasNegativeMatch
     ? "discarded" as TopicDecision
@@ -135,6 +139,7 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[]): 
     audienceRelevance,
     monetizationIntent,
     novelty,
+    learnedBoost: boost,
     score,
     decision
   };

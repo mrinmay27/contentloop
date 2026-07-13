@@ -1,6 +1,7 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { scoreHook, scoreTopic } from "../src/domain/scoring.js";
 import type { Niche, Topic } from "../src/domain/types.js";
+import type { LearnedSignals } from "../src/domain/learning.js";
 
 const niche: Niche = {
   id: "n1",
@@ -39,4 +40,35 @@ it("scores specific curiosity hooks higher than vague hooks", () => {
 
   expect(strong.score).toBeGreaterThan(weak.score);
   expect(strong.score).toBeGreaterThanOrEqual(0.75);
+});
+
+// ── Sprint A: learned boost integration ──────────────────────────────────────
+describe("scoreTopic learned boost", () => {
+  const niche = {
+    id: "n1", name: "Tech", keywords: ["ai", "startups"],
+    monetizationKeywords: ["saas"], negativeKeywords: [], targetPersona: "founders",
+  } as any;
+  const topic = {
+    id: "t1", nicheId: "n1", title: "AI startups raising in 2026",
+    keywords: ["ai", "startups"], sources: ["hackernews"], sourceCount: 2,
+    firstSeenAt: new Date(), lastSeenAt: new Date(), velocity: 0.5,
+    score: null, decision: null, state: "IDEA",
+    suggestedFormat: null, formatConfidence: null,
+  } as any;
+
+  const learned: LearnedSignals = {
+    keywordScores: new Map([["ai", { score: 0.09, sampleSize: 5 }]]),
+    nicheAvg: 0.03,
+  };
+
+  it("applies the boost and records it in the breakdown", () => {
+    const base = scoreTopic(topic, niche, []);
+    const boosted = scoreTopic(topic, niche, [], learned);
+    expect(boosted.learnedBoost).toBe(1.10);
+    expect(boosted.score).toBeCloseTo(Math.min(1, base.score * 1.10), 10);
+  });
+
+  it("learnedBoost is 1.0 when no learned data passed", () => {
+    expect(scoreTopic(topic, niche, []).learnedBoost).toBe(1.0);
+  });
 });
