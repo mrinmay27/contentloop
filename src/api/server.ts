@@ -10,14 +10,12 @@ import { query } from "../db/pool.js";
 import { nextAvailableSlot } from "../services/scheduler.js";
 import {
   approveContentItem,
-  createPost,
   dashboardStats,
   listAnalyticsForPage,
-  listApprovedContentWithoutPost,
+  listApprovedContentWithoutJob,
   listContentItems,
   listNiches,
   listPages,
-  listPosts,
   listScheduledPostsForMonth,
   listScheduledTimesForPage,
   listTopics,
@@ -536,14 +534,6 @@ app.get("/api/content", async (req, res, next) => {
   }
 });
 
-app.get("/api/posts", async (req, res, next) => {
-  try {
-    res.json(await listPosts(req.query.state?.toString()));
-  } catch (error) {
-    next(error);
-  }
-});
-
 app.post("/api/content/:id/approve", async (req, res, next) => {
   try {
     await approveContentItem(req.params.id);
@@ -588,13 +578,27 @@ app.patch("/api/content/:id", async (req, res, next) => {
 
 app.post("/api/schedule/approved", async (_req, res, next) => {
   try {
-    const approved = await listApprovedContentWithoutPost();
+    const { formatCaption } = await import("../services/platformFormatter.js");
+    const approved = await listApprovedContentWithoutJob();
     const scheduled = [];
     for (const item of approved) {
       const existing = await listScheduledTimesForPage(item.page_id);
       const slot = nextAvailableSlot(existing);
-      const postId = await createPost(item.id, item.page_id, item.platform, slot, env.POSTING_DRY_RUN);
-      scheduled.push({ postId, contentItemId: item.id, scheduledAt: slot });
+      const payload = item.payload ?? {};
+      const formattedCaption = formatCaption({
+        platform: item.platform,
+        hook: payload.hook ?? '',
+        caption: payload.caption ?? '',
+        hashtags: payload.hashtags ?? [],
+      });
+      await scheduleContentBatch([{
+        contentItemId: item.id,
+        pageId: item.page_id,
+        platform: item.platform,
+        scheduledAt: slot,
+        formattedCaption,
+      }]);
+      scheduled.push({ contentItemId: item.id, scheduledAt: slot });
     }
     res.json({ scheduled });
   } catch (error) {
@@ -1290,28 +1294,16 @@ app.patch("/api/publish-jobs/:id", async (req, res, next) => {
       return void res.json({ ok: true });
     }
     if (body.action === 'publish-now') {
-      // Load the job and fire it immediately
-      const { rows } = await query(
-        `SELECT pj.*, c.page_id, c.payload FROM publish_jobs pj
+      const { rows } = await query<any>(
+        `SELECT pj.id, pj.content_item_id, pj.page_id, pj.platform, pj.formatted_caption, c.payload
+         FROM publish_jobs pj
          JOIN content_items c ON c.id = pj.content_item_id
          WHERE pj.id = $1`,
         [id]
       );
       if (!rows[0]) return void res.status(404).json({ error: 'Job not found' });
-      const job = rows[0];
-      const payload   = job.payload ?? {};
-      const images: string[] = (payload.images ?? []).map((img: any) => img?.url ?? img).filter(Boolean);
-      const jobInput = {
-        jobId:            job.id,
-        contentItemId:    job.content_item_id,
-        pageId:           job.page_id,
-        platform:         job.platform,
-        formattedCaption: job.formatted_caption ?? '',
-        imageUrls:        images,
-        hook:             payload.hook ?? '',
-      };
-      const { dispatchPublishJob } = await import('../services/platforms/publisher.js');
-      dispatchPublishJob(jobInput, env.POSTING_DRY_RUN).catch(() => {});
+      const { dispatchPublishJob, buildPublishJobInput } = await import('../services/platforms/publisher.js');
+      dispatchPublishJob(buildPublishJobInput(rows[0]), env.POSTING_DRY_RUN).catch(() => {});
       return void res.json({ ok: true });
     }
     res.status(400).json({ error: 'Invalid action' });

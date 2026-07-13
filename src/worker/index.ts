@@ -5,7 +5,6 @@ import { classifyNiche } from "../domain/niche-taxonomy.js";
 import { scoreTopic } from "../domain/scoring.js";
 import { generateContent } from "../services/content-generator.js";
 import { ingestForNiche } from "../services/ingestion/index.js";
-import { publishPost } from "../services/platforms/posting.js";
 import { runQualityGate } from "../services/qa.js";
 import { nextAvailableSlot } from "../services/scheduler.js";
 import { synthesizeReelAudio, saveSubtitles, resolveVoice } from "../services/tts.js";
@@ -20,12 +19,10 @@ import {
   listApprovedContentWithoutJob,
   listNiches,
   listPages,
-  listPosts,
   listRecentTopicTitles,
   listScheduledTimesForPage,
   listScorableTopics,
   listSelectedTopicsWithoutContent,
-  markPostPosted,
   scheduleContentBatch,
   updateTopicScore,
   upsertRawTrend,
@@ -256,16 +253,9 @@ new Worker(
 new Worker(
   "post",
   async () => {
-    const duePosts = (await listPosts("SCHEDULED")).filter((post) => post.scheduled_at && new Date(post.scheduled_at) <= new Date());
-    for (const post of duePosts) {
-      const externalId = await publishPost({
-        postId: post.id,
-        platform: post.platform,
-        payload: post.payload,
-        pageHandle: post.handle
-      });
-      await markPostPosted(post.id, externalId);
-    }
+    const { publishDueJobs } = await import("../services/platforms/publisher.js");
+    const published = await publishDueJobs(env.POSTING_DRY_RUN);
+    if (published > 0) console.log(`[post] Published ${published} due job(s)`);
   },
   workerOptions
 );

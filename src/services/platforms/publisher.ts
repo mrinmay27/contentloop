@@ -12,10 +12,10 @@ export interface PublishJobInput {
   hook:             string;     // used as Reddit title
 }
 
-async function markPublishing(jobId: string) {
+async function markPublishing(jobId: string, dryRun: boolean) {
   await query(
-    `UPDATE publish_jobs SET status='publishing', updated_at=now() WHERE id=$1`,
-    [jobId]
+    `UPDATE publish_jobs SET status='publishing', dry_run=$2, updated_at=now() WHERE id=$1`,
+    [jobId, dryRun]
   );
 }
 
@@ -84,7 +84,7 @@ async function publishStub(platform: string, input: PublishJobInput): Promise<vo
 // ── Main dispatcher ───────────────────────────────────────────────────────────
 
 export async function dispatchPublishJob(input: PublishJobInput, dryRun: boolean): Promise<void> {
-  await markPublishing(input.jobId);
+  await markPublishing(input.jobId, dryRun);
   try {
     if (dryRun) {
       await publishStub(input.platform, input);
@@ -96,9 +96,47 @@ export async function dispatchPublishJob(input: PublishJobInput, dryRun: boolean
       case 'twitter':   throw new Error('Twitter/X publishing — connect via Settings first');
       case 'reddit':    throw new Error('Reddit publishing — connect via Settings first');
       case 'facebook':  throw new Error('Facebook publishing — connect via Settings first');
+      case 'youtube_shorts': throw new Error('YouTube Shorts live publishing not implemented — dry-run only');
       default:          throw new Error(`Unknown platform: ${input.platform}`);
     }
   } catch (err: any) {
     await markFailed(input.jobId, err?.message ?? 'Unknown error');
   }
+}
+
+/** Row shape: publish_jobs joined to content_items (page_id, payload). */
+export function buildPublishJobInput(job: {
+  id: string; content_item_id: string; page_id: string;
+  platform: string; formatted_caption: string | null;
+  payload: any;
+}): PublishJobInput {
+  const payload = job.payload ?? {};
+  const images: string[] = (payload.images ?? [])
+    .map((img: any) => img?.url ?? img)
+    .filter(Boolean);
+  return {
+    jobId: job.id,
+    contentItemId: job.content_item_id,
+    pageId: job.page_id,
+    platform: job.platform as PublishPlatform,
+    formattedCaption: job.formatted_caption ?? "",
+    imageUrls: images,
+    hook: payload.hook ?? "",
+  };
+}
+
+/** Publish every scheduled job whose time has come. */
+export async function publishDueJobs(dryRun: boolean): Promise<number> {
+  const { rows } = await query<any>(
+    `SELECT pj.id, pj.content_item_id, pj.page_id, pj.platform, pj.formatted_caption, c.payload
+     FROM publish_jobs pj
+     JOIN content_items c ON c.id = pj.content_item_id
+     WHERE pj.status = 'scheduled' AND pj.scheduled_at <= now()
+     ORDER BY pj.scheduled_at ASC
+     LIMIT 25`
+  );
+  for (const job of rows) {
+    await dispatchPublishJob(buildPublishJobInput(job), dryRun);
+  }
+  return rows.length;
 }

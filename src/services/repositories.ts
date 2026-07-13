@@ -210,30 +210,6 @@ export async function listScheduledTimesForPage(pageId: string): Promise<Date[]>
   return result.rows.map((row: any) => new Date(row.scheduled_at));
 }
 
-export async function listPosts(state?: string): Promise<any[]> {
-  const result = await query(
-    `
-      SELECT posts.*, c.type, c.payload, p.name AS page_name, p.handle, t.title AS topic_title
-      FROM posts
-      JOIN content_items c ON c.id = posts.content_item_id
-      JOIN pages p ON p.id = posts.page_id
-      JOIN topics t ON t.id = c.topic_id
-      WHERE ($1::text IS NULL OR posts.state = $1)
-      ORDER BY posts.scheduled_at ASC NULLS LAST, posts.created_at DESC
-      LIMIT 100
-    `,
-    [state ?? null]
-  );
-  return result.rows;
-}
-
-export async function markPostPosted(postId: string, externalPostId: string): Promise<void> {
-  await query("UPDATE posts SET state = 'POSTED', posted_at = now(), external_post_id = $2 WHERE id = $1", [
-    postId,
-    externalPostId
-  ]);
-}
-
 export async function insertMetric(postId: string, metric: { views1h: number; views24h: number; saves: number; followsGained: number }): Promise<void> {
   const engagementRate = metric.views24h > 0 ? (metric.saves + metric.followsGained) / metric.views24h : 0;
   await query(
