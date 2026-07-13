@@ -76,6 +76,9 @@ new Worker(
 new Worker(
   "generate",
   async () => {
+    const { getFormatSignals } = await import("../services/learningRepo.js");
+    const { applyLearnedFormat } = await import("../domain/format-rules.js");
+    const formatSignalsCache = new Map<string, Awaited<ReturnType<typeof getFormatSignals>>>();
     const topics = await listSelectedTopicsWithoutContent();
     for (const topic of topics) {
       const niche = await getNiche(topic.nicheId);
@@ -96,9 +99,10 @@ new Worker(
 
       // Learned tiebreak: proven niche format overrides weak decisions
       if (finalFormat && finalConfidence && (finalConfidence === 'rule' || finalConfidence === 'page_default')) {
-        const { getFormatSignals } = await import("../services/learningRepo.js");
-        const { applyLearnedFormat } = await import("../domain/format-rules.js");
-        const learned = applyLearnedFormat(finalFormat, finalConfidence, await getFormatSignals(topic.nicheId));
+        if (!formatSignalsCache.has(topic.nicheId)) {
+          formatSignalsCache.set(topic.nicheId, await getFormatSignals(topic.nicheId));
+        }
+        const learned = applyLearnedFormat(finalFormat, finalConfidence, formatSignalsCache.get(topic.nicheId)!);
         finalFormat = learned.format;
         finalConfidence = learned.confidence;
       }

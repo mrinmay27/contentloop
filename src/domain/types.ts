@@ -28,6 +28,7 @@ export interface Topic {
   lastSeenAt: Date;
   velocity: number;
   score: number | null;
+  scoreBreakdown?: Record<string, number> | null;
   decision: TopicDecision | null;
   state: QueueState;
   /** LLM / rule / page-default suggested content format */

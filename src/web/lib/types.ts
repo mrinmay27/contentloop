@@ -14,7 +14,7 @@ export type ThemePage = {
 };
 
 export type SuggestedFormat = 'post' | 'carousel' | 'reel';
-export type FormatConfidence = 'user' | 'llm' | 'rule' | 'page_default';
+export type FormatConfidence = 'user' | 'llm' | 'rule' | 'page_default' | 'learned';
 
 export type Topic = {
   id: string;
@@ -22,6 +22,7 @@ export type Topic = {
   keywords: string[];
   sources: string[];
   score: number | null;
+  scoreBreakdown?: { learnedBoost?: number } | null;
   decision: string | null;
   state: string;
   suggestedFormat: SuggestedFormat | null;

@@ -34,6 +34,7 @@ export function mapTopic(row: any): Topic {
     lastSeenAt: new Date(row.last_seen_at),
     velocity: Number(row.velocity),
     score: row.score === null ? null : Number(row.score),
+    scoreBreakdown: row.score_breakdown ?? null,
     decision: row.decision,
     state: row.state,
     suggestedFormat: row.suggested_format ?? null,

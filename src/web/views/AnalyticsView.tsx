@@ -18,7 +18,12 @@ type ByType = {
   avg_engagement: number;
 };
 
-type AnalyticsData = { posts: Post[]; byType: ByType[] };
+type AnalyticsData = { posts: Post[]; byType: ByType[]; simulated?: boolean };
+type LearningData = {
+  keywords: Array<{ label: string; score: number; sample_size: number }>;
+  formats: Array<{ label: string; score: number; sample_size: number }>;
+  mode: 'real' | 'simulated';
+};
 
 const TYPE_COLOR: Record<string, string> = {
   carousel: 'var(--accent)',
@@ -44,6 +49,7 @@ function filterByPeriod(posts: Post[], period: Period): Post[] {
 
 export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
   const [data, setData]       = useState<AnalyticsData | null>(null);
+  const [learning, setLearning] = useState<LearningData | null>(null);
   const [loading, setLoading] = useState(false);
   const [period, setPeriod]   = useState<Period>('30d');
 
@@ -53,6 +59,7 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+    api.getLearning(page.id).then(setLearning).catch(() => setLearning(null));
   }, [page.id]);
 
   const filtered = data ? filterByPeriod(data.posts, period) : [];
@@ -135,6 +142,15 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
               ))}
             </div>
 
+            {data.simulated && (
+              <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8,
+                background: 'var(--bg-elevated)', border: '1px dashed var(--text-muted)',
+                fontSize: 12, color: 'var(--text-secondary)' }}>
+                ⚗️ Simulated metrics — Instagram is in dry-run mode. Real insights replace
+                these automatically once publishing goes live.
+              </div>
+            )}
+
             <div className="analytics-grid">
               {/* Bar chart — views per post */}
               <div className="analytics-card" style={{ gridColumn:'span 2' }}>
@@ -214,8 +230,40 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
                 )}
               </div>
 
-              {/* Top posts */}
+              {/* Learning signals */}
               <div className="analytics-card">
+                <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>Learning Signals</div>
+                <div style={{ fontSize:10, color:'var(--text-muted)', marginBottom:12 }}>
+                  {learning?.mode === 'real' ? 'From real Instagram data' : 'From simulated data'}
+                </div>
+                {!learning || learning.keywords.length === 0 ? (
+                  <div style={{ color:'var(--text-muted)', fontSize:12 }}>
+                    No signals yet — appears after posts collect 24h metrics
+                  </div>
+                ) : (
+                  (() => {
+                    const maxScore = Math.max(...learning.keywords.map(x => x.score), 0.001);
+                    return learning.keywords.map(k => (
+                      <div key={k.label} className="perf-row">
+                        <div style={{ width:90, fontSize:12, color:'var(--text-secondary)',
+                          flexShrink:0, overflow:'hidden', textOverflow:'ellipsis',
+                          whiteSpace:'nowrap' }}>{k.label}</div>
+                        <div className="perf-bar">
+                          <div className="perf-fill"
+                            style={{ width:`${Math.round((k.score/maxScore)*100)}%`, background:'var(--purple)' }}/>
+                        </div>
+                        <div style={{ width:48, textAlign:'right', fontSize:11,
+                          fontFamily:'var(--mono)' }}>{(k.score*100).toFixed(1)}%</div>
+                        <div style={{ width:24, textAlign:'right', fontSize:10,
+                          color:'var(--text-muted)' }}>×{k.sample_size}</div>
+                      </div>
+                    ));
+                  })()
+                )}
+              </div>
+
+              {/* Top posts */}
+              <div className="analytics-card" style={{ gridColumn:'span 2' }}>
                 <div style={{ fontWeight:700, fontSize:14, marginBottom:16 }}>Top Posts by Views</div>
                 {topPosts.length === 0 ? (
                   <div style={{ color:'var(--text-muted)', fontSize:12 }}>No posts in this period</div>

@@ -33,6 +33,7 @@ const CONFIDENCE_COLOR: Record<string, string> = {
   llm:          'var(--green, #22c55e)',
   rule:         'var(--amber, #f59e0b)',
   page_default: 'var(--text-muted)',
+  learned:      'var(--purple, #8b5cf6)',
 };
 
 function isContentReady(topic: Topic): boolean {
@@ -136,6 +137,15 @@ export const TopicCard: React.FC<Props> = ({
           <div className="topic-meta">
             <PlatformBadge platform={platform}/>
             <ScoreRing score={score} size={28}/>
+            {topic.scoreBreakdown?.learnedBoost != null && topic.scoreBreakdown.learnedBoost !== 1 && (
+              <span
+                className={`badge ${topic.scoreBreakdown.learnedBoost > 1 ? 'badge-green' : 'badge-amber'}`}
+                title={`Learning boost ×${Number(topic.scoreBreakdown.learnedBoost).toFixed(2)} from past performance`}
+                style={{ fontSize: 9, padding: '1px 5px' }}
+              >
+                {topic.scoreBreakdown.learnedBoost > 1 ? '▲ boosted' : '▼ damped'}
+              </span>
+            )}
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
               {tags.map(tag => <span key={tag} className="tag">{tag}</span>)}
             </div>

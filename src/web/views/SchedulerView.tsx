@@ -25,7 +25,7 @@ const TYPE_COLOR: Record<string, string> = {
 };
 
 const PLATFORM_ICON: Record<string, string> = {
-  instagram: '📸', linkedin: '💼', twitter: '🐦', reddit: '🤖', facebook: '📘',
+  instagram: '📸', linkedin: '💼', twitter: '🐦', reddit: '🤖', facebook: '📘', youtube_shorts: '▶️',
 };
 
 const STATUS_STYLE: Record<string, { color: string; label: string }> = {
