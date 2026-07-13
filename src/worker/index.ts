@@ -15,7 +15,6 @@ import {
   createContentItems,
   updateTopicFormat,
   getNiche,
-  insertMetric,
   listApprovedContentWithoutJob,
   listNiches,
   listPages,
@@ -263,17 +262,13 @@ new Worker(
 new Worker(
   "analyze",
   async () => {
-    const posted = await listPosts("POSTED");
-    for (const post of posted) {
-      await insertMetric(post.id, {
-        views1h: Math.floor(Math.random() * 300),
-        views24h: Math.floor(Math.random() * 2500),
-        saves: Math.floor(Math.random() * 80),
-        followsGained: Math.floor(Math.random() * 20)
-      });
-    }
+    const { runMetricsCapture } = await import("../services/metrics/index.js");
+    const { runLearningStep } = await import("../services/learningService.js");
+    const captured = await runMetricsCapture();
+    if (captured > 0) console.log(`[analyze] Captured ${captured} metric snapshot(s)`);
+    await runLearningStep();
   },
-  workerOptions
+  { connection, concurrency: 1 } // learn step must not overlap itself
 );
 
 await enqueueDailyPipeline();

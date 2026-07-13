@@ -210,18 +210,6 @@ export async function listScheduledTimesForPage(pageId: string): Promise<Date[]>
   return result.rows.map((row: any) => new Date(row.scheduled_at));
 }
 
-export async function insertMetric(postId: string, metric: { views1h: number; views24h: number; saves: number; followsGained: number }): Promise<void> {
-  const engagementRate = metric.views24h > 0 ? (metric.saves + metric.followsGained) / metric.views24h : 0;
-  await query(
-    `
-      INSERT INTO performance_metrics (post_id, views_1h, views_24h, saves, follows_gained, engagement_rate)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `,
-    [postId, metric.views1h, metric.views24h, metric.saves, metric.followsGained, engagementRate]
-  );
-  await query("UPDATE posts SET state = 'ANALYZED' WHERE id = $1", [postId]);
-}
-
 export async function dashboardStats(nicheId?: string, pageId?: string): Promise<Record<string, number | string | null>> {
   const [counts, nextPost] = await Promise.all([
     query(

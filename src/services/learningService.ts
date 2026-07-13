@@ -1,3 +1,4 @@
+import { withTransaction } from "../db/pool.js";
 import { snapshotSignals } from "../domain/learning.js";
 import {
   deleteSignalsForNiche,
@@ -9,10 +10,12 @@ import {
 } from "./learningRepo.js";
 
 async function foldSnapshot(row: UnlearnedSnapshot): Promise<void> {
-  for (const sig of snapshotSignals(row.keywords, row.contentType, row.engagementRate)) {
-    await upsertLearningSignal(row.nicheId, sig);
-  }
-  await markSnapshotsLearned([row.id]);
+  await withTransaction(async (client) => {
+    for (const sig of snapshotSignals(row.keywords, row.contentType, row.engagementRate)) {
+      await upsertLearningSignal(row.nicheId, sig, client);
+    }
+    await markSnapshotsLearned([row.id], client);
+  });
 }
 
 /** Folds unlearned 24h snapshots into learning_signals.

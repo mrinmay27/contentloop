@@ -1,4 +1,5 @@
 import { query } from "../db/pool.js";
+import type { PoolClient } from "pg";
 import { EMA_ALPHA, type LearnedSignals, type SignalUpdate } from "../domain/learning.js";
 import type { FormatSignal } from "../domain/format-rules.js";
 
@@ -59,8 +60,9 @@ export async function deleteSignalsForNiche(nicheId: string): Promise<void> {
 }
 
 /** EMA upsert — first sample takes the raw value, later samples blend. */
-export async function upsertLearningSignal(nicheId: string, sig: SignalUpdate): Promise<void> {
-  await query(
+export async function upsertLearningSignal(nicheId: string, sig: SignalUpdate, client?: PoolClient): Promise<void> {
+  const exec = client ? client.query.bind(client) : query;
+  await exec(
     `
       INSERT INTO learning_signals (niche_id, signal_type, label, score, sample_size, updated_at)
       VALUES ($1, $2, $3, $4, 1, now())
@@ -74,9 +76,10 @@ export async function upsertLearningSignal(nicheId: string, sig: SignalUpdate): 
   );
 }
 
-export async function markSnapshotsLearned(ids: string[]): Promise<void> {
+export async function markSnapshotsLearned(ids: string[], client?: PoolClient): Promise<void> {
   if (ids.length === 0) return;
-  await query(`UPDATE performance_metrics SET learned_at = now() WHERE id = ANY($1::uuid[])`, [ids]);
+  const exec = client ? client.query.bind(client) : query;
+  await exec(`UPDATE performance_metrics SET learned_at = now() WHERE id = ANY($1::uuid[])`, [ids]);
 }
 
 /** Learned signals for scoring: keyword map + niche average. */
