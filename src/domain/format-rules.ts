@@ -1,4 +1,5 @@
-import type { RawTrend, SuggestedFormat } from "./types.js";
+import type { FormatConfidence, RawTrend, SuggestedFormat } from "./types.js";
+import { MIN_FORMAT_SAMPLES } from "./learning.js";
 
 /** Tier-2: Rule-based format suggestion + LLM sanity check.
  *  Returns a format and whether it was a sanity override of the LLM result.
@@ -95,4 +96,22 @@ export function applyPageDefault(
 /** Derive source label from RawTrend source for rule matching. */
 export function trendSourceLabel(trend: Pick<RawTrend, "source">): string {
   return trend.source;
+}
+
+export interface FormatSignal { label: string; score: number; sampleSize: number }
+
+/** Learned tiebreak: when the niche has a proven winning format
+ *  (sample_size >= MIN_FORMAT_SAMPLES), it overrides weak decisions
+ *  (rule / page_default). Explicit user and LLM decisions always win. */
+export function applyLearnedFormat(
+  current: SuggestedFormat,
+  confidence: FormatConfidence,
+  formatSignals: FormatSignal[]
+): { format: SuggestedFormat; confidence: FormatConfidence } {
+  if (confidence === "user" || confidence === "llm") return { format: current, confidence };
+  const eligible = formatSignals.filter((s) => s.sampleSize >= MIN_FORMAT_SAMPLES);
+  if (eligible.length === 0) return { format: current, confidence };
+  const winner = [...eligible].sort((a, b) => b.score - a.score)[0];
+  if (winner.label === current) return { format: current, confidence };
+  return { format: winner.label as SuggestedFormat, confidence: "learned" };
 }
