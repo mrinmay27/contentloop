@@ -54,12 +54,16 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
   const [period, setPeriod]   = useState<Period>('30d');
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     api.getAnalytics(page.id)
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-    api.getLearning(page.id).then(setLearning).catch(() => setLearning(null));
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    api.getLearning(page.id)
+      .then(l => { if (!cancelled) setLearning(l); })
+      .catch(() => { if (!cancelled) setLearning(null); });
+    return () => { cancelled = true; };
   }, [page.id]);
 
   const filtered = data ? filterByPeriod(data.posts, period) : [];
