@@ -1,7 +1,7 @@
 import type { Niche, RawTrend, Topic, TopicDecision } from "./types.js";
 import { seasonalScoreMultiplier } from "./seasonal-context.js";
 import { learnedBoost, type LearnedSignals } from "./learning.js";
-import { normalizeCosine, SEMANTIC_RESCUE_THRESHOLD } from "./similarity.js";
+import { normalizeCosine, normalizeDupeCosine, SEMANTIC_RESCUE_THRESHOLD } from "./similarity.js";
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -123,7 +123,7 @@ export function scoreTopic(
   ).length;
   const monetizationIntent = clamp01(monetizationMatches / Math.max(2, niche.monetizationKeywords.length * 0.35));
   const jaccardNovelty = scoreNovelty(topic.title, recentTitles);
-  const semanticNovelty = semantic ? 1 - normalizeCosine(semantic.maxRecentSimilarity) : 1;
+  const semanticNovelty = semantic ? 1 - normalizeDupeCosine(semantic.maxRecentSimilarity) : 1;
   const novelty = clamp01(Math.min(jaccardNovelty, semanticNovelty));
 
   // Task 2.9: Source quality boost — best source multiplier, capped at +10% of total
