@@ -57,16 +57,33 @@ new Worker(
   "score",
   async () => {
     const { getLearnedSignals } = await import("../services/learningRepo.js");
+    const { buildSemanticContext } = await import("../services/semanticScoring.js");
     const topics = await listScorableTopics();
-    const learnedCache = new Map<string, Awaited<ReturnType<typeof getLearnedSignals>>>();
+    if (topics.length === 0) return;
+
+    const nicheMap = new Map<string, NonNullable<Awaited<ReturnType<typeof getNiche>>>>();
     for (const topic of topics) {
-      const niche = await getNiche(topic.nicheId);
+      if (!nicheMap.has(topic.nicheId)) {
+        const niche = await getNiche(topic.nicheId);
+        if (niche) nicheMap.set(topic.nicheId, niche);
+      }
+    }
+
+    const semanticByTopic = await buildSemanticContext(topics, nicheMap);
+    const learnedCache = new Map<string, Awaited<ReturnType<typeof getLearnedSignals>>>();
+
+    for (const topic of topics) {
+      const niche = nicheMap.get(topic.nicheId);
       if (!niche) continue;
       if (!learnedCache.has(topic.nicheId)) {
         learnedCache.set(topic.nicheId, await getLearnedSignals(topic.nicheId));
       }
       const recentTitles = await listRecentTopicTitles(topic.nicheId, topic.id);
-      const breakdown = scoreTopic(topic, niche, recentTitles, learnedCache.get(topic.nicheId));
+      const breakdown = scoreTopic(
+        topic, niche, recentTitles,
+        learnedCache.get(topic.nicheId),
+        semanticByTopic.get(topic.id)
+      );
       await updateTopicScore(topic.id, breakdown.score, breakdown.decision, breakdown);
     }
   },

@@ -39,7 +39,7 @@ export function parseGeminiBatchResponse(json: GeminiBatchResponse): number[][] 
   return out;
 }
 
-const GEMINI_MODEL = "text-embedding-004";
+const GEMINI_MODEL = "gemini-embedding-001";
 const GEMINI_BATCH_LIMIT = 100;
 
 export class GeminiEmbeddingProvider implements EmbeddingProvider {
