@@ -37,7 +37,15 @@ export async function upsertRawTrend(nicheId: string, rawTrend: RawTrend): Promi
       VALUES ($1, $2, $3, $4, 1, COALESCE($5, now()), $6, $7, $8)
       ON CONFLICT (niche_id, title)
       DO UPDATE SET
-        keywords = (SELECT ARRAY(SELECT DISTINCT unnest(topics.keywords || EXCLUDED.keywords))),
+        keywords = (
+          SELECT COALESCE(array_agg(kw), '{}')
+          FROM (
+            SELECT DISTINCT kw
+            FROM unnest(topics.keywords || EXCLUDED.keywords) AS kw
+            WHERE length(kw) <= 40
+            LIMIT 15
+          ) merged
+        ),
         sources = (SELECT ARRAY(SELECT DISTINCT unnest(topics.sources || EXCLUDED.sources))),
         source_count = cardinality((SELECT ARRAY(SELECT DISTINCT unnest(topics.sources || EXCLUDED.sources)))),
         last_seen_at = GREATEST(topics.last_seen_at, EXCLUDED.last_seen_at),

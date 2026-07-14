@@ -222,7 +222,12 @@ export function keywordize(input: string, maxWords = 8): string[] {
     (a, b) => (NICHE_SIGNAL_WORDS.has(b) ? 1 : 0) - (NICHE_SIGNAL_WORDS.has(a) ? 1 : 0)
   );
 
+  // Single words already covered by a matched compound are redundant fragments
+  // ("artificial intelligence" suppresses "artificial" and "intelligence").
+  // Word-level membership, not raw substring, so "car" survives "carbon emission".
+  const compoundWords = new Set(compounds.flatMap((phrase) => phrase.split(" ")));
+  const standaloneWords = uniqueWords.filter((word) => !compoundWords.has(word));
+
   // Compounds first, then individual words fill remaining slots
-  // (Set deduplication only affects exact string matches — "budget carrier" ≠ "budget")
-  return [...new Set([...compounds, ...uniqueWords])].slice(0, maxWords);
+  return [...new Set([...compounds, ...standaloneWords])].slice(0, maxWords);
 }

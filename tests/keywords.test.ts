@@ -30,4 +30,14 @@ describe("normalizeKeywords", () => {
   it("exports sane constants", () => {
     expect(MAX_KEYWORD_CHARS).toBe(40);
   });
+
+  it("drops punctuation-only and emoji-only entries", () => {
+    expect(normalizeKeywords(["!!!", "...", "\u{1F600}", "\u{1F525}\u{1F525}", "→"])).toEqual([]);
+  });
+
+  it("keeps leading hashes but strips trailing ones (##AI## -> ##ai)", () => {
+    // Locked-in current behavior: '#' is allowed at the leading edge (hashtags)
+    // but stripped from the trailing edge.
+    expect(normalizeKeywords(["##AI##"])).toEqual(["##ai"]);
+  });
 });
