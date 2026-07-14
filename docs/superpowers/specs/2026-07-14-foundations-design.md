@@ -15,8 +15,10 @@
 
 ## Decisions (user-confirmed)
 
-- **Blend, safe:** embeddings raise relevance, never lower it; discard requires
-  both keyword-zero AND low similarity. No currently-selected topic gets worse.
+- **Blend, safe:** embeddings raise RELEVANCE, never lower it; discard requires
+  both keyword-zero AND low similarity. NOVELTY, however, may decrease when a
+  topic is semantically near-identical to a recent one — intended paraphrase
+  dedup, not a regression. "No topic gets worse" applies to relevance only.
 - **Hand-rolled migration runner:** zero new dependencies, matches raw-SQL style.
 - **Approach A for embeddings:** lazy embed at scoring time, cached in DB
   (JSONB float arrays), cosine in JS. No pgvector, no embed-at-ingestion.

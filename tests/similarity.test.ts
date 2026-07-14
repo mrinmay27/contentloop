@@ -28,4 +28,9 @@ describe("normalizeCosine", () => {
     const mid = (COSINE_FLOOR + COSINE_CEIL) / 2;
     expect(normalizeCosine(mid)).toBeCloseTo(0.5, 6);
   });
+  it("non-finite input (corrupt cached vector) → 0, never NaN", () => {
+    expect(normalizeCosine(NaN)).toBe(0);
+    expect(normalizeCosine(Infinity)).toBe(0);
+    expect(normalizeCosine(-Infinity)).toBe(0);
+  });
 });

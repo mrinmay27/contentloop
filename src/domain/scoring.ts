@@ -1,7 +1,7 @@
 import type { Niche, RawTrend, Topic, TopicDecision } from "./types.js";
 import { seasonalScoreMultiplier } from "./seasonal-context.js";
 import { learnedBoost, type LearnedSignals } from "./learning.js";
-import { normalizeCosine } from "./similarity.js";
+import { normalizeCosine, SEMANTIC_RESCUE_THRESHOLD } from "./similarity.js";
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -106,7 +106,7 @@ export function scoreTopic(
 
   // Hard discard: zero keyword overlap AND low semantic relevance means this
   // topic belongs to another niche.
-  if (audienceMatches === 0 && semanticRelevance < 0.15) {
+  if (audienceMatches === 0 && semanticRelevance < SEMANTIC_RESCUE_THRESHOLD) {
     return {
       recency: 0, crossSourceMentions: 0, velocity: 0,
       audienceRelevance: 0, semanticRelevance, monetizationIntent: 0, novelty: 0,
