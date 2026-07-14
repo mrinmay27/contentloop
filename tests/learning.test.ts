@@ -19,6 +19,15 @@ describe("snapshotSignals", () => {
       { signalType: "format", label: "reel", engagementRate: 0.04 },
     ]);
   });
+
+  it("skips keyword labels longer than 40 chars (legacy sentence keywords)", () => {
+    const long = "new updates to ai mode and overviews make it easier to dive deeper";
+    const sigs = snapshotSignals([long, "ai"], "post", 0.05);
+    expect(sigs).toEqual([
+      { signalType: "keyword", label: "ai", engagementRate: 0.05 },
+      { signalType: "format", label: "post", engagementRate: 0.05 },
+    ]);
+  });
 });
 
 describe("learnedBoost", () => {

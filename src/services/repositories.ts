@@ -1,6 +1,8 @@
 import { query } from "../db/pool.js";
 import { mapNiche, mapPage, mapTopic } from "../db/mappers.js";
 import type { FormatConfidence, GeneratedContent, Niche, Page, QaResult, RawTrend, SuggestedFormat, Topic } from "../domain/types.js";
+import { normalizeKeywords } from "../domain/keywords.js";
+import { keywordize } from "./ingestion/keywordize.js";
 
 export async function listNiches(): Promise<Niche[]> {
   const result = await query("SELECT * FROM niches ORDER BY name");
@@ -26,7 +28,7 @@ export async function getPage(id: string): Promise<Page | null> {
 
 export async function upsertRawTrend(nicheId: string, rawTrend: RawTrend): Promise<Topic> {
   const title = rawTrend.title.trim();
-  const keywords = [...new Set(rawTrend.keywords.map((keyword) => keyword.toLowerCase().trim()).filter(Boolean))];
+  const keywords = normalizeKeywords(rawTrend.keywords);
   const velocity = Math.min(1, (rawTrend.engagementHint ?? 0.35) / 100);
 
   const result = await query(
@@ -106,7 +108,13 @@ export async function createManualTopic(opts: {
        ($1, $2, $3, ARRAY['manual'], 1, now(), now(),
         1.0, 1.0, 'CONTENT_READY', 'selected', $4, $5, 'user')
      RETURNING *`,
-    [nicheId, title.trim(), keyPoints ? [keyPoints.trim()] : [], sourceUrl ?? null, suggestedFormat ?? null]
+    [
+      nicheId,
+      title.trim(),
+      normalizeKeywords([...keywordize(title), ...(keyPoints ? keywordize(keyPoints) : [])]),
+      sourceUrl ?? null,
+      suggestedFormat ?? null
+    ]
   );
   return mapTopic(result.rows[0]);
 }

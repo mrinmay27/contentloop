@@ -1,5 +1,8 @@
 /** Pure learning-loop math: EMA aggregation and the bounded scoring boost.
- *  DB plumbing lives in services; this file must stay dependency-free. */
+ *  DB plumbing lives in services; this file allows no service/DB imports —
+ *  sibling domain imports only. */
+
+import { MAX_KEYWORD_CHARS } from "./keywords.js";
 
 export const EMA_ALPHA = 0.3;
 export const MIN_KEYWORD_SAMPLES = 3;
@@ -23,7 +26,8 @@ export function snapshotSignals(
   contentType: string,
   engagementRate: number
 ): SignalUpdate[] {
-  const unique = [...new Set(keywords.map((k) => k.toLowerCase().trim()).filter(Boolean))];
+  const unique = [...new Set(keywords.map((k) => k.toLowerCase().trim()).filter(Boolean))]
+    .filter((k) => k.length <= MAX_KEYWORD_CHARS);
   return [
     ...unique.map((label) => ({ signalType: "keyword" as const, label, engagementRate })),
     { signalType: "format" as const, label: contentType, engagementRate },
