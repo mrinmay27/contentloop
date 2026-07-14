@@ -10,7 +10,6 @@
  */
 
 import { execSync, spawn, type ChildProcess } from "node:child_process";
-import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -163,19 +162,12 @@ async function waitForRedis(maxRetries = 20): Promise<void> {
 
 async function ensureSchema(): Promise<void> {
   log("📦 schema", "Applying schema migrations...");
-
   // Dynamic import to load dotenv/env before pg
   const { pool } = await import("../src/db/pool.js");
-
+  const { runMigrations } = await import("../src/db/migrate.js");
   try {
-    // Always run schema.sql — every statement is idempotent:
-    // CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN IF NOT EXISTS,
-    // CREATE INDEX IF NOT EXISTS. Safe to re-run on every boot so new
-    // migrations (like source_url) are picked up without dropping the DB.
-    const schemaPath = path.join(ROOT, "src/db/schema.sql");
-    const schema = await fs.readFile(schemaPath, "utf8");
-    await pool.query(schema);
-    log("📦 schema", "Schema up to date ✓");
+    const applied = await runMigrations();
+    log("📦 schema", applied.length > 0 ? `Applied ${applied.length} migration(s) ✓` : "Schema up to date ✓");
     await pool.end();
   } catch (error) {
     log("❌ error", `Schema migration failed: ${error}`);

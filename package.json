@@ -15,7 +15,8 @@
     "build": "tsc -p tsconfig.json && vite build",
     "start": "node dist/src/api/server.js",
     "worker": "node dist/src/worker/index.js",
-    "db:init": "tsx scripts/init-db.ts",
+    "db:init": "tsx scripts/migrate.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx"
