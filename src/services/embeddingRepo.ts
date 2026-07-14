@@ -35,19 +35,23 @@ export async function saveTopicEmbedding(topicId: string, vec: number[]): Promis
   await query(`UPDATE topics SET embedding = $2 WHERE id = $1`, [topicId, JSON.stringify(vec)]);
 }
 
-/** Recent same-niche topic vectors for paraphrase-novelty comparison. */
-export async function listRecentTopicEmbeddings(
+/** Recent same-niche topic vectors (with ids) for paraphrase-novelty
+ *  comparison. Fetched ONCE per niche per score run; callers exclude the
+ *  topic under scoring in memory. Pool is deliberately larger than the old
+ *  per-topic limit (25) so self-exclusion doesn't starve the comparison.
+ *  Includes discarded topics on purpose — "don't re-cover anything recently
+ *  seen" matches the jaccard novelty path's behavior. */
+export async function listNicheRecentEmbeddings(
   nicheId: string,
-  excludeTopicId: string,
-  limit = 25
-): Promise<number[][]> {
+  limit = 50
+): Promise<Array<{ id: string; embedding: number[] }>> {
   const r = await query(
-    `SELECT embedding FROM topics
-     WHERE niche_id = $1 AND id <> $2 AND embedding IS NOT NULL
-     ORDER BY last_seen_at DESC LIMIT $3`,
-    [nicheId, excludeTopicId, limit]
+    `SELECT id, embedding FROM topics
+     WHERE niche_id = $1 AND embedding IS NOT NULL
+     ORDER BY last_seen_at DESC LIMIT $2`,
+    [nicheId, limit]
   );
   return r.rows
-    .map((row: any) => asVector(row.embedding))
-    .filter((v: number[] | null): v is number[] => v !== null);
+    .map((row: any) => ({ id: row.id as string, embedding: asVector(row.embedding) }))
+    .filter((row: { id: string; embedding: number[] | null }): row is { id: string; embedding: number[] } => row.embedding !== null);
 }
