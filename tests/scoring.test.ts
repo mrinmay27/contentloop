@@ -74,3 +74,66 @@ describe("scoreTopic learned boost", () => {
     expect(scoreTopic(topic, niche, []).learnedBoost).toBe(1.0);
   });
 });
+
+// ── Sprint B: semantic blend ─────────────────────────────────────────────────
+describe("scoreTopic semantic blend", () => {
+  const niche = {
+    id: "n1", name: "Tech", keywords: ["ai", "startups"],
+    monetizationKeywords: ["saas"], negativeKeywords: [], targetPersona: "founders",
+  } as any;
+
+  // NOTE: fixture must avoid "ai"/"startups" even as SUBSTRINGS (the keyword
+  // matcher is substring-based — e.g. "raising" contains "ai").
+  const paraphrased = {
+    id: "t2", nicheId: "n1", title: "Machine intelligence firms secure new funding",
+    keywords: ["machine intelligence", "funding"], sources: ["hackernews"], sourceCount: 2,
+    firstSeenAt: new Date(), lastSeenAt: new Date(), velocity: 0.5,
+    score: null, decision: null, state: "IDEA",
+    suggestedFormat: null, formatConfidence: null,
+  } as any;
+
+  it("rescues zero-keyword-overlap topics with high semantic similarity", () => {
+    const withoutSemantic = scoreTopic(paraphrased, niche, []);
+    expect(withoutSemantic.decision).toBe("discarded"); // today's behavior
+
+    const withSemantic = scoreTopic(paraphrased, niche, [], undefined, {
+      nicheSimilarity: 0.82, maxRecentSimilarity: 0.3,
+    });
+    expect(withSemantic.decision).not.toBe("discarded");
+    expect(withSemantic.semanticRelevance).toBeGreaterThan(0.8);
+  });
+
+  it("still discards when both keyword overlap and similarity are low", () => {
+    const result = scoreTopic(paraphrased, niche, [], undefined, {
+      nicheSimilarity: 0.45, maxRecentSimilarity: 0.3,
+    });
+    expect(result.decision).toBe("discarded");
+  });
+
+  it("never lowers audienceRelevance for keyword-matching topics (blend is max)", () => {
+    const matching = { ...paraphrased, id: "t3", title: "AI startups on the rise", keywords: ["ai", "startups"] };
+    const base = scoreTopic(matching, niche, []);
+    const blended = scoreTopic(matching, niche, [], undefined, {
+      nicheSimilarity: 0.4, maxRecentSimilarity: 0.0, // low semantic must not hurt
+    });
+    expect(blended.audienceRelevance).toBeGreaterThanOrEqual(base.audienceRelevance);
+    expect(blended.score).toBeGreaterThanOrEqual(base.score * 0.999); // no meaningful drop
+  });
+
+  it("semantic recent-similarity reduces novelty (paraphrase dedup)", () => {
+    const matching = { ...paraphrased, id: "t4", title: "AI startups on the rise", keywords: ["ai", "startups"] };
+    const fresh = scoreTopic(matching, niche, [], undefined, {
+      nicheSimilarity: 0.8, maxRecentSimilarity: 0.5,
+    });
+    const dupe = scoreTopic(matching, niche, [], undefined, {
+      nicheSimilarity: 0.8, maxRecentSimilarity: 0.85,
+    });
+    expect(dupe.novelty).toBeLessThan(fresh.novelty);
+  });
+
+  it("semanticRelevance is 0 and behavior unchanged when semantic omitted", () => {
+    const matching = { ...paraphrased, id: "t5", title: "AI startups on the rise", keywords: ["ai", "startups"] };
+    const r = scoreTopic(matching, niche, []);
+    expect(r.semanticRelevance).toBe(0);
+  });
+});

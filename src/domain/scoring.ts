@@ -1,6 +1,7 @@
 import type { Niche, RawTrend, Topic, TopicDecision } from "./types.js";
 import { seasonalScoreMultiplier } from "./seasonal-context.js";
 import { learnedBoost, type LearnedSignals } from "./learning.js";
+import { normalizeCosine } from "./similarity.js";
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -55,11 +56,19 @@ export interface TopicScoreBreakdown {
   crossSourceMentions: number;
   velocity: number;
   audienceRelevance: number;
+  semanticRelevance: number;
   monetizationIntent: number;
   novelty: number;
   learnedBoost: number;
   score: number;
   decision: TopicDecision;
+}
+
+export interface SemanticSignals {
+  /** Raw cosine: topic embedding vs niche embedding. */
+  nicheSimilarity: number;
+  /** Raw cosine: topic embedding vs most-similar recent topic in the niche. */
+  maxRecentSimilarity: number;
 }
 
 export interface HookScoreBreakdown {
@@ -71,7 +80,13 @@ export interface HookScoreBreakdown {
   score: number;
 }
 
-export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[], learned?: LearnedSignals): TopicScoreBreakdown {
+export function scoreTopic(
+  topic: Topic,
+  niche: Niche,
+  recentTitles: string[],
+  learned?: LearnedSignals,
+  semantic?: SemanticSignals
+): TopicScoreBreakdown {
   const ageHours = Math.max(0, (Date.now() - topic.lastSeenAt.getTime()) / 36e5);
   const recency = clamp01(1 - ageHours / 72);
 
@@ -86,11 +101,15 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[], l
   const audienceMatches = niche.keywords.filter((keyword) => words.includes(keyword.toLowerCase())).length;
   const audienceRelevance = clamp01(audienceMatches / Math.max(1, Math.min(8, niche.keywords.length * 0.30)));
 
-  // Hard discard: zero keyword overlap means this topic belongs to another niche.
-  if (audienceMatches === 0) {
+  const semanticRelevance = semantic ? normalizeCosine(semantic.nicheSimilarity) : 0;
+  const blendedRelevance = Math.max(audienceRelevance, semanticRelevance);
+
+  // Hard discard: zero keyword overlap AND low semantic relevance means this
+  // topic belongs to another niche.
+  if (audienceMatches === 0 && semanticRelevance < 0.15) {
     return {
       recency: 0, crossSourceMentions: 0, velocity: 0,
-      audienceRelevance: 0, monetizationIntent: 0, novelty: 0,
+      audienceRelevance: 0, semanticRelevance, monetizationIntent: 0, novelty: 0,
       learnedBoost: 1.0,
       score: 0, decision: "discarded" as TopicDecision,
     };
@@ -103,7 +122,9 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[], l
     words.includes(keyword.toLowerCase())
   ).length;
   const monetizationIntent = clamp01(monetizationMatches / Math.max(2, niche.monetizationKeywords.length * 0.35));
-  const novelty = scoreNovelty(topic.title, recentTitles);
+  const jaccardNovelty = scoreNovelty(topic.title, recentTitles);
+  const semanticNovelty = semantic ? 1 - normalizeCosine(semantic.maxRecentSimilarity) : 1;
+  const novelty = clamp01(Math.min(jaccardNovelty, semanticNovelty));
 
   // Task 2.9: Source quality boost — best source multiplier, capped at +10% of total
   const bestSourceMultiplier = topic.sources.reduce(
@@ -116,7 +137,7 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[], l
     0.10 * recency +
     0.10 * crossSourceMentions +
     0.10 * velocity +
-    0.28 * audienceRelevance +
+    0.28 * blendedRelevance +
     0.14 * monetizationIntent +
     0.14 * novelty +
     0.08 * (hasNegativeMatch ? 0 : 1) +
@@ -137,6 +158,7 @@ export function scoreTopic(topic: Topic, niche: Niche, recentTitles: string[], l
     crossSourceMentions,
     velocity,
     audienceRelevance,
+    semanticRelevance,
     monetizationIntent,
     novelty,
     learnedBoost: boost,
