@@ -57,6 +57,15 @@ describe("formatCaption", () => {
     expect(out.length).toBeLessThanOrEqual(280);
   });
 
+  it("default path trims an over-long caption with ellipsis (real trim branch)", () => {
+    // Exercises the overhead/bodyLimit/trimmedCaption logic that the twitter
+    // test above cannot reach (twitter ignores caption entirely).
+    const out = formatCaption({ platform: "instagram", ...base, caption: "y".repeat(3000) });
+    expect(out.length).toBeLessThanOrEqual(2200);
+    expect(out).toContain("…");
+    expect(out).toContain(base.hook);
+  });
+
   it("empty hashtags produce no dangling separator", () => {
     const out = formatCaption({ platform: "instagram", ...base, hashtags: [] });
     expect(out.trimEnd()).toBe(out);
