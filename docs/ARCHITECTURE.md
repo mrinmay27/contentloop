@@ -13,6 +13,15 @@
    - Multi-factor scoring: recency, cross-source, velocity, audience relevance, monetization, novelty
    - Source quality multipliers (HN: 1.30, arXiv: 1.25, Google Trends: 0.80)
    - Seasonal context adjustment
+   - **Semantic relevance** *(Sprint B)*: Gemini `gemini-embedding-001` vectors
+     (cached in `topics.embedding`/`niches.embedding` JSONB) blend with keyword
+     relevance via `max()` — paraphrased on-niche topics with zero keyword
+     overlap are rescued instead of hard-discarded. A separate near-duplicate
+     band drives paraphrase-aware novelty. Keyword-only when no gemini key or
+     on any embedding/DB failure (the semantic layer can never block scoring).
+     Cosine bands are empirically calibrated — see `src/domain/similarity.ts`.
+   - Keyword hygiene: `normalizeKeywords` (≤40 chars, ≤4 words, ≤10 per topic)
+     guards every topic write path; learned signals skip long legacy labels.
    - `>= 0.50`: selected, `0.35-0.49`: backup, `< 0.35`: discarded
 
 3. Content generation
@@ -73,6 +82,17 @@
      tiebreak for weak rule/page_default decisions (`format_confidence='learned'`).
    - **UI:** AnalyticsView shows per-post metrics, a Learning Signals card, and a
      "simulated data" banner; TopicCard shows a boosted/damped badge.
+
+## Migrations
+
+Schema changes live as numbered SQL files in `src/db/migrations/`
+(`001_baseline.sql`, `002_embeddings.sql`, …), applied in filename order by
+`npm run db:init` / `npm run db:migrate` (and automatically by
+`npm run dev`'s bootstrap). Applied versions are tracked in
+`schema_migrations`; each file runs inside a transaction, and concurrent
+runners are serialized with a Postgres advisory lock. **Never edit an
+applied migration — add a new numbered file.** Migrations run from TS source
+via tsx only; the build does not copy `.sql` into `dist/`.
 
 ## Queue States
 
