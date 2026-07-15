@@ -63,4 +63,10 @@ describe("isTrendSpike", () => {
   it("does not fire for a quiet fresh topic", () => {
     expect(isTrendSpike(2, at("2026-07-15T08:00:00Z"), at("2026-07-15T09:00:00Z"), 0.3, now)).toBe(false);
   });
+  it("rejects inverted or future timestamps (data-integrity guard)", () => {
+    // lastSeenAt before firstSeenAt — negative duration must not count as "fast"
+    expect(isTrendSpike(5, at("2026-07-15T10:00:00Z"), at("2026-07-15T08:00:00Z"), 0.9, now)).toBe(false);
+    // firstSeenAt in the future
+    expect(isTrendSpike(5, at("2026-07-16T10:00:00Z"), at("2026-07-16T11:00:00Z"), 0.9, now)).toBe(false);
+  });
 });

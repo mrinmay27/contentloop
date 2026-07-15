@@ -49,6 +49,10 @@ export function isTrendSpike(
   velocity: number,
   now: Date = new Date()
 ): boolean {
+  // Inverted or future timestamps are data-integrity violations, not spikes —
+  // a negative duration would trivially satisfy the window checks below.
+  if (lastSeenAt.getTime() < firstSeenAt.getTime()) return false;
+  if (firstSeenAt.getTime() > now.getTime()) return false;
   const window = TREND_WINDOW_HOURS * HOUR_MS;
   const accumulatedFast =
     sourceCount >= 1 + TREND_SPIKE_SOURCES &&

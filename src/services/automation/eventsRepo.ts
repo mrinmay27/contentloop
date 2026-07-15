@@ -35,7 +35,8 @@ export async function claimEvent(opts: {
   return (result.rowCount ?? 0) === 1;
 }
 
-/** Merge extra data into a claimed event's payload (e.g. record an error). */
+/** Merge extra data into a claimed event's payload (e.g. record an error).
+ *  SHALLOW top-level merge (JSONB ||) — nested keys are replaced, not merged. */
 export async function annotateEvent(kind: AutomationKind, subjectId: string, extra: Record<string, unknown>): Promise<void> {
   await query(
     `UPDATE automation_events SET payload = payload || $3::jsonb
