@@ -86,6 +86,14 @@ new Worker(
       );
       await updateTopicScore(topic.id, breakdown.score, breakdown.decision, breakdown);
     }
+
+    try {
+      const { detectTrendSpikes } = await import("../services/automation/trendAlerts.js");
+      const alerts = await detectTrendSpikes(topics);
+      if (alerts > 0) console.log(`[score] ${alerts} trend alert(s)`);
+    } catch (err: any) {
+      console.warn(`[score] trend alert detection failed: ${err?.message}`);
+    }
   },
   workerOptions
 );
