@@ -302,6 +302,15 @@ new Worker(
     const captured = await runMetricsCapture();
     if (captured > 0) console.log(`[analyze] Captured ${captured} metric snapshot(s)`);
     await runLearningStep();
+
+    // Growth automation — after core capture+learn, individually shielded.
+    try {
+      const { runReactor } = await import("../services/automation/reactor.js");
+      const fired = await runReactor();
+      if (fired > 0) console.log(`[analyze] Reactor fired ${fired} action(s)`);
+    } catch (err: any) {
+      console.warn(`[analyze] reactor failed: ${err?.message}`);
+    }
   },
   { connection, concurrency: 1 } // learn step must not overlap itself
 );
