@@ -311,6 +311,14 @@ new Worker(
     } catch (err: any) {
       console.warn(`[analyze] reactor failed: ${err?.message}`);
     }
+
+    try {
+      const { runRecycler } = await import("../services/automation/recycler.js");
+      const recycled = await runRecycler();
+      if (recycled > 0) console.log(`[analyze] Recycled ${recycled} winner(s)`);
+    } catch (err: any) {
+      console.warn(`[analyze] recycler failed: ${err?.message}`);
+    }
   },
   { connection, concurrency: 1 } // learn step must not overlap itself
 );
