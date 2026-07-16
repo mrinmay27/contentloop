@@ -473,7 +473,7 @@ app.get("/api/pages/:id/learning", async (req, res, next) => {
 app.get("/api/alerts", async (req, res, next) => {
   try {
     const { listEvents } = await import("../services/automation/eventsRepo.js");
-    const limit = Math.min(100, Number(req.query.limit) || 30);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
     res.json(await listEvents(limit));
   } catch (err) { next(err); }
 });
