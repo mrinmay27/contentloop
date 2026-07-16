@@ -40,6 +40,10 @@ export const api = {
   getAnalytics: (pageId: string)       => req<any>(`/pages/${pageId}/analytics`),
   getLearning: (pageId: string)        => req<any>(`/pages/${pageId}/learning`),
 
+  // ── Growth automation: alerts / activity feed ────────────────────────────
+  getAlerts:       ()   => req<{ events: any[]; unseen: number }>(`/alerts`),
+  markAlertsSeen:  ()   => req<{ ok: boolean }>(`/alerts/seen`, { method: 'POST' }),
+
   approveContent: (id: string)         => req<{ ok: boolean }>(`/content/${id}/approve`, { method: 'POST' }),
   rejectContent: (id: string)          => req<{ ok: boolean }>(`/content/${id}/reject`, { method: 'POST' }),
   scheduleApproved: ()                 => req<{ scheduled: any[] }>('/schedule/approved', { method: 'POST' }),

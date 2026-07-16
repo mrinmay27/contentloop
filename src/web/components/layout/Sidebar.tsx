@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from '../ui/Icon';
+import { AlertsBell } from './AlertsBell';
 import type { ThemePage, NavKey } from '../../lib/types';
 
 type SidebarProps = {
@@ -74,13 +75,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div style={{ padding: '8px', borderTop: '1px solid var(--border)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px' }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>v1.0.0</span>
-        <button
-          className="btn-icon"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          title="Toggle dark mode"
-        >
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14}/>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <AlertsBell />
+          <button
+            className="btn-icon"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title="Toggle dark mode"
+          >
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14}/>
+          </button>
+        </div>
       </div>
     </div>
   </div>

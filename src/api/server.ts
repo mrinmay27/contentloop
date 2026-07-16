@@ -469,6 +469,23 @@ app.get("/api/pages/:id/learning", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Growth automation: activity feed (cross-post/fast-track/recycle/trend_alert)
+app.get("/api/alerts", async (req, res, next) => {
+  try {
+    const { listEvents } = await import("../services/automation/eventsRepo.js");
+    const limit = Math.min(100, Number(req.query.limit) || 30);
+    res.json(await listEvents(limit));
+  } catch (err) { next(err); }
+});
+
+app.post("/api/alerts/seen", async (_req, res, next) => {
+  try {
+    const { markAllSeen } = await import("../services/automation/eventsRepo.js");
+    await markAllSeen();
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 app.get("/api/topics", async (req, res, next) => {
   try {
     const nicheId = req.query.nicheId?.toString();
