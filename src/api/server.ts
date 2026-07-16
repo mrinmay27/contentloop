@@ -32,7 +32,7 @@ import * as canva from "../services/canva.js";
 import * as instagram from "../services/instagram.js";
 import { configStore, CONFIG_META, type ConfigKey } from "../config/configStore.js";
 import { generateImage as genImage } from "../config/generationProviders.js";
-import { llmConfigStore, LLM_PROVIDERS } from "../config/llmConfigStore.js";
+import { llmConfigStore, LLM_PROVIDERS, resolveBaseUrl } from "../config/llmConfigStore.js";
 import { probeProvider, loadCapabilities } from "../config/modelDiscovery.js";
 import { saveBrandImage, saveContentImage, UPLOADS_DIR } from "../services/imageStorage.js";
 import { listVoices, previewVoice, VOICE_PRESETS } from "../services/tts.js";
@@ -1103,7 +1103,7 @@ app.post("/api/generate/reel-script", async (req, res, next) => {
     if (!cfg) return void res.status(503).json({ error: 'no_llm', message: 'No LLM configured — use ChatGPT/Gemini/Claude browser option' });
 
     const { default: OpenAI } = await import('openai');
-    const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl });
+    const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: resolveBaseUrl(cfg) });
 
     const bare         = handle?.replace(/^@+/, '');
     const nicheDisplay = (niche ?? 'content').replace(/^@+/, '');
@@ -1373,7 +1373,7 @@ app.post("/api/topics/extract-url", async (req, res, next) => {
     if (cfg && article.bodyText.length > 200) {
       try {
         const { OpenAI } = await import('openai');
-        const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl ?? undefined });
+        const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: resolveBaseUrl(cfg) });
         const resp = await client.chat.completions.create({
           model: cfg.model,
           max_tokens: 300,

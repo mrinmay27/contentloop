@@ -83,6 +83,24 @@
    - **UI:** AnalyticsView shows per-post metrics, a Learning Signals card, and a
      "simulated data" banner; TopicCard shows a boosted/damped badge.
 
+10. Growth automation *(Sprint C)*
+   - **Reactor** (hourly, after metrics capture): a post whose 1h engagement
+     beats its niche average ×1.5 (min 3 in-mode samples) triggers a
+     cross-post to the niche's sibling page (platform-compatible only) and
+     fast-tracks the topic's qa_passed sibling drafts (schedule-then-approve —
+     ordering prevents a double-schedule race with the schedule worker).
+   - **Evergreen recycler** (daily): published winners ≥30 days old with 24h
+     engagement ≥1.5× niche average are re-queued with an LLM-regenerated
+     caption (media reused; ≤3 LLM attempts/run; skips silently without LLM).
+   - **Trend alerts**: topics accumulating 3+ sources within their first 6
+     hours (or velocity ≥0.8 while fresh) raise a one-time alert.
+   - **`automation_events`** is the single ledger: claim-once idempotency
+     (UNIQUE(kind, subject)), audit log, and the alerts feed behind the
+     sidebar bell (unseen badge, mark-seen on open).
+   - Niche averages follow the same simulated→real source discipline as
+     learning; every automation step is error-isolated and runs after the
+     core capture/learn/score paths.
+
 ## Migrations
 
 Schema changes live as numbered SQL files in `src/db/migrations/`
@@ -123,7 +141,9 @@ from `performance_metrics` rather than a topic state.)
 |--------|------|-------------|
 | GET | `/api/pages/:id/analytics` | Per-post metrics (1h/24h/7d) + type breakdown + simulated flag |
 | GET | `/api/pages/:id/learning` | Learned keyword/format signals + mode (real/simulated) |
-| POST | `/api/jobs/analyze` | Run metrics capture + learning fold manually |
+| POST | `/api/jobs/analyze` | Run metrics capture + learning fold + automation manually |
+| GET | `/api/alerts` | Automation activity feed + unseen count |
+| POST | `/api/alerts/seen` | Mark all feed events seen |
 
 ## MVP Limits
 

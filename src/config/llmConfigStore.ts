@@ -257,3 +257,13 @@ class LLMConfigStore {
 }
 
 export const llmConfigStore = new LLMConfigStore();
+
+/** Resolve the effective OpenAI-compatible base URL for a config.
+ *  `cfg.baseUrl` is a per-config OVERRIDE (custom providers); the canonical
+ *  URL lives in the LLM_PROVIDERS catalog. Passing `cfg.baseUrl` directly to
+ *  the OpenAI client silently defaults non-OpenAI providers to api.openai.com. */
+export function resolveBaseUrl(cfg: Pick<LLMConfig, "provider" | "baseUrl">): string | undefined {
+  if (cfg.baseUrl) return cfg.baseUrl;
+  const catalog = LLM_PROVIDERS[cfg.provider as ProviderKey];
+  return catalog?.baseUrl || undefined;
+}

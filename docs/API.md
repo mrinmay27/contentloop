@@ -38,6 +38,14 @@ Per-post metrics (1h/24h/7d capture points) plus content-type breakdown and a `s
 
 Learned keyword/format signals for the page's niche, plus `mode` (`real` | `simulated`).
 
+`GET /alerts`
+
+Automation activity feed (cross-posts, fast-tracks, recycles, trend alerts) plus unseen count.
+
+`POST /alerts/seen`
+
+Marks all feed events as seen.
+
 ## Approval
 
 `POST /content/:id/approve`

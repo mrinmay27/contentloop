@@ -1,6 +1,6 @@
 import { query } from "../../db/pool.js";
 import { isRecyclable } from "../../domain/automation.js";
-import { llmConfigStore } from "../../config/llmConfigStore.js";
+import { llmConfigStore, resolveBaseUrl } from "../../config/llmConfigStore.js";
 import { nextAvailableSlot } from "../scheduler.js";
 import { formatCaption, type PublishPlatform } from "../platformFormatter.js";
 import { listScheduledTimesForPage, scheduleContentBatch } from "../repositories.js";
@@ -85,7 +85,7 @@ export async function regenerateCaption(originalCaption: string, hook: string, n
   if (!cfg) return null;
   try {
     const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl ?? undefined });
+    const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: resolveBaseUrl(cfg) });
     const resp = await client.chat.completions.create({
       model: cfg.model,
       messages: [{
