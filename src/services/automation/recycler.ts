@@ -6,7 +6,9 @@ import { formatCaption, type PublishPlatform } from "../platformFormatter.js";
 import { listScheduledTimesForPage, scheduleContentBatch } from "../repositories.js";
 import { annotateEvent, claimEvent, recycleRanRecently } from "./eventsRepo.js";
 
-const MAX_RECYCLES_PER_RUN = 3;
+/** Cap on caption-regeneration ATTEMPTS per run (not successes) — the spec's
+ *  ≤3/day intent is per-attempt LLM cost control. */
+const MAX_RECYCLE_ATTEMPTS_PER_RUN = 3;
 
 interface RecycleCandidate {
   publish_job_id: string;
@@ -22,15 +24,34 @@ interface RecycleCandidate {
   payload: any;
 }
 
+/** Intentional indefinite re-recycle: each recycle creates a NEW publish_job,
+ *  and once that job is published its own id becomes a fresh recycle subject —
+ *  so a perennial winner becomes eligible again ~30 days after each recycle,
+ *  gated by continued 1.5x-average 24h performance. By design, not a loop.
+ *
+ *  Source discipline (spec §2, same as the learning loop): per niche, use real
+ *  ('instagram') rows exclusively once any exist, else simulated — never mixed.
+ *  Both the average AND the candidate's own snapshot must be in-mode. */
 async function listRecycleCandidates(): Promise<RecycleCandidate[]> {
   const r = await query<Omit<RecycleCandidate, "published_at"> & { published_at: string | Date }>(
     `
-    WITH niche_avg AS (
+    WITH niche_mode AS (
+      SELECT t.niche_id,
+             CASE WHEN bool_or(pm.source = 'instagram') THEN 'instagram' ELSE 'simulated' END AS mode
+      FROM performance_metrics pm
+      JOIN publish_jobs pj ON pj.id = pm.publish_job_id
+      JOIN content_items c ON c.id = pj.content_item_id
+      JOIN topics t ON t.id = c.topic_id
+      WHERE pm.capture_point = '24h'
+      GROUP BY t.niche_id
+    ),
+    niche_avg AS (
       SELECT t.niche_id, avg(pm.engagement_rate)::float8 AS avg_24h, count(*)::int AS samples
       FROM performance_metrics pm
       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
       JOIN content_items c ON c.id = pj.content_item_id
       JOIN topics t ON t.id = c.topic_id
+      JOIN niche_mode nm ON nm.niche_id = t.niche_id AND pm.source = nm.mode
       WHERE pm.capture_point = '24h'
       GROUP BY t.niche_id
     )
@@ -43,6 +64,7 @@ async function listRecycleCandidates(): Promise<RecycleCandidate[]> {
     JOIN content_items c ON c.id = pj.content_item_id
     JOIN topics t ON t.id = c.topic_id
     JOIN niche_avg na ON na.niche_id = t.niche_id
+    JOIN niche_mode nm ON nm.niche_id = t.niche_id AND pm.source = nm.mode
     WHERE pm.capture_point = '24h'
       AND pj.status = 'published'
       AND pj.published_at <= now() - interval '30 days'
@@ -94,9 +116,10 @@ export async function runRecycler(now: Date = new Date()): Promise<number> {
   const candidates = await listRecycleCandidates();
   const nicheNames = new Map<string, string>();
   let recycled = 0;
+  let attempts = 0;
 
   for (const cand of candidates) {
-    if (recycled >= MAX_RECYCLES_PER_RUN) break;
+    if (attempts >= MAX_RECYCLE_ATTEMPTS_PER_RUN) break;
     if (!isRecyclable(cand.published_at, cand.engagement_rate, cand.niche_avg, cand.sample_size, now)) continue;
 
     const claimed = await claimEvent({
@@ -113,6 +136,7 @@ export async function runRecycler(now: Date = new Date()): Promise<number> {
         nicheNames.set(cand.niche_id, n.rows[0]?.name ?? "content");
       }
       const payload = cand.payload ?? {};
+      attempts += 1; // count every LLM attempt, success or not — cost control
       const fresh = await regenerateCaption(payload.caption ?? "", payload.hook ?? "", nicheNames.get(cand.niche_id)!);
       if (!fresh) {
         await annotateEvent("recycle", cand.publish_job_id, { skipped: "caption regeneration unavailable" });
