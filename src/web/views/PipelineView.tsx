@@ -154,12 +154,13 @@ export const PipelineView: React.FC<Props> = ({ topics, stats, busy, page, onOpe
         </div>
       )}
 
-      <div className="view-area">
-        <div style={{ marginBottom: 20 }}>
-          <PipelineBar activeStep="generate" setActiveStep={() => {}}
-            counts={{ ingest: stats.topics, score: stats.selected_topics,
-              generate: stats.qa_ready, review: stats.approved, schedule: stats.scheduled }}/>
-        </div>
+      {/* Stage strip pinned; only the topic list below scrolls. */}
+      <div className="view-area" style={{ flex: 'none', overflowY: 'visible', paddingBottom: 0 }}>
+        <PipelineBar activeStep="generate" setActiveStep={() => {}}
+          counts={{ ingest: stats.topics, score: stats.selected_topics,
+            generate: stats.qa_ready, review: stats.approved, schedule: stats.scheduled }}/>
+      </div>
+      <div className="view-area" style={{ paddingTop: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} className="stagger">
           {local.map(topic => (
             <TopicCard key={topic.id} topic={topic} pageId={page.id}
