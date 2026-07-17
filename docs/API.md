@@ -46,6 +46,12 @@ Automation activity feed (cross-posts, fast-tracks, recycles, trend alerts) plus
 
 Marks all feed events as seen.
 
+`GET /inbox`
+
+Aggregated inbox payload: needs-you items (drafts + failed publishes), activity with outcome chips, since-yesterday digest, next scheduled posts.
+
+`PATCH /publish-jobs/:id` also accepts `{"action":"dismiss"}` for failed jobs (404 unknown id, 409 non-failed status).
+
 ## Approval
 
 `POST /content/:id/approve`

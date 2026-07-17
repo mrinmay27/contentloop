@@ -101,6 +101,18 @@
      learning; every automation step is error-isolated and runs after the
      core capture/learn/score paths.
 
+11. UI — inbox-first *(Sprint D-UI)*
+   - Home screen is a cross-page **Inbox**: a clearable "Needs you" lane
+     (drafts awaiting approval with the real platform-formatted preview,
+     failed publishes with Retry/Dismiss) above an "Activity" lane
+     (automation events + posted items with 24h-outcome chips), a
+     since-yesterday digest strip, and next-scheduled posts. Keyboard:
+     j/k focus, A approve, R reject. Opening the inbox marks alerts seen.
+   - Navigation: Inbox (home) · Calendar · Performance · Topics · Pipeline ·
+     Settings. The old dashboard/pipeline remain as power views; score rings
+     are colored by decision thresholds (≥50 green / 35–49 amber / <35 red).
+   - Backed by one aggregate endpoint (`GET /api/inbox`).
+
 ## Migrations
 
 Schema changes live as numbered SQL files in `src/db/migrations/`
@@ -144,6 +156,7 @@ from `performance_metrics` rather than a topic state.)
 | POST | `/api/jobs/analyze` | Run metrics capture + learning fold + automation manually |
 | GET | `/api/alerts` | Automation activity feed + unseen count |
 | POST | `/api/alerts/seen` | Mark all feed events seen |
+| GET | `/api/inbox` | Aggregated inbox: needs-you, activity, digest, next scheduled |
 
 ## MVP Limits
 
