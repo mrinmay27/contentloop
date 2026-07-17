@@ -4,7 +4,6 @@ import { Icon } from '../components/ui/Icon';
 import { MetricCards } from '../components/dashboard/MetricCards';
 import { PipelineBar } from '../components/dashboard/PipelineBar';
 import { TopicCard } from '../components/dashboard/TopicCard';
-import { TopicSourcePanel } from '../components/dashboard/TopicSourcePanel';
 import { ConfirmModal } from '../components/modals/ConfirmModal';
 import { api } from '../lib/api';
 import type { SuggestedFormat, ThemePage, Topic, Stats } from '../lib/types';
@@ -361,8 +360,7 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
 
   return (
     <>
-    <div style={{ display:'flex', flex:1, overflow:'hidden', minHeight:0 }}>
-      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minHeight:0 }}>
 
         {/* Topbar */}
         <div className="topbar">
@@ -600,9 +598,6 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
             }
           </div>
         </div>
-      </div>
-
-      <TopicSourcePanel/>
     </div>
 
     {pendingDelete && (

@@ -4,7 +4,9 @@ export const ScoreRing: React.FC<{ score: number; size?: number }> = ({ score, s
   const r = (size - 6) / 2;
   const circ = 2 * Math.PI * r;
   const fill = (score / 100) * circ;
-  const color = score >= 85 ? 'var(--green)' : score >= 70 ? 'var(--accent)' : 'var(--red)';
+  // Mirrors topicDecision thresholds (src/domain/scoring.ts: 0.50/0.35 on a 0-1
+  // scale == 50/35 here): selected >= 50 green, backup 35-49 amber, discard < 35 red.
+  const color = score >= 50 ? 'var(--green)' : score >= 35 ? 'var(--amber, #f59e0b)' : 'var(--red)';
   return (
     <svg width={size} height={size} style={{ flexShrink: 0 }}>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth="3"/>
