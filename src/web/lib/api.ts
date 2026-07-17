@@ -18,7 +18,17 @@ export const api = {
     req<Topic[]>(`/topics${nicheId ? `?nicheId=${nicheId}` : ''}`),
   getContent: (status?: string)        => req<ContentItem[]>(`/content${status ? `?status=${status}` : ''}`),
   getNiches: ()                        => req<any[]>('/niches'),
+  createNiche: (body: any) => req<any>('/niches', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }),
   getPages: (nicheId?: string)         => req<any[]>(`/pages${nicheId ? `?nicheId=${nicheId}` : ''}`),
+  createPage: (body: any) => req<any>('/pages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }),
   getHealth: ()                        => req<any>('/health'),
   getSettings: ()                      => req<any>('/settings'),
   getConfig: ()                        => req<any>('/config'),

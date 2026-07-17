@@ -26,6 +26,45 @@ export async function getPage(id: string): Promise<Page | null> {
   return result.rows[0] ? mapPage(result.rows[0]) : null;
 }
 
+/** Sprint U1 Task 5: user-defined niches (the wizard's "Custom niche" path). */
+export async function createNiche(opts: {
+  name: string; keywords: string[]; monetizationKeywords: string[];
+  negativeKeywords: string[]; targetPersona: string;
+}): Promise<Niche> {
+  const result = await query(
+    `INSERT INTO niches (name, keywords, monetization_keywords, negative_keywords, target_persona)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [opts.name.trim(), opts.keywords, opts.monetizationKeywords, opts.negativeKeywords, opts.targetPersona.trim()]
+  );
+  return mapNiche(result.rows[0]);
+}
+
+/**
+ * Sprint U1 Task 5: creates a Theme Page for a niche. There was no
+ * POST /api/pages route before this sprint — pages were seed-only — so this
+ * repository fn + its route are a necessary addition beyond the plan's
+ * literal file list (see report deviations). `platform`/`handle` aren't
+ * collected by the wizard yet, so sane defaults are applied; `handle` gets a
+ * random suffix to avoid colliding with the (niche_id, platform, handle)
+ * unique constraint.
+ */
+export async function createPage(opts: {
+  nicheId: string; name: string;
+  platform?: "instagram" | "youtube_shorts";
+  handle?: string;
+  brand?: Record<string, unknown>;
+}): Promise<Page> {
+  const platform = opts.platform ?? "instagram";
+  const slug = opts.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "page";
+  const handle = opts.handle?.trim() || `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+  const result = await query(
+    `INSERT INTO pages (niche_id, name, platform, handle, brand)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [opts.nicheId, opts.name.trim(), platform, handle, JSON.stringify(opts.brand ?? {})]
+  );
+  return mapPage(result.rows[0]);
+}
+
 export async function upsertRawTrend(nicheId: string, rawTrend: RawTrend): Promise<Topic> {
   const title = rawTrend.title.trim();
   const keywords = normalizeKeywords(rawTrend.keywords);

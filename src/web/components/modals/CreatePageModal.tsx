@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Icon } from '../ui/Icon';
+import { api } from '../../lib/api';
 import type { ThemePage } from '../../lib/types';
 
 const NICHES = [
@@ -24,9 +25,24 @@ const COLORS = ['#F5A623','#10B981','#6366F1','#EF4444','#0EA5E9','#EC4899','#8B
 
 const STEP_LABELS = ['Niche','Keywords','Name','Branding'];
 
-type Props = { onClose:()=>void; onCreate:(page: Omit<ThemePage,'id'>)=>void; };
+// Sprint U1 Task 5: sentinel id for the "+ Custom niche" card — routes the
+// wizard to api.createNiche()/api.createPage() instead of the static NICHES
+// list, which stays untouched for the standard path.
+const CUSTOM_NICHE_ID = '__custom__';
 
-export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate }) => {
+const parseCsv = (raw: string): string[] =>
+  [...new Set(raw.split(',').map(s => s.trim()).filter(Boolean))];
+
+type Props = {
+  onClose: () => void;
+  onCreate: (page: Omit<ThemePage, 'id'> & { id?: string }) => void;
+  /** Sprint U1 Task 5: surfaces a short-lived notice banner in App (e.g.
+   *  "sources are being generated") — App has no toast system today, so this
+   *  is the smallest hook that lets the modal report async follow-up work. */
+  onNotice?: (message: string) => void;
+};
+
+export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }) => {
   const [step, setStep]                   = useState(1);
   const [selectedNiche, setSelectedNiche] = useState<string|null>(null);
   const [nicheSearch, setNicheSearch]     = useState('');
@@ -34,13 +50,77 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate }) => {
   const [selectedName, setSelectedName]   = useState<string|null>(null);
   const [primaryColor, setPrimaryColor]   = useState('#F5A623');
 
-  const filteredNiches = NICHES.filter(n => n.name.toLowerCase().includes(nicheSearch.toLowerCase()));
-  const canNext = (step===1 && !!selectedNiche) || (step===2 && keywords.length>0) || (step===3 && !!selectedName) || step===4;
+  // Custom niche fields (Sprint U1 Task 5) — only used when
+  // selectedNiche === CUSTOM_NICHE_ID.
+  const [customName, setCustomName]             = useState('');
+  const [customKeywordsRaw, setCustomKeywordsRaw] = useState('');
+  const [customPersona, setCustomPersona]         = useState('');
+  const [customMonetizationRaw, setCustomMonetizationRaw] = useState('');
+  const [creating, setCreating]     = useState(false);
+  const [createError, setCreateError] = useState<string|null>(null);
 
-  const handleCreate = () => {
-    const niche = NICHES.find(n => n.id===selectedNiche);
-    onCreate({ name: selectedName!, niche: niche?.name ?? 'Custom', nicheId: niche?.id ?? '', accent: primaryColor, status:'active', posts:0, followers:'0' });
-    onClose();
+  const filteredNiches = NICHES.filter(n => n.name.toLowerCase().includes(nicheSearch.toLowerCase()));
+  const isCustom = selectedNiche === CUSTOM_NICHE_ID;
+  const customKeywordsList = parseCsv(customKeywordsRaw);
+  const customValid = customName.trim().length >= 2 && customKeywordsList.length >= 2 && customPersona.trim().length >= 3;
+
+  const canNext =
+    (step===1 && (isCustom ? customValid : !!selectedNiche)) ||
+    (step===2 && keywords.length>0) ||
+    (step===3 && !!selectedName) ||
+    step===4;
+
+  // Moving past the custom-niche step seeds the shared `keywords` state from
+  // the comma-separated input so Step 2's existing add/remove-tag UI works
+  // unchanged for both flows.
+  const goNext = () => {
+    if (step === 1 && isCustom) setKeywords(customKeywordsList);
+    setStep(s => s + 1);
+  };
+
+  const handleCreate = async () => {
+    if (!isCustom) {
+      const niche = NICHES.find(n => n.id===selectedNiche);
+      onCreate({ name: selectedName!, niche: niche?.name ?? 'Custom', nicheId: niche?.id ?? '', accent: primaryColor, status:'active', posts:0, followers:'0' });
+      onClose();
+      return;
+    }
+
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const { niche } = await api.createNiche({
+        name: customName,
+        keywords,
+        monetizationKeywords: parseCsv(customMonetizationRaw),
+        negativeKeywords: [],
+        targetPersona: customPersona,
+      });
+      const { page } = await api.createPage({
+        nicheId: niche.id,
+        name: selectedName!,
+        brand: { accent: primaryColor },
+      });
+      // Fire-and-forget — the Sources panel shows progress/results; a failure
+      // here shouldn't block the page from being created.
+      api.regenerateSources(page.id).catch(() => {});
+      onNotice?.('Sources are being generated — review them in Settings → Sources.');
+      onCreate({
+        id: page.id,
+        name: page.name,
+        niche: niche.name,
+        nicheId: niche.id,
+        accent: primaryColor,
+        status: 'active',
+        posts: 0,
+        followers: '0',
+      });
+      onClose();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create custom niche');
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -105,7 +185,49 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate }) => {
                     </div>
                   </div>
                 ))}
+
+                {/* Sprint U1 Task 5: custom-niche path — creates a real niche
+                    (POST /api/niches) instead of picking from the static list. */}
+                <div key={CUSTOM_NICHE_ID}
+                  className={`niche-card ${isCustom ? 'selected' : ''}`}
+                  style={{ borderStyle: 'dashed' }}
+                  onClick={() => setSelectedNiche(CUSTOM_NICHE_ID)}>
+                  <div className="niche-card-name">
+                    <span style={{ fontSize:16 }}>➕</span>Custom niche
+                    {isCustom && <span style={{ marginLeft:'auto' }}><Icon name="check" size={12}/></span>}
+                  </div>
+                  <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>
+                    Define your own niche — name, keywords, persona.
+                  </div>
+                </div>
               </div>
+
+              {isCustom && (
+                <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:10,
+                  padding:14, background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)',
+                  border:'1px solid var(--border)' }}>
+                  <div>
+                    <div className="section-label" style={{ marginBottom:6 }}>Niche name</div>
+                    <input type="text" placeholder="e.g. AI for Nurses" style={{ width:'100%' }}
+                      value={customName} onChange={e => setCustomName(e.target.value)}/>
+                  </div>
+                  <div>
+                    <div className="section-label" style={{ marginBottom:6 }}>Keywords (comma-separated, 2+)</div>
+                    <input type="text" placeholder="e.g. nursing, patient care, clinical AI" style={{ width:'100%' }}
+                      value={customKeywordsRaw} onChange={e => setCustomKeywordsRaw(e.target.value)}/>
+                  </div>
+                  <div>
+                    <div className="section-label" style={{ marginBottom:6 }}>Target persona</div>
+                    <input type="text" placeholder="e.g. Working nurses curious about AI tools" style={{ width:'100%' }}
+                      value={customPersona} onChange={e => setCustomPersona(e.target.value)}/>
+                  </div>
+                  <div>
+                    <div className="section-label" style={{ marginBottom:6 }}>Monetization keywords (optional)</div>
+                    <input type="text" placeholder="e.g. course, certification, software" style={{ width:'100%' }}
+                      value={customMonetizationRaw} onChange={e => setCustomMonetizationRaw(e.target.value)}/>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -114,7 +236,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate }) => {
             <div>
               <div style={{ marginBottom:12, padding:'10px 14px', background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)' }}>
                 <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:4 }}>Auto-generated for</div>
-                <div style={{ fontWeight:600 }}>{NICHES.find(n=>n.id===selectedNiche)?.name}</div>
+                <div style={{ fontWeight:600 }}>{isCustom ? customName : NICHES.find(n=>n.id===selectedNiche)?.name}</div>
               </div>
               <div className="section-label" style={{ marginBottom:8 }}>Keywords — click to remove</div>
               <div className="keyword-tags" style={{ marginBottom:16 }}>
@@ -192,14 +314,18 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate }) => {
           )}
         </div>
 
+        {createError && (
+          <div style={{ padding:'0 24px', color:'var(--red)', fontSize:12 }}>{createError}</div>
+        )}
+
         <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={() => step>1 ? setStep(s=>s-1) : onClose()}>
+          <button className="btn btn-ghost" onClick={() => step>1 ? setStep(s=>s-1) : onClose()} disabled={creating}>
             {step>1 ? '← Back' : 'Cancel'}
           </button>
-          <button className="btn btn-primary" disabled={!canNext}
-            style={{ opacity: canNext ? 1 : 0.4 }}
-            onClick={() => step<4 ? setStep(s=>s+1) : handleCreate()}>
-            {step<4 ? 'Continue →' : '🚀 Create Theme Page'}
+          <button className="btn btn-primary" disabled={!canNext || creating}
+            style={{ opacity: (canNext && !creating) ? 1 : 0.4 }}
+            onClick={() => step<4 ? goNext() : handleCreate()}>
+            {creating ? 'Creating…' : step<4 ? 'Continue →' : '🚀 Create Theme Page'}
           </button>
         </div>
       </div>

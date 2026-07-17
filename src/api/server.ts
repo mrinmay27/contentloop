@@ -16,6 +16,8 @@ import {
   listContentItems,
   listNiches,
   listPages,
+  createNiche,
+  createPage,
   listScheduledPostsForMonth,
   listScheduledTimesForPage,
   listTopics,
@@ -292,11 +294,58 @@ app.get("/api/niches", async (_req, res, next) => {
   }
 });
 
+// Sprint U1 Task 5: custom-niche creation (wizard "Custom niche" path).
+app.post("/api/niches", async (req, res, next) => {
+  try {
+    const body = z.object({
+      name: z.string().min(2),
+      keywords: z.array(z.string().min(1)).min(2),
+      monetizationKeywords: z.array(z.string()).default([]),
+      negativeKeywords: z.array(z.string()).default([]),
+      targetPersona: z.string().min(3),
+    }).parse(req.body);
+    const { normalizeKeywords } = await import("../domain/keywords.js");
+    const niche = await createNiche({
+      ...body,
+      keywords: normalizeKeywords(body.keywords),
+      monetizationKeywords: normalizeKeywords(body.monetizationKeywords),
+      negativeKeywords: normalizeKeywords(body.negativeKeywords),
+    });
+    res.json({ ok: true, niche });
+  } catch (err) {
+    // The generic error middleware always answers 500 (no ZodError special-
+    // casing exists in this codebase yet) — this route explicitly maps
+    // validation failures to 400 per the plan's live-check contract.
+    if (err instanceof z.ZodError) return void res.status(400).json({ error: err.issues });
+    next(err);
+  }
+});
+
 app.get("/api/pages", async (req, res, next) => {
   try {
     res.json(await listPages(req.query.nicheId?.toString()));
   } catch (error) {
     next(error);
+  }
+});
+
+// Sprint U1 Task 5: no POST /api/pages existed before this sprint (pages were
+// seed-only); added so the custom-niche wizard path can create a real page
+// and fire regenerateSources against a real id.
+app.post("/api/pages", async (req, res, next) => {
+  try {
+    const body = z.object({
+      nicheId: z.string().uuid(),
+      name: z.string().min(2),
+      platform: z.enum(["instagram", "youtube_shorts"]).optional(),
+      handle: z.string().optional(),
+      brand: z.record(z.string(), z.unknown()).optional(),
+    }).parse(req.body);
+    const page = await createPage(body);
+    res.json({ ok: true, page });
+  } catch (err) {
+    if (err instanceof z.ZodError) return void res.status(400).json({ error: err.issues });
+    next(err);
   }
 });
 

@@ -47,6 +47,7 @@ function App() {
   const [error, setError]             = useState<string|null>(null);
   const [showCreate, setShowCreate]   = useState(false);
   const [showAddTopic, setShowAddTopic] = useState(false);
+  const [notice, setNotice]           = useState<string|null>(null);
 
   // Load real pages from API once
   useEffect(() => {
@@ -164,6 +165,18 @@ function App() {
         </div>
       )}
 
+      {/* Notice toast (Sprint U1 Task 5 — e.g. "sources are being generated") */}
+      {notice && (
+        <div style={{ position:'fixed', top: error ? 60 : 16, right:16, zIndex:9999,
+          background:'var(--green)', color:'#fff', padding:'10px 16px',
+          borderRadius:'var(--radius-sm)', fontSize:13, boxShadow:'var(--shadow-lg)',
+          display:'flex', gap:8, alignItems:'center' }}>
+          {notice}
+          <button onClick={() => setNotice(null)}
+            style={{ background:'none', border:'none', color:'#fff', cursor:'pointer', padding:0, fontSize:14 }}>✕</button>
+        </div>
+      )}
+
       <div id="app-shell" style={{ display:'flex', flex:1, overflow:'hidden' }}>
         <Sidebar
           activeNav={activeNav} setActiveNav={nav => { closeEditor(); setActiveNav(nav); }}
@@ -206,11 +219,15 @@ function App() {
         <CreatePageModal
           onClose={() => setShowCreate(false)}
           onCreate={newPage => {
-            const id = 'tp' + (pages.length + 1);
+            // Sprint U1 Task 5: the custom-niche path creates a real DB page
+            // and passes its real id through; the standard (static NICHES)
+            // path stays mocked and gets a client-only fake id, as before.
+            const id = newPage.id ?? ('tp' + (pages.length + 1));
             const full: ThemePage = { ...newPage, id };
             setPages(p => [...p, full]);
             setActivePage(id);
           }}
+          onNotice={msg => { setNotice(msg); setTimeout(() => setNotice(null), 6000); }}
         />
       )}
 
