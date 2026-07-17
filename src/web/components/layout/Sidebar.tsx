@@ -1,4 +1,5 @@
 import React from 'react';
+import { Inbox } from 'lucide-react';
 import { Icon } from '../ui/Icon';
 import { AlertsBell } from './AlertsBell';
 import type { ThemePage, NavKey } from '../../lib/types';
@@ -15,11 +16,12 @@ type SidebarProps = {
 };
 
 const NAV_ITEMS: { key: NavKey; icon: any; label: string; kbd: string }[] = [
-  { key: 'dashboard', icon: 'dashboard', label: 'Dashboard', kbd: '⌘1' },
-  { key: 'pipeline',  icon: 'pipeline',  label: 'Pipeline',  kbd: '⌘2' },
-  { key: 'scheduler', icon: 'scheduler', label: 'Scheduler', kbd: '⌘3' },
-  { key: 'analytics', icon: 'analytics', label: 'Analytics', kbd: '⌘4' },
-  { key: 'settings',  icon: 'settings',  label: 'Settings',  kbd: '⌘,' },
+  { key: 'inbox',     icon: 'inbox',     label: 'Inbox',       kbd: '⌘1' },
+  { key: 'scheduler', icon: 'scheduler', label: 'Calendar',    kbd: '⌘3' },
+  { key: 'analytics', icon: 'analytics', label: 'Performance', kbd: '⌘4' },
+  { key: 'dashboard', icon: 'dashboard', label: 'Topics',      kbd: '⌘2' },
+  { key: 'pipeline',  icon: 'pipeline',  label: 'Pipeline',    kbd: '⌘5' },
+  { key: 'settings',  icon: 'settings',  label: 'Settings',    kbd: '⌘,' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,7 +43,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className={`nav-item ${activeNav === item.key ? 'active' : ''}`}
           onClick={() => setActiveNav(item.key)}
         >
-          <span className="nav-item-icon"><Icon name={item.icon} size={14}/></span>
+          <span className="nav-item-icon">
+            {item.key === 'inbox' ? <Inbox size={14}/> : <Icon name={item.icon} size={14}/>}
+          </span>
           <span>{item.label}</span>
           <span className="nav-kbd"><kbd className="kbd">{item.kbd}</kbd></span>
         </div>

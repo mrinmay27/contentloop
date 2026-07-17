@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
 import './styles/globals.css';
 import { Sidebar } from './components/layout/Sidebar';
+import { InboxView }     from './views/InboxView';
 import { DashboardView } from './views/DashboardView';
 import { PipelineView }  from './views/PipelineView';
 import { SchedulerView } from './views/SchedulerView';
@@ -10,6 +11,7 @@ import { AnalyticsView } from './views/AnalyticsView';
 import { SettingsView }  from './views/SettingsView';
 import { ContentEditor }   from './components/editor/ContentEditor';
 import { CreatePageModal } from './components/modals/CreatePageModal';
+import { AddTopicDrawer }  from './components/pipeline/AddTopicDrawer';
 import { api } from './lib/api';
 import type { NavKey, ThemePage, Topic, Stats } from './lib/types';
 
@@ -36,7 +38,7 @@ function mapApiPage(p: any): ThemePage {
 
 function App() {
   const [theme, setTheme]             = useState<'light'|'dark'>('dark');
-  const [activeNav, setActiveNav]     = useState<NavKey>('dashboard');
+  const [activeNav, setActiveNav]     = useState<NavKey>('inbox');
   const [pages, setPages]             = useState<ThemePage[]>([]);
   const [activePage, setActivePage]   = useState('');
   const [topics, setTopics]           = useState<Topic[]>([]);
@@ -44,6 +46,7 @@ function App() {
   const [busy, setBusy]               = useState<string|null>(null);
   const [error, setError]             = useState<string|null>(null);
   const [showCreate, setShowCreate]   = useState(false);
+  const [showAddTopic, setShowAddTopic] = useState(false);
 
   // Load real pages from API once
   useEffect(() => {
@@ -75,7 +78,7 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && editingTopic) { closeEditor(); return; }
       if (!(e.metaKey || e.ctrlKey)) return;
-      const map: Record<string, NavKey> = { '1':'dashboard','2':'pipeline','3':'scheduler','4':'analytics' };
+      const map: Record<string, NavKey> = { '1':'inbox','2':'dashboard','3':'scheduler','4':'analytics','5':'pipeline' };
       if (map[e.key]) { e.preventDefault(); closeEditor(); setActiveNav(map[e.key]); }
       if (e.key===',') { e.preventDefault(); closeEditor(); setActiveNav('settings'); }
     };
@@ -180,6 +183,9 @@ function App() {
             />
           ) : (
             <>
+              {activeNav==='inbox' && (
+                <InboxView onOpenEditor={openEditor} onAddTopic={() => setShowAddTopic(true)} />
+              )}
               {activeNav==='dashboard' && (
                 <DashboardView page={currentPage} topics={topics} stats={stats}
                   busy={busy} onOpenEditor={openEditor} onRunJob={runJob}/>
@@ -205,6 +211,13 @@ function App() {
             setPages(p => [...p, full]);
             setActivePage(id);
           }}
+        />
+      )}
+
+      {showAddTopic && (
+        <AddTopicDrawer
+          onCreated={() => setShowAddTopic(false)}
+          onClose={() => setShowAddTopic(false)}
         />
       )}
     </>
