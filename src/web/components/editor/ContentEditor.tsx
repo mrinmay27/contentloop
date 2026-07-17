@@ -48,6 +48,7 @@ type Props = {
 };
 
 const NAV_LABELS: Record<NavKey, string> = {
+  inbox:     'Inbox',
   dashboard: 'Dashboard',
   pipeline:  'Pipeline',
   scheduler: 'Scheduler',

@@ -224,6 +224,18 @@ export const api = {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'publish-now' }),
     }),
+  // Inbox: retry/dismiss a failed publish job — same PATCH-with-action
+  // pattern as cancelPublishJob/reschedulePublishJob/publishJobNow above.
+  retryPublishJob: (jobId: string) =>
+    req<{ ok: boolean }>(`/publish-jobs/${jobId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'publish-now' }),
+    }),
+  dismissPublishJob: (jobId: string) =>
+    req<{ ok: boolean }>(`/publish-jobs/${jobId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dismiss' }),
+    }),
 
   // ── Danger zone ───────────────────────────────────────────────────────────
   resetPipeline: () => req<{ ok: boolean }>('/reset/pipeline', { method: 'POST' }),

@@ -1,6 +1,6 @@
 // Shared types — aligns API data shapes with UI models
 
-export type NavKey = 'dashboard' | 'pipeline' | 'scheduler' | 'analytics' | 'settings';
+export type NavKey = 'inbox' | 'dashboard' | 'pipeline' | 'scheduler' | 'analytics' | 'settings';
 
 export type ThemePage = {
   id: string;
@@ -96,4 +96,28 @@ export type AnalyticsData = {
   follows: number[];
   months: string[];
   topPosts: { title: string; views: string; saves: string; type: string }[];
+};
+
+// ── Inbox (Sprint D-UI) ──────────────────────────────────────────────────
+export type InboxDraftItem = {
+  kind: 'draft'; contentItemId: string; type: 'post' | 'carousel' | 'reel';
+  pageId: string; pageName: string; platform: string;
+  topic: Topic; hook: string; formattedCaption: string;
+  imageUrl: string | null; createdAt: string;
+};
+export type InboxFailedItem = {
+  kind: 'failed_publish'; publishJobId: string; contentItemId: string;
+  pageId: string; pageName: string; platform: string; topicTitle: string;
+  error: string | null; scheduledAt: string | null;
+};
+export type InboxActivity = {
+  id: string; kind: 'cross_post' | 'fast_track' | 'recycle' | 'trend_alert' | 'posted';
+  title: string; createdAt: string; pageName: string | null;
+  outcome?: { engagementRate: number; nicheAvg: number };
+};
+export type InboxData = {
+  needsYou: Array<InboxDraftItem | InboxFailedItem>;
+  activity: InboxActivity[];
+  digest: { postedSinceYesterday: number; automationSinceYesterday: number; topicsScoredSinceYesterday: number };
+  nextScheduled: Array<{ publishJobId: string; topicTitle: string; pageName: string; platform: string; scheduledAt: string }>;
 };
