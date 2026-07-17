@@ -5,6 +5,7 @@ import { LLMManager } from '../components/settings/LLMManager';
 import { ImageGenManager } from '../components/settings/ImageGenManager';
 import { BrandKitLogoGenerator } from '../components/settings/BrandKitLogoGenerator';
 import { OAuthConnectCard, type OAuthProvider } from '../components/settings/OAuthConnectCard';
+import { SourcesPanel } from '../components/settings/SourcesPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ const GROUP_ICONS: Record<string, string> = {
   'YouTube':           '▶️',
   'Canva':             '🖼️',
   'Pipeline':          '⚙️',
-  'Content Sources':   '📡',
+  'Sources':           '📡',
 };
 
 const GROUP_DESC: Record<string, string> = {
@@ -46,7 +47,7 @@ const GROUP_DESC: Record<string, string> = {
   'YouTube':          'YouTube Data API v3 key for Trending ingestion + OAuth for publishing Shorts',
   'Canva':            'Canva OAuth credentials for template autofill',
   'Pipeline':         'Automation limits, approval mode, scheduling defaults, and default content format',
-  'Content Sources':  'LLM-generated source map per Theme Page — subreddits, newsletters, RSS feeds, and arXiv categories',
+  'Sources':          'Registry-driven per-page source map — toggle sources, tune config (subreddits, tags, feeds), add custom RSS, regenerate via AI',
 };
 
 // Groups that require a paid subscription to be useful
@@ -54,7 +55,7 @@ const PREMIUM_GROUPS = new Set(['Twitter / X', 'Exploding Topics']);
 
 // Navigation sections — defines order and visual grouping in the left panel
 const NAV_SECTIONS: { label: string; groups: string[] }[] = [
-  { label: 'System',               groups: ['AI / LLM', 'Branding', 'Content Sources', 'Pipeline'] },
+  { label: 'System',               groups: ['AI / LLM', 'Branding', 'Sources', 'Pipeline'] },
   { label: 'Generation',           groups: ['Image Generation'] },
   { label: 'Ingestion — Free',     groups: ['Reddit', 'Product Hunt'] },
   { label: 'Ingestion — Premium',  groups: ['Twitter / X', 'Exploding Topics'] },
@@ -846,284 +847,10 @@ function OAuthCredentialFields({ group, fieldsInGroup, config, dirty, onChange }
   );
 }
 
-// ─── ContentSourcesSection ────────────────────────────────────────────────────
-
-function TagPills({ items, color = 'var(--accent)' }: { items: string[]; color?: string }) {
-  if (!items || items.length === 0)
-    return <span style={{ fontSize:11, color:'var(--text-muted)' }}>None</span>;
-  return (
-    <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
-      {items.map((tag, i) => (
-        <span key={i} style={{
-          fontSize:10, padding:'2px 7px', borderRadius:10,
-          background:`color-mix(in srgb, ${color} 12%, transparent)`,
-          border:`1px solid color-mix(in srgb, ${color} 30%, transparent)`,
-          color, fontFamily:'var(--mono)'
-        }}>{tag}</span>
-      ))}
-    </div>
-  );
-}
-
-const ALL_SOURCES: { key: string; label: string; icon: string; premium?: boolean }[] = [
-  { key: 'reddit',             label: 'Reddit',               icon: '🔴' },
-  { key: 'rss',                label: 'RSS Feeds',            icon: '📰' },
-  { key: 'google_news',        label: 'Google News',          icon: '🔍' },
-  { key: 'medium',             label: 'Medium',               icon: '✍️' },
-  { key: 'hacker_news',        label: 'Hacker News',          icon: '🔶' },
-  { key: 'devto',              label: 'Dev.to',               icon: '💻' },
-  { key: 'substack',           label: 'Substack',             icon: '📧' },
-  { key: 'arxiv',              label: 'arXiv',                icon: '📚' },
-  { key: 'pubmed',             label: 'PubMed',               icon: '🔬' },
-  { key: 'exploding_topics',   label: 'Exploding Topics',     icon: '🚀', premium: true },
-  { key: 'product_hunt',       label: 'Product Hunt',         icon: '🐱' },
-  { key: 'crypto_news',        label: 'Crypto News',          icon: '₿'  },
-  { key: 'finance_newsletter', label: 'Finance Newsletters',  icon: '💰' },
-  { key: 'youtube_trends',     label: 'YouTube Trending',     icon: '▶️' },
-  { key: 'twitter',            label: 'Twitter / X',          icon: '🐦', premium: true },
-];
-
-function ContentSourcesSection() {
-  const [pages,      setPages]      = useState<any[]>([]);
-  const [pageId,     setPageId]     = useState('');
-  const [map,        setMap]        = useState<any | null>(null);
-  const [loading,    setLoading]    = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [msg,        setMsg]        = useState<string | null>(null);
-  const [togglingSource, setTogglingSource] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.getPages().then((ps: any[]) => {
-      setPages(ps);
-      if (ps.length > 0 && !pageId) setPageId(ps[0].id);
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!pageId) return;
-    setLoading(true);
-    api.getSources(pageId)
-      .then((d: any) => setMap(d.map))
-      .catch(() => setMap(null))
-      .finally(() => setLoading(false));
-  }, [pageId]);
-
-  const handleRefresh = async () => {
-    if (!pageId) return;
-    setRefreshing(true); setMsg(null);
-    try {
-      const { map: m } = await api.regenerateSources(pageId);
-      setMap(m);
-      setMsg('✓ Sources refreshed via LLM');
-    } catch { setMsg('✗ Refresh failed — check LLM config'); }
-    finally { setRefreshing(false); setTimeout(() => setMsg(null), 3000); }
-  };
-
-  const handleToggleSource = async (sourceKey: string, enabled: boolean) => {
-    if (!pageId || !map) return;
-    setTogglingSource(sourceKey);
-    // Optimistic update
-    setMap((m: any) => m ? { ...m, sourceEnabled: { ...(m.sourceEnabled ?? {}), [sourceKey]: enabled } } : m);
-    try {
-      await api.updateSources(pageId, { sourceEnabled: { [sourceKey]: enabled } });
-    } catch {
-      // Revert on failure
-      setMap((m: any) => m ? { ...m, sourceEnabled: { ...(m.sourceEnabled ?? {}), [sourceKey]: !enabled } } : m);
-      setMsg('✗ Failed to save toggle');
-      setTimeout(() => setMsg(null), 2000);
-    } finally {
-      setTogglingSource(null);
-    }
-  };
-
-  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div style={{ display:'flex', gap:16, padding:'11px 0',
-      borderBottom:'1px solid var(--border)', alignItems:'flex-start' }}>
-      <div style={{ minWidth:160, flexShrink:0, fontSize:12, fontWeight:500,
-        color:'var(--text-secondary)', paddingTop:2 }}>{label}</div>
-      <div style={{ flex:1, fontSize:12, lineHeight:1.6 }}>{children}</div>
-    </div>
-  );
-
-  return (
-    <div>
-      <div style={{ marginBottom:16 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-          <span style={{ fontSize:18 }}>📡</span>
-          <span style={{ fontSize:16, fontWeight:700 }}>Content Sources</span>
-        </div>
-        <div style={{ fontSize:12, color:'var(--text-muted)', lineHeight:1.6 }}>
-          LLM-generated source mapping for each Theme Page. One call per page populates subreddits,
-          newsletters, RSS feeds, and arXiv categories — making the engine work for any niche.
-          The cache refreshes automatically every 7 days.
-        </div>
-      </div>
-
-      {/* Page selector */}
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16,
-        padding:'10px 14px', background:'var(--bg-elevated)',
-        border:'1px solid var(--border)', borderRadius:'var(--radius-sm)' }}>
-        <span style={{ fontSize:12, color:'var(--text-muted)', flexShrink:0 }}>Theme Page:</span>
-        <select value={pageId} onChange={e => setPageId(e.target.value)} style={{ flex:1, minWidth:0 }}>
-          {pages.map(p => (
-            <option key={p.id} value={p.id}>{p.name} — {p.handle}</option>
-          ))}
-        </select>
-        {map && (
-          <span style={{ fontSize:10, color:'var(--text-muted)', flexShrink:0 }}>
-            Generated {new Date(map.generatedAt).toLocaleDateString()}
-          </span>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center' }}>
-        <button className="btn btn-primary btn-sm" disabled={refreshing || !pageId}
-          onClick={handleRefresh}>
-          {refreshing ? '⏳ Generating…' : '✨ Refresh Sources via LLM'}
-        </button>
-        {msg && (
-          <span style={{ fontSize:11,
-            color: msg.startsWith('✓') ? 'var(--green)' : msg.startsWith('✗') ? 'var(--red)' : 'var(--text-muted)' }}>
-            {msg}
-          </span>
-        )}
-      </div>
-
-      {loading && (
-        <div style={{ color:'var(--text-muted)', fontSize:13 }}>Loading…</div>
-      )}
-
-      {!loading && !map && (
-        <div style={{ padding:'20px 16px', background:'var(--bg-elevated)',
-          border:'1px solid var(--border)', borderRadius:'var(--radius)',
-          color:'var(--text-muted)', fontSize:12, lineHeight:1.8 }}>
-          <div style={{ fontSize:14, fontWeight:600, color:'var(--text-secondary)', marginBottom:8 }}>
-            No source map yet for this page.
-          </div>
-          Click <strong>Refresh Sources via LLM</strong> to generate a niche-specific source map.
-          This runs one LLM call and caches the result for 7 days.
-          During each ingest run the cached map is used automatically.
-        </div>
-      )}
-
-      {!loading && map && (
-        <div>
-          <div style={{ background:'var(--bg-surface)', border:'1px solid var(--border)',
-            borderRadius:'var(--radius)', padding:'0 16px' }}>
-            <Row label="Niche category">
-              <span className="badge badge-green" style={{ fontSize:11 }}>{map.nicheCategory}</span>
-            </Row>
-            <Row label="Default format">
-              <span className="badge badge-muted" style={{ fontSize:11, textTransform:'uppercase' }}>
-                {map.defaultFormat}
-              </span>
-            </Row>
-            <Row label="Subreddits">
-              <TagPills items={map.redditSubreddits} color="var(--accent)" />
-            </Row>
-            <Row label="Medium tags">
-              <TagPills items={map.mediumTags} color="#00ab6c" />
-            </Row>
-            <Row label="HN search terms">
-              <TagPills items={map.hackernewsTerms} color="#ff6600" />
-            </Row>
-            <Row label="Substack newsletters">
-              <TagPills items={map.substackSlugs} color="#ff6719" />
-            </Row>
-            <Row label="Dev.to tags">
-              <TagPills items={map.devtoTags} color="#3b49df" />
-            </Row>
-            {map.arxivCategories?.length > 0 && (
-              <Row label="arXiv categories">
-                <TagPills items={map.arxivCategories} color="#b31b1b" />
-              </Row>
-            )}
-            <Row label="RSS feeds">
-              {(!map.rssFeeds || map.rssFeeds.length === 0) ? (
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>None verified</span>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                  {map.rssFeeds.map((f: any, i: number) => (
-                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ fontSize:10, color:'var(--green)' }}>✓</span>
-                      <a href={f.url} target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize:11, color:'var(--accent)', textDecoration:'none' }}>
-                        {f.name}
-                      </a>
-                      <span style={{ fontSize:10, color:'var(--text-muted)',
-                        fontFamily:'var(--mono)', overflow:'hidden', textOverflow:'ellipsis',
-                        whiteSpace:'nowrap', maxWidth:240 }}>{f.url}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Row>
-          </div>
-
-          <div style={{ marginTop:20 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)',
-              letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>
-              Source Enable / Disable
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:6 }}>
-              {ALL_SOURCES.map(src => {
-                const isOn = (map.sourceEnabled ?? {})[src.key] !== false;
-                return (
-                  <div key={src.key} style={{
-                    display:'flex', alignItems:'center', justifyContent:'space-between',
-                    padding:'8px 12px', borderRadius:'var(--radius-sm)',
-                    background:'var(--bg-elevated)', border:'1px solid var(--border)',
-                    opacity: isOn ? 1 : 0.55,
-                  }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:7, minWidth:0 }}>
-                      <span style={{ fontSize:14, flexShrink:0 }}>{src.icon}</span>
-                      <span style={{ fontSize:12, color:'var(--text-primary)',
-                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {src.label}
-                      </span>
-                      {src.premium && (
-                        <span style={{ fontSize:9, fontWeight:700, letterSpacing:'0.05em',
-                          padding:'1px 5px', borderRadius:4, flexShrink:0,
-                          background:'color-mix(in srgb, var(--accent) 15%, transparent)',
-                          color:'var(--accent)', border:'1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
-                          PRO
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      onClick={() => handleToggleSource(src.key, !isOn)}
-                      title={isOn ? 'Click to disable' : 'Click to enable'}
-                      style={{
-                        cursor:'pointer', position:'relative', flexShrink:0,
-                        width:32, height:18, borderRadius:9, marginLeft:8,
-                        background: isOn ? 'var(--accent)' : 'var(--bg-hover)',
-                        border:'1px solid var(--border)', transition:'background 0.2s',
-                      }}>
-                      <div style={{
-                        position:'absolute', top:1, left: isOn ? 14 : 1,
-                        width:14, height:14, borderRadius:'50%', background:'#fff',
-                        transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,.3)',
-                      }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:8 }}>
-              Disabled sources are skipped during ingest. Changes take effect on the next pipeline run.
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Main view ────────────────────────────────────────────────────────────────
 
 const GROUP_ORDER_WITH_BRANDING = [
-  'AI / LLM', 'Branding', 'Content Sources', 'Pipeline',
+  'AI / LLM', 'Branding', 'Sources', 'Pipeline',
   'Image Generation',
   'Reddit', 'Product Hunt',
   'Twitter / X', 'Exploding Topics',
@@ -1245,8 +972,8 @@ export const SettingsView: React.FC = () => {
             <LLMManager />
           ) : activeGroup === 'Branding' ? (
             <BrandingSection/>
-          ) : activeGroup === 'Content Sources' ? (
-            <ContentSourcesSection />
+          ) : activeGroup === 'Sources' ? (
+            <SourcesPanel />
           ) : activeGroup === 'Image Generation' ? (
             <ImageGenManager />
           ) : loading ? (
