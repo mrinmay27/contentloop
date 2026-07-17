@@ -136,7 +136,7 @@ new Worker(
       await updateTopicFormat(topic.id, finalFormat, finalConfidence);
       const nicheCategory = classifyNiche(niche.name, niche.keywords);
       const qa = runQualityGate(content, nicheCategory);
-      await createContentItems(topic.id, pages, content, qa);
+      await createContentItems(topic.id, pages, content, qa, finalFormat);
     }
   },
   workerOptions

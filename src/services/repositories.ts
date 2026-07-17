@@ -142,20 +142,61 @@ export async function listSelectedTopicsWithoutContent(): Promise<Topic[]> {
   return result.rows.map(mapTopic);
 }
 
-export async function createContentItems(topicId: string, pages: Page[], content: GeneratedContent, qa: QaResult): Promise<void> {
-  const client = await query("SELECT 1");
-  void client;
+/** Create draft content items for a topic.
+ *
+ *  When `format` is provided (the topic's locked format — see the roadmap's
+ *  "format locked at copy step" decision), exactly ONE item of that format
+ *  is created per page: reel → the highest-hookScore script, carousel → the
+ *  carousel, post → hook+caption. Without a format (legacy/fallback), the
+ *  original fan-out (2 reels + 1 carousel per page) is preserved. */
+export async function createContentItems(
+  topicId: string,
+  pages: Page[],
+  content: GeneratedContent,
+  qa: QaResult,
+  format?: SuggestedFormat | null
+): Promise<void> {
+  const status = qa.passed ? "qa_passed" : "qa_failed";
+
   for (const page of pages) {
+    const caption = content.captions[page.platform];
+
+    if (format === "reel") {
+      const best = [...content.reelScripts].sort((a, b) => b.hookScore - a.hookScore)[0];
+      if (best) {
+        await query(
+          "INSERT INTO content_items (topic_id, page_id, type, status, payload, qa_result) VALUES ($1, $2, 'reel', $3, $4, $5)",
+          [topicId, page.id, status, { reel: best, caption, hashtags: content.hashtags }, qa]
+        );
+      }
+      continue;
+    }
+    if (format === "carousel") {
+      await query(
+        "INSERT INTO content_items (topic_id, page_id, type, status, payload, qa_result) VALUES ($1, $2, 'carousel', $3, $4, $5)",
+        [topicId, page.id, status, { carousel: content.carousel, brand: page.brand, caption, hashtags: content.hashtags }, qa]
+      );
+      continue;
+    }
+    if (format === "post") {
+      await query(
+        "INSERT INTO content_items (topic_id, page_id, type, status, payload, qa_result) VALUES ($1, $2, 'post', $3, $4, $5)",
+        [topicId, page.id, status, { hook: content.reelScripts[0]?.hook ?? "", caption, hashtags: content.hashtags }, qa]
+      );
+      continue;
+    }
+
+    // Legacy fan-out: no locked format — 2 reel variants + 1 carousel.
     const reelPayloads = content.reelScripts.map((script) => ({
       reel: script,
-      caption: content.captions[page.platform],
+      caption,
       hashtags: content.hashtags
     }));
 
     for (const payload of reelPayloads) {
       await query(
         "INSERT INTO content_items (topic_id, page_id, type, status, payload, qa_result) VALUES ($1, $2, 'reel', $3, $4, $5)",
-        [topicId, page.id, qa.passed ? "qa_passed" : "qa_failed", payload, qa]
+        [topicId, page.id, status, payload, qa]
       );
     }
 

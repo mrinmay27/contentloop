@@ -206,3 +206,28 @@ input::placeholder,textarea::placeholder { color:var(--text-muted); }
 .font-option { padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--bg-elevated);transition:all 0.15s; }
 .font-option.selected { border-color:var(--accent);background:var(--accent-glow); }
 .keyword-tags { display:flex;flex-wrap:wrap;gap:6px; }
+
+/* ── Inbox responsive layout ─────────────────────────────────────────────────
+   Single reading column by default; on wide screens the activity lane moves
+   into a sticky right column so the viewport isn't mostly whitespace. */
+.inbox-layout {
+  width: 100%;
+  max-width: 820px;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "digest" "main" "side";
+  align-content: start;
+}
+.inbox-digest { grid-area: digest; min-width: 0; }
+.inbox-main   { grid-area: main;   min-width: 0; }
+.inbox-side   { grid-area: side;   min-width: 0; }
+@media (min-width: 1360px) {
+  .inbox-layout {
+    max-width: 1240px;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-areas: "digest digest" "main side";
+    align-items: start;
+  }
+  .inbox-side { position: sticky; top: 12px; }
+}
