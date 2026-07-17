@@ -221,7 +221,8 @@ export const InboxView: React.FC<{
                       return (
                         <div key={row.key} onClick={() => setFocusIdx(idx)}
                           style={{ borderRadius: 10, background: 'var(--bg-elevated)', padding: 14,
-                            outline: idx === safeFocus ? '2px solid var(--accent)' : '1px solid transparent' }}>
+                            outline: idx === safeFocus ? '2px solid var(--accent)' : '1px solid transparent',
+                            outlineOffset: -2 }}>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 11, flexWrap: 'wrap' }}>
                             <span className="badge badge-muted">{row.pageName}</span>
                             {row.drafts.length === 1 && (
@@ -276,7 +277,8 @@ export const InboxView: React.FC<{
                       <div key={row.publishJobId} onClick={() => setFocusIdx(idx)}
                         style={{ borderRadius: 10, background: 'var(--bg-elevated)', padding: 14,
                           borderLeft: '3px solid var(--red)',
-                          outline: idx === safeFocus ? '2px solid var(--accent)' : '1px solid transparent' }}>
+                          outline: idx === safeFocus ? '2px solid var(--accent)' : '1px solid transparent',
+                            outlineOffset: -2 }}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, fontSize: 11 }}>
                           <span className="badge badge-muted">{row.pageName}</span>
                           <span style={{ color: 'var(--red)', fontWeight: 600 }}>Publish failed</span>
