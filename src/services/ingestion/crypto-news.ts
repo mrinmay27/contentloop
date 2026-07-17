@@ -15,11 +15,35 @@ const CRYPTO_FEEDS = [
 
 const STALENESS_HOURS = 24; // crypto news older than this gets discarded
 
-export async function fetchCryptoTrends(keywords: string[]): Promise<RawTrend[]> {
+/** Default engagement hint applied to user-configured override feeds
+ *  (no per-feed hint is known for arbitrary URLs, so use the CRYPTO_FEEDS
+ *  average as a reasonable default). */
+const OVERRIDE_ENGAGEMENT_HINT = 77;
+
+/**
+ * @param keywords      The niche keywords for relevance filtering
+ * @param overrideFeeds User-configured feed URLs (PageSourceMap.cryptoFeeds).
+ *                      Non-empty = use these instead of the module defaults.
+ */
+export async function fetchCryptoTrends(
+  keywords:      string[],
+  overrideFeeds?: string[]
+): Promise<RawTrend[]> {
   const trends: RawTrend[] = [];
   const keywordLower = keywords.map((k) => k.toLowerCase());
 
-  for (const feed of CRYPTO_FEEDS) {
+  const feeds = overrideFeeds && overrideFeeds.length > 0
+    ? overrideFeeds.map((url) => {
+        let name = url;
+        try { name = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep raw url as name */ }
+        return { name, url, engagementHint: OVERRIDE_ENGAGEMENT_HINT };
+      })
+    : CRYPTO_FEEDS;
+  if (overrideFeeds && overrideFeeds.length > 0) {
+    console.log(`[crypto] Using ${feeds.length} user-configured feeds`);
+  }
+
+  for (const feed of feeds) {
     try {
       const res = await fetch(feed.url, {
         headers: { "User-Agent": "TPCE/1.0 content-research-bot" },
@@ -66,7 +90,7 @@ export async function fetchCryptoTrends(keywords: string[]): Promise<RawTrend[]>
     }
   }
 
-  console.log(`[crypto] Fetched ${trends.length} items from ${CRYPTO_FEEDS.length} feeds`);
+  console.log(`[crypto] Fetched ${trends.length} items from ${feeds.length} feeds`);
   return trends;
 }
 

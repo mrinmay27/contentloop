@@ -35,11 +35,27 @@ const GENERAL_BUSINESS_RSS_FEEDS = [
  * Fetch finance/business newsletter RSS trends.
  * @param nicheCategory The niche category (finance, business, tech, etc.)
  * @param keywords      The niche keywords for relevance filtering
+ * @param overrideFeeds User-configured feed URLs (PageSourceMap.financeFeeds).
+ *                      Non-empty = use these instead of the module defaults.
  */
 export async function fetchFinanceNewsletterTrends(
   nicheCategory: string,
-  keywords:      string[]
+  keywords:      string[],
+  overrideFeeds?: string[]
 ): Promise<RawTrend[]> {
+  if (overrideFeeds && overrideFeeds.length > 0) {
+    console.log(`[finance-newsletters] Using ${overrideFeeds.length} user-configured feeds for ${nicheCategory}`);
+    try {
+      const trends = await fetchRssTrends(overrideFeeds);
+      const boosted = trends.map(t => ({ ...t, source: "finance_newsletter" as const, engagementHint: 78 }));
+      console.log(`[finance-newsletters] ✓ ${boosted.length} newsletter articles fetched`);
+      return boosted;
+    } catch (err: any) {
+      console.warn(`[finance-newsletters] RSS fetch failed: ${err?.message}`);
+      return [];
+    }
+  }
+
   const isFinance  = nicheCategory === "finance";
   const isCrypto   = keywords.some(k =>
     ["crypto", "bitcoin", "ethereum", "defi", "nft", "blockchain"].includes(k.toLowerCase())

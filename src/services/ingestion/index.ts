@@ -52,7 +52,10 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
   // Precedence: cached LLM map → centralized niche-queries maps → keyword fallback
 
   // Google News: use intent-specific compound phrases, never raw niche keywords
-  const googleNewsQueries = GOOGLE_NEWS_QUERIES[category] ?? [];
+  // (LLM map override takes precedence when the user has set custom phrases)
+  const googleNewsQueries = cachedMap?.googleNewsQueries?.length
+    ? cachedMap.googleNewsQueries
+    : (GOOGLE_NEWS_QUERIES[category] ?? []);
 
   // HackerNews: merge niche-specific HN terms with user-defined keywords so
   // custom niches (e.g. "Crypto Trading") retain their specific signals
@@ -100,12 +103,12 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
     isEnabled("arxiv")              && arxivCategories.length > 0
       ? fetchArxivTrends(category, niche.keywords.slice(0, 3))                                           : Promise.resolve([]),
     isEnabled("crypto_news")        && isCrypto
-      ? fetchCryptoTrends(niche.keywords)                                                                : Promise.resolve([]),
+      ? fetchCryptoTrends(niche.keywords, cachedMap?.cryptoFeeds)                                          : Promise.resolve([]),
     isEnabled("pubmed")             && usePubMed
       ? fetchPubMedTrends(niche.keywords.slice(0, 3))                                                    : Promise.resolve([]),
     isEnabled("exploding_topics")   ? fetchExplodingTopicsTrends(category, niche.keywords.slice(0, 4))  : Promise.resolve([]),
     isEnabled("product_hunt")       ? fetchProductHuntTrends(category, niche.keywords)                  : Promise.resolve([]),
-    isEnabled("finance_newsletter") ? fetchFinanceNewsletterTrends(category, niche.keywords)            : Promise.resolve([]),
+    isEnabled("finance_newsletter") ? fetchFinanceNewsletterTrends(category, niche.keywords, cachedMap?.financeFeeds) : Promise.resolve([]),
     isEnabled("youtube_trends")     ? fetchYouTubeTrends(category as any, niche.keywords)               : Promise.resolve([]),
   ]);
 
