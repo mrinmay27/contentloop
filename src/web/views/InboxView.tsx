@@ -180,7 +180,7 @@ export const InboxView: React.FC<{
         </div>
       </div>
 
-      <div className="view-area" style={{ display: 'flex', justifyContent: 'center' }}>
+      <div className="view-area inbox-viewport" style={{ display: 'flex', justifyContent: 'center' }}>
         <div className="inbox-layout">
           {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 13, gridArea: 'digest' }}>Loading inbox…</div>}
 

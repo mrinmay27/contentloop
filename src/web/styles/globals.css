@@ -223,11 +223,16 @@ input::placeholder,textarea::placeholder { color:var(--text-muted); }
 .inbox-main   { grid-area: main;   min-width: 0; }
 .inbox-side   { grid-area: side;   min-width: 0; }
 @media (min-width: 1360px) {
+  /* Fixed digest + independently scrolling panes: the page itself stops
+     scrolling; only the needs-you queue (and, if long, activity) scroll. */
+  .inbox-viewport { overflow-y: hidden; }
   .inbox-layout {
     max-width: 1240px;
+    height: 100%;
     grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas: "digest digest" "main side";
-    align-items: start;
+    align-items: stretch;
   }
-  .inbox-side { position: sticky; top: 12px; }
+  .inbox-main, .inbox-side { overflow-y: auto; overflow-x: hidden; padding-right: 4px; padding-bottom: 8px; }
 }
