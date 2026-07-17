@@ -55,7 +55,10 @@ export function validateSourcePatch(body: Patch): ValidationResult {
       const name = typeof (f as any)?.name === "string" ? (f as any).name.trim() : "";
       const url = typeof (f as any)?.url === "string" ? (f as any).url.trim() : "";
       if (!isHttpUrl(url)) return { ok: false, error: `invalid feed URL: ${url || "(empty)"}` };
-      out.push({ name: name || url, url });
+      // Spread the original entry first so extra fields (e.g. `verified`,
+      // set by generateSourceMap's feed-reachability check) survive a UI
+      // save — only name/url are normalized/validated here.
+      out.push({ ...(typeof f === "object" && f ? f : {}), name: name || url, url });
     }
     patch.rssFeeds = out;
   }

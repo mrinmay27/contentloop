@@ -692,11 +692,29 @@ app.put("/api/pages/:id/sources", async (req, res, next) => {
 
 app.post("/api/pages/:id/sources/regenerate", async (req, res, next) => {
   try {
-    const { generateSourceMap, getCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
+    const { generateSourceMap, getCachedSourceMap, setCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
     const page = await query(`SELECT p.id, n.name, n.keywords FROM pages p JOIN niches n ON n.id = p.niche_id WHERE p.id = $1`, [req.params.id]);
     if (!page.rows[0]) return void res.status(404).json({ error: "Page not found" });
+    // Preserve user config across regeneration — generation itself stays pure
+    // (no awareness of prior state); the route merges. sourceEnabled toggles
+    // are the user's explicit intent and always win over a fresh map (which
+    // has none). googleNewsQueries/financeFeeds/cryptoFeeds are carried over
+    // only when the fresh map didn't supply its own (LLM doesn't produce
+    // these fields, so they'd otherwise be silently dropped every regen).
+    const prior = await getCachedSourceMap(req.params.id);
     await generateSourceMap(req.params.id, page.rows[0].name, page.rows[0].keywords, true);
-    res.json({ ok: true, map: await getCachedSourceMap(req.params.id) });
+    let fresh = await getCachedSourceMap(req.params.id);
+    if (prior && fresh) {
+      fresh = {
+        ...fresh,
+        sourceEnabled: { ...(fresh.sourceEnabled ?? {}), ...(prior.sourceEnabled ?? {}) },
+        googleNewsQueries: fresh.googleNewsQueries?.length ? fresh.googleNewsQueries : prior.googleNewsQueries,
+        financeFeeds: fresh.financeFeeds?.length ? fresh.financeFeeds : prior.financeFeeds,
+        cryptoFeeds: fresh.cryptoFeeds?.length ? fresh.cryptoFeeds : prior.cryptoFeeds,
+      };
+      await setCachedSourceMap(req.params.id, fresh);
+    }
+    res.json({ ok: true, map: fresh });
   } catch (error) { next(error); }
 });
 

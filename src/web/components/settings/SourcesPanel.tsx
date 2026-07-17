@@ -33,6 +33,13 @@ export const SourcesPanel: React.FC = () => {
 
   const page = pages.find((p) => p.id === pageId);
 
+  // `kind: 'feeds'` is shared by rssFeeds (objects: {name,url,verified?})
+  // AND financeFeeds/cryptoFeeds (plain URL strings — see
+  // sourceMapValidation.ts's URL_ARRAY_KEYS). So `kind` alone can't tell us
+  // the shape; rssFeeds is the only object-shaped field.
+  const isObjectFeed = (f: ConfigField) => f.mapField === 'rssFeeds';
+  const placeholderFor = (f: ConfigField) => f.placeholder ?? (f.kind === 'feeds' ? 'https://example.com/feed.xml' : 'add…');
+
   const load = () => {
     if (!pageId) return;
     setLoading(true);
@@ -51,7 +58,7 @@ export const SourcesPanel: React.FC = () => {
   const fieldValues = (f: ConfigField): string[] => {
     const v = map?.[f.mapField];
     if (!v) return [];
-    return f.mapField === 'rssFeeds' ? v.map((x: any) => x.url ?? x) : v;
+    return isObjectFeed(f) ? v.map((x: any) => x.url ?? x) : v;
   };
 
   const addValue = (f: ConfigField) => {
@@ -59,7 +66,7 @@ export const SourcesPanel: React.FC = () => {
     if (!raw) return;
     setMap((m: any) => {
       const current = m?.[f.mapField] ?? [];
-      const next = f.mapField === 'rssFeeds'
+      const next = isObjectFeed(f)
         ? [...current, { name: raw, url: raw }]
         : [...new Set([...current, raw])];
       return { ...m, [f.mapField]: next };
@@ -71,7 +78,7 @@ export const SourcesPanel: React.FC = () => {
   const removeValue = (f: ConfigField, value: string) => {
     setMap((m: any) => ({
       ...m,
-      [f.mapField]: (m?.[f.mapField] ?? []).filter((x: any) => (f.mapField === 'rssFeeds' ? x.url !== value : x !== value)),
+      [f.mapField]: (m?.[f.mapField] ?? []).filter((x: any) => (isObjectFeed(f) ? x.url !== value : x !== value)),
     }));
     setDirty(true);
   };
@@ -90,12 +97,20 @@ export const SourcesPanel: React.FC = () => {
     api.regenerateSources(pageId).then((d) => { setMap(d.map); setDirty(false); }).finally(() => setBusy(null));
   };
 
+  const handlePageChange = (nextId: string) => {
+    // Controlled <select> — not calling setPageId leaves its displayed
+    // value at the current pageId, so declining the confirm auto-reverts
+    // the dropdown with no extra state needed.
+    if (dirty && !window.confirm('Discard unsaved source changes?')) return;
+    setPageId(nextId);
+  };
+
   const PageSelector = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
       padding: '10px 14px', background: 'var(--bg-elevated)',
       border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
       <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Theme Page:</span>
-      <select value={pageId} onChange={(e) => setPageId(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
+      <select value={pageId} onChange={(e) => handlePageChange(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
         {pages.map((p) => (
           <option key={p.id} value={p.id}>{p.name}{p.handle ? ` — ${p.handle}` : ''}</option>
         ))}
@@ -142,7 +157,10 @@ export const SourcesPanel: React.FC = () => {
           Sources for <b>{page?.name}</b> — toggle, tune, or add your own.
         </span>
         <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={load} title="Reload"><RefreshCw size={13} /></button>
-        <button className="btn btn-ghost btn-sm" disabled={busy === 'regen'} onClick={regenerate}><Sparkles size={13} /> Regenerate with AI</button>
+        <button className="btn btn-ghost btn-sm" disabled={busy === 'regen'} onClick={regenerate}
+          title="Regenerates subreddits/tags/feeds via LLM — your toggles and custom feeds are preserved">
+          <Sparkles size={13} /> Regenerate with AI
+        </button>
         <button className="btn btn-primary btn-sm" disabled={!dirty || busy === 'save'} onClick={save}>Save changes</button>
       </div>
 
@@ -172,7 +190,7 @@ export const SourcesPanel: React.FC = () => {
                   </span>
                 ))}
                 <input className="search-input" style={{ width: 220, fontSize: 11 }}
-                  placeholder={f.placeholder ?? 'add…'}
+                  placeholder={placeholderFor(f)}
                   value={inputs[f.mapField] ?? ''}
                   onChange={(e) => setInputs((st) => ({ ...st, [f.mapField]: e.target.value }))}
                   onKeyDown={(e) => { if (e.key === 'Enter') addValue(f); }} />

@@ -35,4 +35,12 @@ describe("validateSourcePatch", () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.patch.mediumTags).toEqual(["ai"]);
   });
+
+  it("preserves extra feed fields (e.g. verified) across validation", () => {
+    const r = validateSourcePatch({
+      rssFeeds: [{ name: "Blog", url: "https://example.com/feed.xml", verified: true }],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect((r.patch.rssFeeds as any[])[0]).toMatchObject({ verified: true, name: "Blog", url: "https://example.com/feed.xml" });
+  });
 });

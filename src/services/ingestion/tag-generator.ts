@@ -91,11 +91,6 @@ export async function setCachedSourceMap(pageId: string, map: PageSourceMap): Pr
   );
 }
 
-/** Delete the cached source map (forces re-generation). */
-export async function clearSourceMap(pageId: string): Promise<void> {
-  await query(`DELETE FROM page_source_maps WHERE page_id = $1`, [pageId]);
-}
-
 // ─── LLM generation ───────────────────────────────────────────────────────────
 
 const PROMPT_SYSTEM = `You are an expert social media content strategist. You will be given a niche name and keywords. Return a JSON source mapping object with no explanation or markdown — JSON only.`;
