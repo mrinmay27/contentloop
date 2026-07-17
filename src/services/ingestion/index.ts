@@ -41,7 +41,7 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
   const category = classifyNiche(niche.name, niche.keywords);
 
   // ── Try cached LLM source map first (Task 2.0) ──────────────────────────
-  let cachedMap = pageId ? getCachedSourceMap(pageId) : null;
+  let cachedMap = pageId ? await getCachedSourceMap(pageId) : null;
 
   if (!cachedMap && pageId) {
     // Fire-and-forget — will be ready for the next ingest run

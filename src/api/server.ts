@@ -666,7 +666,7 @@ app.post("/api/schedule/approved", async (_req, res, next) => {
 app.get("/api/pages/:id/sources", async (req, res, next) => {
   try {
     const { getCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
-    const map = getCachedSourceMap(req.params.id);
+    const map = await getCachedSourceMap(req.params.id);
     res.json({ map: map ?? null });
   } catch (error) { next(error); }
 });
@@ -686,7 +686,7 @@ app.post("/api/pages/:id/sources/refresh", async (req, res, next) => {
 app.delete("/api/pages/:id/sources", async (req, res, next) => {
   try {
     const { clearSourceMap } = await import("../services/ingestion/tag-generator.js");
-    clearSourceMap(req.params.id);
+    await clearSourceMap(req.params.id);
     res.json({ ok: true });
   } catch (error) { next(error); }
 });
@@ -695,11 +695,11 @@ app.delete("/api/pages/:id/sources", async (req, res, next) => {
 app.patch("/api/pages/:id/sources/toggles", async (req, res, next) => {
   try {
     const { getCachedSourceMap, setCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
-    const map = getCachedSourceMap(req.params.id);
+    const map = await getCachedSourceMap(req.params.id);
     if (!map) return void res.status(404).json({ error: "No source map for this page — generate one first" });
     const toggles = z.record(z.string(), z.boolean()).parse(req.body);
     map.sourceEnabled = { ...(map.sourceEnabled ?? {}), ...toggles };
-    setCachedSourceMap(req.params.id, map);
+    await setCachedSourceMap(req.params.id, map);
     res.json({ ok: true, sourceEnabled: map.sourceEnabled });
   } catch (error) { next(error); }
 });

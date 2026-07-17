@@ -4,14 +4,17 @@
  * this makes ONE LLM call to generate a complete source mapping for the
  * niche — making the engine work for ANY niche the user defines.
  *
- * Output is cached in data/page-sources.json keyed by page ID.
- * The ingestion index checks this cache before falling back to
+ * Sprint U1: persisted in the `page_source_maps` DB table (was:
+ * data/page-sources.json, gitignored — lost on every fresh install). A
+ * one-time legacy import seeds the DB from that JSON file if present.
+ * The ingestion index checks the cached map before falling back to
  * heuristic-derived subreddits/feeds.
  */
 
 import fs   from "fs";
 import path from "path";
 import { llmClient, llmConfig } from "../../config/llm.js";
+import { query } from "../../db/pool.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,53 +33,63 @@ export interface PageSourceMap {
   nicheCategory:      string;
   /** Per-source enable/disable toggles. Absent key = enabled (default on). */
   sourceEnabled?:     Record<string, boolean>;
+  /** Google News search phrases (override; empty/absent = category defaults). */
+  googleNewsQueries?: string[];
+  /** Finance-newsletter RSS overrides (absent = adapter defaults). */
+  financeFeeds?:      string[];
+  /** Crypto-news RSS overrides (absent = adapter defaults). */
+  cryptoFeeds?:       string[];
 }
 
-// ─── Cache on disk ────────────────────────────────────────────────────────────
+// ─── Cache in DB (Sprint U1) ──────────────────────────────────────────────────
 
+// Legacy on-disk cache path — kept only for the one-time seed import below.
 const CACHE_PATH = path.resolve(
   new URL(".", import.meta.url).pathname,
   "../../../data/page-sources.json"
 );
 
-function loadCache(): Record<string, PageSourceMap> {
+/** One-time legacy import: seed the DB from data/page-sources.json rows
+ *  that don't exist in the table yet. Safe to call repeatedly. */
+async function seedLegacyCache(): Promise<void> {
+  let legacy: Record<string, PageSourceMap> = {};
   try {
-    if (fs.existsSync(CACHE_PATH)) {
-      return JSON.parse(fs.readFileSync(CACHE_PATH, "utf-8"));
-    }
-  } catch {}
-  return {};
+    if (fs.existsSync(CACHE_PATH)) legacy = JSON.parse(fs.readFileSync(CACHE_PATH, "utf-8"));
+  } catch { return; }
+  for (const [pageId, map] of Object.entries(legacy)) {
+    await query(
+      `INSERT INTO page_source_maps (page_id, map) VALUES ($1, $2)
+       ON CONFLICT (page_id) DO NOTHING`,
+      [pageId, JSON.stringify(map)]
+    ).catch(() => {}); // page may no longer exist (FK) — skip
+  }
 }
-
-function saveCache(cache: Record<string, PageSourceMap>): void {
-  const dir = path.dirname(CACHE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2), "utf-8");
+let seeded = false;
+async function ensureSeeded(): Promise<void> {
+  if (seeded) return;
+  seeded = true;
+  await seedLegacyCache();
 }
 
 /** Get the cached source map for a page (returns null if none). */
-export function getCachedSourceMap(pageId: string): PageSourceMap | null {
-  const cache = loadCache();
-  return cache[pageId] ?? null;
+export async function getCachedSourceMap(pageId: string): Promise<PageSourceMap | null> {
+  await ensureSeeded();
+  const r = await query(`SELECT map FROM page_source_maps WHERE page_id = $1`, [pageId]);
+  return r.rows[0]?.map ?? null;
 }
 
 /** Persist a source map for a page. */
-export function setCachedSourceMap(pageId: string, map: PageSourceMap): void {
-  const cache = loadCache();
-  cache[pageId] = map;
-  saveCache(cache);
+export async function setCachedSourceMap(pageId: string, map: PageSourceMap): Promise<void> {
+  await query(
+    `INSERT INTO page_source_maps (page_id, map, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (page_id) DO UPDATE SET map = EXCLUDED.map, updated_at = now()`,
+    [pageId, JSON.stringify(map)]
+  );
 }
 
 /** Delete the cached source map (forces re-generation). */
-export function clearSourceMap(pageId: string): void {
-  const cache = loadCache();
-  delete cache[pageId];
-  saveCache(cache);
-}
-
-/** Get all cached page IDs. */
-export function listCachedPageIds(): string[] {
-  return Object.keys(loadCache());
+export async function clearSourceMap(pageId: string): Promise<void> {
+  await query(`DELETE FROM page_source_maps WHERE page_id = $1`, [pageId]);
 }
 
 // ─── LLM generation ───────────────────────────────────────────────────────────
@@ -142,7 +155,7 @@ export async function generateSourceMap(
 ): Promise<PageSourceMap> {
   // Return cached if fresh enough (< 7 days) and not forced
   if (!forceRefresh) {
-    const cached = getCachedSourceMap(pageId);
+    const cached = await getCachedSourceMap(pageId);
     if (cached) {
       const age = Date.now() - new Date(cached.generatedAt).getTime();
       if (age < 7 * 24 * 60 * 60 * 1000) {
@@ -212,7 +225,7 @@ export async function generateSourceMap(
   }
 
   // Persist to cache
-  setCachedSourceMap(pageId, map);
+  await setCachedSourceMap(pageId, map);
   return map;
 }
 
