@@ -112,7 +112,7 @@ Layout (single column, max-width ~760px, centered):
    rest of the empty state).
 4. **Activity lane**: heading "Activity", collapsed to the latest 10 with
    "Show all"; icon per kind (reuse AlertsBell mapping), relative time,
-   page name, outcome chip (`6.4% eng`, green when ≥ nicheAvg, red below)
+   page name, outcome chip (`6.4% eng`, green when ≥ nicheAvg, AMBER below — deliberately softened from red: ~half of posts are below average by definition, and red would read as failure)
    on posted items that have one.
 
 Approve → `POST /api/content/:id/approve` (existing; the schedule worker
