@@ -16,7 +16,7 @@ type SidebarProps = {
 };
 
 const NAV_ITEMS: { key: NavKey; icon: any; label: string; kbd: string }[] = [
-  { key: 'inbox',     icon: 'inbox',     label: 'Inbox',       kbd: '⌘1' },
+  { key: 'inbox',     icon: null,        label: 'Inbox',       kbd: '⌘1' }, // rendered via lucide Inbox below, not Icon
   { key: 'scheduler', icon: 'scheduler', label: 'Calendar',    kbd: '⌘3' },
   { key: 'analytics', icon: 'analytics', label: 'Performance', kbd: '⌘4' },
   { key: 'dashboard', icon: 'dashboard', label: 'Topics',      kbd: '⌘2' },

@@ -224,13 +224,8 @@ export const api = {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'publish-now' }),
     }),
-  // Inbox: retry/dismiss a failed publish job — same PATCH-with-action
-  // pattern as cancelPublishJob/reschedulePublishJob/publishJobNow above.
-  retryPublishJob: (jobId: string) =>
-    req<{ ok: boolean }>(`/publish-jobs/${jobId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'publish-now' }),
-    }),
+  // Inbox: retry a failed publish job reuses publishJobNow above (same
+  // action) — no separate method needed. Dismiss is inbox-only.
   dismissPublishJob: (jobId: string) =>
     req<{ ok: boolean }>(`/publish-jobs/${jobId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },

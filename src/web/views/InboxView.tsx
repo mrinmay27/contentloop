@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, RefreshCw, Check, X, Pencil, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import type { InboxData, InboxDraftItem, InboxFailedItem, Topic } from '../lib/types';
@@ -28,9 +28,28 @@ export const InboxView: React.FC<{
   const [focusIdx, setFocusIdx] = useState(0);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // IDs of needs-you items with an in-flight approve/reject/retry/dismiss
+  // call. Guards against a refresh (manual click or the 60s poll) landing
+  // between the optimistic removal and the server processing the mutation
+  // — without this, the item would be resurrected until the next refresh.
+  const pendingRef = useRef<Set<string>>(new Set());
+  const idOf = (i: InboxDraftItem | InboxFailedItem) => i.kind === 'draft' ? i.contentItemId : i.publishJobId;
+
+  // approve/reject are memoized (deps: [refresh], which never changes
+  // identity), so their closures are fixed at mount — reading `data`
+  // directly inside removeItem would see the stale mount-time value
+  // (null). Mirror it into a ref, refreshed every render, instead.
+  const dataRef = useRef<InboxData | null>(data);
+  dataRef.current = data;
 
   const refresh = useCallback(() => {
-    api.getInbox().then((d: InboxData) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+    api.getInbox().then((d: InboxData) => {
+      const needsYou = d.needsYou.filter((i) => !pendingRef.current.has(idOf(i)));
+      setData({ ...d, needsYou });
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -40,37 +59,50 @@ export const InboxView: React.FC<{
     return () => clearInterval(t);
   }, [refresh]);
 
-  const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
+  useEffect(() => () => { if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); }, []);
 
-  const removeItem = (predicate: (i: InboxDraftItem | InboxFailedItem) => boolean) =>
+  const flash = (msg: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast(msg);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 2500);
+  };
+
+  const removeItem = (predicate: (i: InboxDraftItem | InboxFailedItem) => boolean) => {
     setData((d) => d ? { ...d, needsYou: d.needsYou.filter((i) => !predicate(i)) } : d);
+    const newLen = (dataRef.current?.needsYou ?? []).filter((i) => !predicate(i)).length;
+    setFocusIdx((idx) => Math.max(0, Math.min(idx, newLen - 1)));
+  };
 
   const approve = useCallback((item: InboxDraftItem) => {
+    pendingRef.current.add(item.contentItemId);
     removeItem((i) => i.kind === 'draft' && i.contentItemId === item.contentItemId);
     api.approveContent(item.contentItemId)
-      .then(() => flash('Approved — will be scheduled shortly'))
-      .catch(() => { flash('Approve failed'); refresh(); });
+      .then(() => { pendingRef.current.delete(item.contentItemId); flash('Approved — will be scheduled shortly'); })
+      .catch(() => { pendingRef.current.delete(item.contentItemId); flash('Approve failed'); refresh(); });
   }, [refresh]);
 
   const reject = useCallback((item: InboxDraftItem) => {
+    pendingRef.current.add(item.contentItemId);
     removeItem((i) => i.kind === 'draft' && i.contentItemId === item.contentItemId);
     api.rejectContent(item.contentItemId)
-      .then(() => flash('Rejected'))
-      .catch(() => { flash('Reject failed'); refresh(); });
+      .then(() => { pendingRef.current.delete(item.contentItemId); flash('Rejected'); })
+      .catch(() => { pendingRef.current.delete(item.contentItemId); flash('Reject failed'); refresh(); });
   }, [refresh]);
 
   const retryFailed = (item: InboxFailedItem) => {
+    pendingRef.current.add(item.publishJobId);
     removeItem((i) => i.kind === 'failed_publish' && i.publishJobId === item.publishJobId);
-    api.retryPublishJob(item.publishJobId)
-      .then(() => flash('Retrying publish'))
-      .catch(() => { flash('Retry failed'); refresh(); });
+    api.publishJobNow(item.publishJobId)
+      .then(() => { pendingRef.current.delete(item.publishJobId); flash('Retrying publish'); })
+      .catch(() => { pendingRef.current.delete(item.publishJobId); flash('Retry failed'); refresh(); });
   };
 
   const dismissFailed = (item: InboxFailedItem) => {
+    pendingRef.current.add(item.publishJobId);
     removeItem((i) => i.kind === 'failed_publish' && i.publishJobId === item.publishJobId);
     api.dismissPublishJob(item.publishJobId)
-      .then(() => flash('Dismissed'))
-      .catch(() => { flash('Dismiss failed'); refresh(); });
+      .then(() => { pendingRef.current.delete(item.publishJobId); flash('Dismissed'); })
+      .catch(() => { pendingRef.current.delete(item.publishJobId); flash('Dismiss failed'); refresh(); });
   };
 
   // Keyboard: j/k or arrows move focus; A approve; R reject (drafts only)
