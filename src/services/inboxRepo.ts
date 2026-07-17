@@ -182,8 +182,9 @@ async function listActivity(limit = 30): Promise<InboxActivityItem[]> {
       JOIN pages p ON p.id = pj.page_id
       JOIN content_items c ON c.id = pj.content_item_id
       JOIN topics t ON t.id = c.topic_id
+      LEFT JOIN niche_mode nm ON nm.niche_id = t.niche_id
       LEFT JOIN performance_metrics pm
-        ON pm.publish_job_id = pj.id AND pm.capture_point = '24h'
+        ON pm.publish_job_id = pj.id AND pm.capture_point = '24h' AND pm.source = nm.mode
       LEFT JOIN niche_avg na ON na.niche_id = t.niche_id
       WHERE pj.status = 'published' AND pj.published_at IS NOT NULL
     )

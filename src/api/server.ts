@@ -1348,8 +1348,11 @@ app.patch("/api/publish-jobs/:id", async (req, res, next) => {
       return void res.json({ ok: true });
     }
     if (body.action === 'dismiss') {
-      const del = await query(`DELETE FROM publish_jobs WHERE id=$1 AND status='failed'`, [id]);
-      if ((del.rowCount ?? 0) === 0) return void res.status(409).json({ error: 'Only failed jobs can be dismissed' });
+      const { rows } = await query<any>(`SELECT status FROM publish_jobs WHERE id = $1`, [id]);
+      if (!rows[0]) return void res.status(404).json({ error: 'Job not found' });
+      if (rows[0].status !== 'failed')
+        return void res.status(409).json({ error: 'Only failed jobs can be dismissed' });
+      await query(`DELETE FROM publish_jobs WHERE id=$1`, [id]);
       return void res.json({ ok: true });
     }
     if (body.action === 'publish-now') {
