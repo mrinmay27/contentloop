@@ -902,8 +902,8 @@ function ContentSourcesSection() {
   useEffect(() => {
     if (!pageId) return;
     setLoading(true);
-    api.getPageSources(pageId)
-      .then(({ map: m }) => setMap(m))
+    api.getSources(pageId)
+      .then((d: any) => setMap(d.map))
       .catch(() => setMap(null))
       .finally(() => setLoading(false));
   }, [pageId]);
@@ -912,19 +912,11 @@ function ContentSourcesSection() {
     if (!pageId) return;
     setRefreshing(true); setMsg(null);
     try {
-      const { map: m } = await api.refreshPageSources(pageId);
+      const { map: m } = await api.regenerateSources(pageId);
       setMap(m);
       setMsg('✓ Sources refreshed via LLM');
     } catch { setMsg('✗ Refresh failed — check LLM config'); }
     finally { setRefreshing(false); setTimeout(() => setMsg(null), 3000); }
-  };
-
-  const handleClear = async () => {
-    if (!pageId) return;
-    await api.clearPageSources(pageId).catch(() => {});
-    setMap(null);
-    setMsg('🗑 Cache cleared — will regenerate on next ingest');
-    setTimeout(() => setMsg(null), 3000);
   };
 
   const handleToggleSource = async (sourceKey: string, enabled: boolean) => {
@@ -933,7 +925,7 @@ function ContentSourcesSection() {
     // Optimistic update
     setMap((m: any) => m ? { ...m, sourceEnabled: { ...(m.sourceEnabled ?? {}), [sourceKey]: enabled } } : m);
     try {
-      await api.updatePageSourceToggles(pageId, { [sourceKey]: enabled });
+      await api.updateSources(pageId, { sourceEnabled: { [sourceKey]: enabled } });
     } catch {
       // Revert on failure
       setMap((m: any) => m ? { ...m, sourceEnabled: { ...(m.sourceEnabled ?? {}), [sourceKey]: !enabled } } : m);
@@ -989,10 +981,6 @@ function ContentSourcesSection() {
         <button className="btn btn-primary btn-sm" disabled={refreshing || !pageId}
           onClick={handleRefresh}>
           {refreshing ? '⏳ Generating…' : '✨ Refresh Sources via LLM'}
-        </button>
-        <button className="btn btn-ghost btn-sm" disabled={!map || !pageId}
-          onClick={handleClear}>
-          🗑 Clear Cache
         </button>
         {msg && (
           <span style={{ fontSize:11,

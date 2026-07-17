@@ -101,16 +101,14 @@ export const api = {
       body: JSON.stringify({ suggested_format: format, format_confidence: confidence }),
     }),
 
-  // ── Task 2.0: Source map management ──────────────────────────────────────
-  getPageSources:     (pageId: string) => req<{ map: any | null }>(`/pages/${pageId}/sources`),
-  refreshPageSources: (pageId: string) => req<{ ok: boolean; map: any }>(`/pages/${pageId}/sources/refresh`, { method: 'POST' }),
-  clearPageSources:   (pageId: string) => req<{ ok: boolean }>(`/pages/${pageId}/sources`, { method: 'DELETE' }),
-  updatePageSourceToggles: (pageId: string, toggles: Record<string, boolean>) =>
-    req<{ ok: boolean; sourceEnabled: Record<string, boolean> }>(`/pages/${pageId}/sources/toggles`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(toggles),
-    }),
+  // ── Sprint U1: Sources API — registry-driven GET, validated PUT, regenerate ──
+  getSources:        (pageId: string) => req<any>(`/pages/${pageId}/sources`),
+  updateSources:     (pageId: string, patch: any) => req<any>(`/pages/${pageId}/sources`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  }),
+  regenerateSources: (pageId: string) => req<any>(`/pages/${pageId}/sources/regenerate`, { method: 'POST' }),
 
   // ── Provider capabilities ─────────────────────────────────────────────────────
   getProviderCapabilities: () =>

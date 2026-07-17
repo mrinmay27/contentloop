@@ -660,47 +660,43 @@ app.post("/api/schedule/approved", async (_req, res, next) => {
   }
 });
 
-// ── Task 2.0: Source map management ──────────────────────────────────────────
+// ── Sprint U1: Sources API — registry-driven GET, validated PUT, regenerate ──
+// (Supersedes the earlier Task 2.0 GET/refresh/DELETE/toggles routes — the
+// only caller, SettingsView's ContentSourcesSection, was rewritten to the
+// registry-driven SourcesPanel in the same sprint; see Task 4.)
 
-// GET cached source map for a page (or null if none generated yet)
 app.get("/api/pages/:id/sources", async (req, res, next) => {
   try {
     const { getCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
+    const { SOURCE_REGISTRY } = await import("../services/ingestion/sourceRegistry.js");
     const map = await getCachedSourceMap(req.params.id);
-    res.json({ map: map ?? null });
+    const keys: Record<string, boolean> = {};
+    for (const s of SOURCE_REGISTRY) if (s.needsKey) keys[s.id] = Boolean(process.env[s.needsKey.env]);
+    res.json({ registry: SOURCE_REGISTRY, map, keyPresent: keys });
   } catch (error) { next(error); }
 });
 
-// POST: trigger (re)generation of source map via LLM
-app.post("/api/pages/:id/sources/refresh", async (req, res, next) => {
-  try {
-    const page = (await query("SELECT p.id, n.name, n.keywords FROM pages p JOIN niches n ON p.niche_id = n.id WHERE p.id = $1", [req.params.id])).rows[0];
-    if (!page) return void res.status(404).json({ error: "Page not found" });
-    const { generateSourceMap } = await import("../services/ingestion/tag-generator.js");
-    const map = await generateSourceMap(page.id, page.name, page.keywords, true);
-    res.json({ ok: true, map });
-  } catch (error) { next(error); }
-});
-
-// DELETE: clear cached source map (forces regen on next ingest)
-app.delete("/api/pages/:id/sources", async (req, res, next) => {
-  try {
-    const { clearSourceMap } = await import("../services/ingestion/tag-generator.js");
-    await clearSourceMap(req.params.id);
-    res.json({ ok: true });
-  } catch (error) { next(error); }
-});
-
-// PATCH: update per-source enable/disable toggles
-app.patch("/api/pages/:id/sources/toggles", async (req, res, next) => {
+app.put("/api/pages/:id/sources", async (req, res, next) => {
   try {
     const { getCachedSourceMap, setCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
-    const map = await getCachedSourceMap(req.params.id);
-    if (!map) return void res.status(404).json({ error: "No source map for this page — generate one first" });
-    const toggles = z.record(z.string(), z.boolean()).parse(req.body);
-    map.sourceEnabled = { ...(map.sourceEnabled ?? {}), ...toggles };
-    await setCachedSourceMap(req.params.id, map);
-    res.json({ ok: true, sourceEnabled: map.sourceEnabled });
+    const { validateSourcePatch } = await import("../services/ingestion/sourceMapValidation.js");
+    const result = validateSourcePatch(req.body ?? {});
+    if (!result.ok) return void res.status(400).json({ error: result.error });
+    const existing = await getCachedSourceMap(req.params.id);
+    if (!existing) return void res.status(404).json({ error: "No source map yet — regenerate first" });
+    const merged = { ...existing, ...result.patch };
+    await setCachedSourceMap(req.params.id, merged);
+    res.json({ ok: true, map: merged });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/pages/:id/sources/regenerate", async (req, res, next) => {
+  try {
+    const { generateSourceMap, getCachedSourceMap } = await import("../services/ingestion/tag-generator.js");
+    const page = await query(`SELECT p.id, n.name, n.keywords FROM pages p JOIN niches n ON n.id = p.niche_id WHERE p.id = $1`, [req.params.id]);
+    if (!page.rows[0]) return void res.status(404).json({ error: "Page not found" });
+    await generateSourceMap(req.params.id, page.rows[0].name, page.rows[0].keywords, true);
+    res.json({ ok: true, map: await getCachedSourceMap(req.params.id) });
   } catch (error) { next(error); }
 });
 
