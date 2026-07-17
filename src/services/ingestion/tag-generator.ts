@@ -55,7 +55,10 @@ async function seedLegacyCache(): Promise<void> {
   let legacy: Record<string, PageSourceMap> = {};
   try {
     if (fs.existsSync(CACHE_PATH)) legacy = JSON.parse(fs.readFileSync(CACHE_PATH, "utf-8"));
-  } catch { return; }
+  } catch (err) {
+    console.warn(`[sources] legacy page-sources.json unreadable — skipping seed: ${err}`);
+    return;
+  }
   for (const [pageId, map] of Object.entries(legacy)) {
     await query(
       `INSERT INTO page_source_maps (page_id, map) VALUES ($1, $2)
@@ -64,11 +67,12 @@ async function seedLegacyCache(): Promise<void> {
     ).catch(() => {}); // page may no longer exist (FK) — skip
   }
 }
-let seeded = false;
+// Promise-memoized so concurrent first calls all await the SAME seed run —
+// a boolean flag would let a second caller race past a half-finished import.
+let seedPromise: Promise<void> | null = null;
 async function ensureSeeded(): Promise<void> {
-  if (seeded) return;
-  seeded = true;
-  await seedLegacyCache();
+  if (!seedPromise) seedPromise = seedLegacyCache();
+  await seedPromise;
 }
 
 /** Get the cached source map for a page (returns null if none). */
