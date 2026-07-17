@@ -43,6 +43,7 @@ export const api = {
   // ── Growth automation: alerts / activity feed ────────────────────────────
   getAlerts:       ()   => req<{ events: any[]; unseen: number }>(`/alerts`),
   markAlertsSeen:  ()   => req<{ ok: boolean }>(`/alerts/seen`, { method: 'POST' }),
+  getInbox:        ()   => req<any>(`/inbox`),
 
   approveContent: (id: string)         => req<{ ok: boolean }>(`/content/${id}/approve`, { method: 'POST' }),
   rejectContent: (id: string)          => req<{ ok: boolean }>(`/content/${id}/reject`, { method: 'POST' }),

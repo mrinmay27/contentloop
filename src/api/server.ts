@@ -486,6 +486,15 @@ app.post("/api/alerts/seen", async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Sprint D-UI: aggregated inbox — needs-you (drafts + failed publishes),
+// activity (events ∪ posted jobs with 24h outcome), digest, next scheduled.
+app.get("/api/inbox", async (_req, res, next) => {
+  try {
+    const { getInboxPayload } = await import("../services/inboxRepo.js");
+    res.json(await getInboxPayload());
+  } catch (err) { next(err); }
+});
+
 app.get("/api/topics", async (req, res, next) => {
   try {
     const nicheId = req.query.nicheId?.toString();
@@ -1329,13 +1338,18 @@ app.post("/api/content/:id/publish", async (req, res, next) => {
 app.patch("/api/publish-jobs/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const body = req.body as { action: 'cancel' | 'reschedule' | 'publish-now'; scheduledAt?: string };
+    const body = req.body as { action: 'cancel' | 'reschedule' | 'publish-now' | 'dismiss'; scheduledAt?: string };
     if (body.action === 'cancel') {
       await cancelPublishJob(id);
       return void res.json({ ok: true });
     }
     if (body.action === 'reschedule' && body.scheduledAt) {
       await reschedulePublishJob(id, new Date(body.scheduledAt));
+      return void res.json({ ok: true });
+    }
+    if (body.action === 'dismiss') {
+      const del = await query(`DELETE FROM publish_jobs WHERE id=$1 AND status='failed'`, [id]);
+      if ((del.rowCount ?? 0) === 0) return void res.status(409).json({ error: 'Only failed jobs can be dismissed' });
       return void res.json({ ok: true });
     }
     if (body.action === 'publish-now') {
