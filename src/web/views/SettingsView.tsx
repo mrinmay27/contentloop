@@ -6,6 +6,7 @@ import { ImageGenManager } from '../components/settings/ImageGenManager';
 import { BrandKitLogoGenerator } from '../components/settings/BrandKitLogoGenerator';
 import { OAuthConnectCard, type OAuthProvider } from '../components/settings/OAuthConnectCard';
 import { SourcesPanel } from '../components/settings/SourcesPanel';
+import { AdvancedTuning } from '../components/settings/AdvancedTuning';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ const GROUP_ICONS: Record<string, string> = {
   'Canva':             '🖼️',
   'Pipeline':          '⚙️',
   'Sources':           '📡',
+  'Advanced':          '🎛️',
 };
 
 const GROUP_DESC: Record<string, string> = {
@@ -48,6 +50,7 @@ const GROUP_DESC: Record<string, string> = {
   'Canva':            'Canva OAuth credentials for template autofill',
   'Pipeline':         'Automation limits, approval mode, scheduling defaults, and default content format',
   'Sources':          'Registry-driven per-page source map — toggle sources, tune config (subreddits, tags, feeds), add custom RSS, regenerate via AI',
+  'Advanced':         'Growth-automation thresholds and per-source quality multipliers — workers pick up changes on next restart',
 };
 
 // Groups that require a paid subscription to be useful
@@ -55,7 +58,7 @@ const PREMIUM_GROUPS = new Set(['Twitter / X', 'Exploding Topics']);
 
 // Navigation sections — defines order and visual grouping in the left panel
 const NAV_SECTIONS: { label: string; groups: string[] }[] = [
-  { label: 'System',               groups: ['AI / LLM', 'Branding', 'Sources', 'Pipeline'] },
+  { label: 'System',               groups: ['AI / LLM', 'Branding', 'Sources', 'Pipeline', 'Advanced'] },
   { label: 'Generation',           groups: ['Image Generation'] },
   { label: 'Ingestion — Free',     groups: ['Reddit', 'Product Hunt'] },
   { label: 'Ingestion — Premium',  groups: ['Twitter / X', 'Exploding Topics'] },
@@ -928,8 +931,15 @@ export const SettingsView: React.FC = () => {
   };
 
   const groups       = config ? groupFields(config.meta) : {};
-  // Add Branding as a virtual group (not in config meta — it's per-page)
-  const allGroups    = { ...groups, Branding: [] } as Record<string, string[]>;
+  // Add Branding as a virtual group (not in config meta — it's per-page).
+  // Sources is ALSO virtual (its config lives in page_source_maps, not
+  // configStore) — pre-existing gap found while wiring Task 6's Advanced
+  // section: without this, `allGroups['Sources']` was undefined and the nav
+  // filter (`section.groups.filter(g => allGroups[g] !== undefined)`) always
+  // dropped Sources, so the Sources panel added in Task 4 was unreachable
+  // from the nav. Advanced doesn't need this — its config keys are real
+  // configStore entries — but Sources' fix belongs alongside it.
+  const allGroups    = { ...groups, Branding: [], Sources: [] } as Record<string, string[]>;
   const fieldsInGroup  = groups[activeGroup] ?? [];
   const dirtyCount   = Object.keys(dirty).length;
   const isIntegGroup = INTEGRATION_GROUPS.includes(activeGroup);
@@ -974,6 +984,8 @@ export const SettingsView: React.FC = () => {
             <BrandingSection/>
           ) : activeGroup === 'Sources' ? (
             <SourcesPanel />
+          ) : activeGroup === 'Advanced' ? (
+            <AdvancedTuning />
           ) : activeGroup === 'Image Generation' ? (
             <ImageGenManager />
           ) : loading ? (

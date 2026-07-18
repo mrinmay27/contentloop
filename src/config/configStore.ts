@@ -46,7 +46,10 @@ export type ConfigKey =
   // Pipeline
   | 'APPROVAL_REQUIRED' | 'POSTING_DRY_RUN'
   | 'MAX_POSTS_PER_PAGE_PER_DAY' | 'MIN_POST_GAP_HOURS' | 'DEFAULT_TIME_SLOTS'
-  | 'DEFAULT_FORMAT';
+  | 'DEFAULT_FORMAT'
+  // Tuning (Sprint U1 Task 6) — JSON blobs consumed by applyAutomationOverrides()
+  // / applySourceQualityOverrides() at boot; empty string = use code defaults.
+  | 'AUTOMATION_THRESHOLDS' | 'SOURCE_QUALITY_OVERRIDES';
 
 /** Describes every editable config field */
 export type ConfigMeta = {
@@ -124,6 +127,12 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
   DEFAULT_FORMAT:             { label:'Default content format',  group:'Pipeline', type:'select',
                                 options:['auto', 'post', 'carousel', 'reel'],
                                 placeholder:'auto' },
+  // ── Tuning (Sprint U1 Task 6) — rendered by AdvancedTuning.tsx, not the
+  // generic ConfigRow grid (JSON blobs aren't user-friendly as raw text) ────
+  AUTOMATION_THRESHOLDS:    { label:'Automation thresholds (JSON)',      group:'Advanced', type:'text',
+                              placeholder:'{}' },
+  SOURCE_QUALITY_OVERRIDES: { label:'Source quality overrides (JSON)',  group:'Advanced', type:'text',
+                              placeholder:'{}' },
 };
 
 // ─── Defaults sourced from env ────────────────────────────────────────────────
@@ -163,6 +172,8 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
   MIN_POST_GAP_HOURS:        String(env.MIN_POST_GAP_HOURS),
   DEFAULT_TIME_SLOTS:        env.DEFAULT_TIME_SLOTS,
   DEFAULT_FORMAT:            'auto',
+  AUTOMATION_THRESHOLDS:     '',
+  SOURCE_QUALITY_OVERRIDES:  '',
 };
 
 // ─── Store class ──────────────────────────────────────────────────────────────

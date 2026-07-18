@@ -38,7 +38,20 @@ import { llmConfigStore, LLM_PROVIDERS, resolveBaseUrl } from "../config/llmConf
 import { probeProvider, loadCapabilities } from "../config/modelDiscovery.js";
 import { saveBrandImage, saveContentImage, UPLOADS_DIR } from "../services/imageStorage.js";
 import { listVoices, previewVoice, VOICE_PRESETS } from "../services/tts.js";
+import { applyAutomationOverrides } from "../domain/automation.js";
+import { applySourceQualityOverrides } from "../domain/scoring.js";
 import path from 'path';
+
+// Sprint U1 Task 6: apply user tuning overrides from the config store (JSON
+// strings) at boot — mirrors worker/index.ts so the API process (which also
+// runs the scoring predicates via any inline paths) picks up the same
+// effective thresholds/multipliers.
+try {
+  const at = configStore.get("AUTOMATION_THRESHOLDS");
+  if (at) applyAutomationOverrides(JSON.parse(at));
+  const sq = configStore.get("SOURCE_QUALITY_OVERRIDES");
+  if (sq) applySourceQualityOverrides(JSON.parse(sq));
+} catch (err) { console.warn(`[config] invalid tuning overrides ignored: ${err}`); }
 
 // In-memory OAuth state store (keyed by state param for CSRF protection)
 const oauthStateStore = new Map<string, { pageId: string; provider: string }>();

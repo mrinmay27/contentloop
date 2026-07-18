@@ -28,10 +28,29 @@ const SOURCE_QUALITY_MULTIPLIER: Record<string, number> = {
   google_trends:      0.80,
 };
 
+// Sprint U1 Task 6: user-tunable per-source multipliers, fed from configStore
+// at boot (see worker/index.ts and api/server.ts). Overrides win over the
+// static table above; clamped to [0.1, 3] so a fat-fingered value can't zero
+// out or blow up scoring.
+let overrides: Record<string, number> = {};
+const OVERRIDE_MIN = 0.1;
+const OVERRIDE_MAX = 3;
+
+/** Apply partial per-source overrides (clamped to [0.1, 3]); null resets all. */
+export function applySourceQualityOverrides(map: Record<string, number> | null): void {
+  if (map === null) { overrides = {}; return; }
+  const next: Record<string, number> = {};
+  for (const [source, value] of Object.entries(map)) {
+    if (!Number.isFinite(value)) continue;
+    next[source.toLowerCase().replace(/[^a-z_]/g, "")] = Math.min(OVERRIDE_MAX, Math.max(OVERRIDE_MIN, value));
+  }
+  overrides = next;
+}
+
 /** Returns a quality multiplier for a given source label (default: 1.0). */
 export function sourceQualityMultiplier(source: string): number {
   const s = source.toLowerCase().replace(/[^a-z_]/g, "");
-  return SOURCE_QUALITY_MULTIPLIER[s] ?? 1.0;
+  return overrides[s] ?? SOURCE_QUALITY_MULTIPLIER[s] ?? 1.0;
 }
 
 /** Apply freshness decay: >5 days → -15%; >10 days → -30%. */

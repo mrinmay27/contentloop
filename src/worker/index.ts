@@ -2,7 +2,8 @@ import { Worker } from "bullmq";
 import { env } from "../config/env.js";
 import { configStore } from "../config/configStore.js";
 import { classifyNiche } from "../domain/niche-taxonomy.js";
-import { scoreTopic } from "../domain/scoring.js";
+import { scoreTopic, applySourceQualityOverrides } from "../domain/scoring.js";
+import { applyAutomationOverrides } from "../domain/automation.js";
 import { generateContent } from "../services/content-generator.js";
 import { ingestForNiche } from "../services/ingestion/index.js";
 import { runQualityGate } from "../services/qa.js";
@@ -33,6 +34,16 @@ import {
   updateContentVideo,
 } from "../services/repositories.js";
 import { connection, enqueueDailyPipeline } from "./queues.js";
+
+// Sprint U1 Task 6: apply user tuning overrides from the config store (JSON
+// strings) before any queue processor runs, so every job sees the effective
+// thresholds/multipliers from the first tick.
+try {
+  const at = configStore.get("AUTOMATION_THRESHOLDS");
+  if (at) applyAutomationOverrides(JSON.parse(at));
+  const sq = configStore.get("SOURCE_QUALITY_OVERRIDES");
+  if (sq) applySourceQualityOverrides(JSON.parse(sq));
+} catch (err) { console.warn(`[config] invalid tuning overrides ignored: ${err}`); }
 
 const workerOptions = { connection, concurrency: 3 };
 
