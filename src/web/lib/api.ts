@@ -1,7 +1,13 @@
 import type { Stats, Topic, ContentItem } from './types';
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, opts);
+  // Sprint U1 Task 7: attach the optional self-host API token (set in
+  // Settings → Advanced, persisted client-side only). No-op when unset —
+  // matches the server's API_TOKEN middleware, which is open when unset.
+  const token = localStorage.getItem('tpce_token');
+  const headers: Record<string, string> = { ...(opts?.headers as Record<string, string> | undefined) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`/api${path}`, { ...opts, headers });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

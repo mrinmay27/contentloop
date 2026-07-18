@@ -61,6 +61,10 @@ function safeParse(raw: string): Record<string, number> {
   } catch { return {}; }
 }
 
+// localStorage key the shared req() helper in web/lib/api.ts reads to
+// attach `Authorization: Bearer <token>` — see Sprint U1 Task 7.
+const TOKEN_KEY = 'tpce_token';
+
 export const AdvancedTuning: React.FC = () => {
   const [thresholds, setThresholds] = useState<Record<string, number>>({});
   const [multipliers, setMultipliers] = useState<Record<string, number>>({});
@@ -68,6 +72,19 @@ export const AdvancedTuning: React.FC = () => {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const [apiToken, setApiToken] = useState('');
+  const [tokenSaved, setTokenSaved] = useState(false);
+  useEffect(() => {
+    setApiToken(localStorage.getItem(TOKEN_KEY) ?? '');
+  }, []);
+  const saveToken = () => {
+    const trimmed = apiToken.trim();
+    if (trimmed) localStorage.setItem(TOKEN_KEY, trimmed);
+    else localStorage.removeItem(TOKEN_KEY);
+    setTokenSaved(true);
+    setTimeout(() => setTokenSaved(false), 2000);
+  };
 
   const load = () => {
     setLoading(true);
@@ -135,6 +152,23 @@ export const AdvancedTuning: React.FC = () => {
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           Growth-automation thresholds and per-source quality multipliers. Labels show the
           built-in default in parentheses. Workers pick up changes on next restart.
+        </div>
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>API token (self-host)</div>
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)', padding: 16, marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+          Only needed if this server was started with <code>API_TOKEN</code> set. Saved in this
+          browser only — sent as <code>Authorization: Bearer &lt;token&gt;</code> on every request.
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <input type="password" style={{ flex: 1, maxWidth: 320 }}
+            placeholder="API token"
+            value={apiToken}
+            onChange={e => setApiToken(e.target.value)} />
+          <button className="btn btn-primary btn-sm" onClick={saveToken}>Save</button>
+          {tokenSaved && <span style={{ fontSize: 11, color: 'var(--green)' }}>✓ Saved</span>}
         </div>
       </div>
 

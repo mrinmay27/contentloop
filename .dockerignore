@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-web
+data
+.env
+.env.*
+Imgs
+docs
+.git
+.gitignore
+*.md
+.vscode
+.claude

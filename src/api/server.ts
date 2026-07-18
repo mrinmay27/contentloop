@@ -41,6 +41,7 @@ import { listVoices, previewVoice, VOICE_PRESETS } from "../services/tts.js";
 import { applyAutomationOverrides } from "../domain/automation.js";
 import { applySourceQualityOverrides } from "../domain/scoring.js";
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 
 // Sprint U1 Task 6: apply user tuning overrides from the config store (JSON
 // strings) at boot — mirrors worker/index.ts so the API process (which also
@@ -66,6 +67,20 @@ app.use(cors());
 // Bumped to 25mb so we can accept image data URLs — a 1080×1920 PNG is ~3MB base64,
 // and a carousel batch can include several of them in one request.
 app.use(express.json({ limit: "25mb" }));
+
+// Sprint U1 Task 7: optional single-user API token for self-hosted deploys.
+// Unset (the default, e.g. local dev) = open, matching today's behavior.
+// /api/health stays exempt so uptime checks / compose healthchecks don't
+// need the token. Positioned after helmet/cors/json, before every route.
+const API_TOKEN = process.env.API_TOKEN;
+if (API_TOKEN) {
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/health") return next();
+    const auth = req.headers.authorization;
+    if (auth === `Bearer ${API_TOKEN}`) return next();
+    res.status(401).json({ error: "unauthorized" });
+  });
+}
 
 // Serve user-generated images: data/uploads/<pageId>/... → /uploads/<pageId>/...
 app.use("/uploads", express.static(UPLOADS_DIR, {
@@ -1521,6 +1536,21 @@ app.post("/api/reset/pipeline", async (_req, res, next) => {
     next(error);
   }
 });
+
+// Sprint U1 Task 7: prod static serving of the built SPA (dist-web), for
+// the single-container self-host deploy where the API also serves the UI.
+// Must come AFTER every /api, /uploads, /media, /queues route (those are
+// the prefixes excluded below) and BEFORE the error handler. Path
+// resolution is dist-aware: this file runs compiled from
+// dist/src/api/server.js in production, so ../../../dist-web resolves to
+// <repo-root>/dist-web (Docker COPYs both dist/ and dist-web/ as siblings
+// under /app). WEB_DIST overrides for non-standard layouts.
+if (env.NODE_ENV === "production") {
+  const webDist = process.env.WEB_DIST
+    ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../dist-web");
+  app.use(express.static(webDist));
+  app.get(/^\/(?!api|uploads|media|queues).*/, (_req, res) => res.sendFile(path.join(webDist, "index.html")));
+}
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _nextFunction: express.NextFunction) => {
   void _nextFunction;

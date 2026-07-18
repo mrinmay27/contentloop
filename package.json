@@ -14,6 +14,8 @@
     "infra:reset": "docker compose down -v && docker compose up -d",
     "build": "tsc -p tsconfig.json && vite build",
     "start": "node dist/src/api/server.js",
+    "start:api": "node dist/src/api/server.js",
+    "start:worker": "node dist/src/worker/index.js",
     "worker": "node dist/src/worker/index.js",
     "db:init": "tsx scripts/migrate.ts",
     "db:migrate": "tsx scripts/migrate.ts",

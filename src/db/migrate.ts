@@ -1,12 +1,32 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool, withTransaction } from "./pool.js";
 
-// NOTE: migrations run via tsx from src/ only. `npm run build` does NOT copy
-// .sql files into dist/, so wiring runMigrations into compiled startup would
-// require an asset-copy step for src/db/migrations first.
-const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "migrations");
+// NOTE (Sprint U1 Task 7): `npm run build`'s tsc pass does NOT copy .sql
+// files into dist/ — only .ts → .js. So a compiled dist/src/db/migrate.js
+// has no dist/src/db/migrations directory of its own. resolveMigrationsDir()
+// handles this three ways, in order: (1) MIGRATIONS_DIR env var — what the
+// Docker image uses, since the Dockerfile COPYs src/db/migrations to
+// /app/src/db/migrations and sets the env var to point there; (2) the
+// tsx dev path (src/db/migrations, sibling of this file); (3) a fallback
+// that walks up from dist/src/db to the repo root and back down into
+// src/db/migrations — useful for running the compiled output directly
+// against a repo checkout (no Docker) without setting the env var.
+function resolveMigrationsDir(): string {
+  if (process.env.MIGRATIONS_DIR) return process.env.MIGRATIONS_DIR;
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.join(here, "migrations"),                 // tsx: src/db/migrations
+    path.join(here, "../../../src/db/migrations"), // dist/src/db → repo src fallback
+  ];
+  for (const c of candidates) {
+    try { if (fsSync.existsSync(c)) return c; } catch { /* keep looking */ }
+  }
+  return candidates[0];
+}
+const MIGRATIONS_DIR = resolveMigrationsDir();
 
 /** Pure: which .sql files still need applying, in filename order. */
 export function pendingMigrations(files: string[], applied: string[]): string[] {
