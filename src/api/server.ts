@@ -325,11 +325,13 @@ app.post("/api/niches", async (req, res, next) => {
       negativeKeywords: normalizeKeywords(body.negativeKeywords),
     });
     res.json({ ok: true, niche });
-  } catch (err) {
+  } catch (err: any) {
     // The generic error middleware always answers 500 (no ZodError special-
     // casing exists in this codebase yet) — this route explicitly maps
     // validation failures to 400 per the plan's live-check contract.
     if (err instanceof z.ZodError) return void res.status(400).json({ error: err.issues });
+    // Unique violation on niches.name → friendly 409 instead of raw pg text.
+    if (err?.code === '23505') return void res.status(409).json({ error: 'A niche with that name already exists' });
     next(err);
   }
 });
@@ -356,8 +358,11 @@ app.post("/api/pages", async (req, res, next) => {
     }).parse(req.body);
     const page = await createPage(body);
     res.json({ ok: true, page });
-  } catch (err) {
+  } catch (err: any) {
     if (err instanceof z.ZodError) return void res.status(400).json({ error: err.issues });
+    // FK violation (bad nicheId) / unique violation (handle) → friendly errors.
+    if (err?.code === '23503') return void res.status(400).json({ error: 'Unknown niche' });
+    if (err?.code === '23505') return void res.status(409).json({ error: 'A page with that handle already exists for this niche' });
     next(err);
   }
 });

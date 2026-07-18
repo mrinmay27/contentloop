@@ -66,7 +66,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
 
   const canNext =
     (step===1 && (isCustom ? customValid : !!selectedNiche)) ||
-    (step===2 && keywords.length>0) ||
+    (step===2 && keywords.length >= (isCustom ? 2 : 1)) || // custom niches need >=2 (API zod .min(2))
     (step===3 && !!selectedName) ||
     step===4;
 
