@@ -97,7 +97,7 @@ export async function upsertRawTrend(nicheId: string, rawTrend: RawTrend): Promi
   return mapTopic(result.rows[0]);
 }
 
-export async function listTopics(nicheId?: string, limit = 200): Promise<Topic[]> {
+export async function listTopics(nicheId?: string, limit = 500): Promise<Topic[]> {
   const result = await query(
     `SELECT * FROM topics
      WHERE ($1::uuid IS NULL OR niche_id = $1)
