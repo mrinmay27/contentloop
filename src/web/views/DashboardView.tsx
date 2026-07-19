@@ -18,7 +18,7 @@ type Props = {
 };
 
 const TABS = [
-  { key:'scored',    label:'Selected',  desc:'Topics passed scoring — ready to generate content', icon:'⭐' },
+  { key:'scored',    label:'Selected',  desc:'Everything scoring picked (content may already be generated)', icon:'⭐' },
   { key:'backup',    label:'Backup',    desc:'Passed scoring but lower priority',                  icon:'🔄' },
   { key:'review',    label:'Review',    desc:'Content generated — needs your approval',            icon:'📝' },
   { key:'scheduled', label:'Scheduled', desc:'Approved and queued to post',                        icon:'📅' },
@@ -99,19 +99,28 @@ function isFiltered(f: FilterState) {
 /**
  * Maps a topic's DB state+decision to the dashboard tab it belongs in.
  */
+/** NOTE: 'scored' (Selected) and 'review' OVERLAP by design since Sprint C
+ *  automated generation: a selected topic passes through SCORED in minutes,
+ *  so Selected shows every topic scoring picked (matching the SELECTED stat
+ *  card), while Review is the subset whose content awaits approval. */
 function resolveTab(topic: Topic): string {
   const s = topic.state;
-  if (s === 'CONTENT_READY' || s === 'QA_PASSED')     return 'review';
   if (s === 'SCHEDULED')                               return 'scheduled';
   if (s === 'POSTED' || s === 'ANALYZED')              return 'posted';
-  if (s === 'SCORED' && topic.decision === 'selected') return 'scored';
   if (s === 'SCORED' && topic.decision === 'backup')   return 'backup';
+  if (topic.decision === 'selected' &&
+      (s === 'SCORED' || s === 'CONTENT_READY' || s === 'QA_PASSED')) return 'scored';
   return 'hidden';
+}
+
+/** Review = selected topics whose generated content awaits approval. */
+function isReviewTopic(topic: Topic): boolean {
+  return topic.state === 'CONTENT_READY' || topic.state === 'QA_PASSED';
 }
 
 function applyFilters(topics: Topic[], f: FilterState, search: string, tab: TabKey): Topic[] {
   return topics.filter(t => {
-    if (resolveTab(t) !== tab) return false;
+    if (tab === 'review' ? !isReviewTopic(t) : resolveTab(t) !== tab) return false;
     // search
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     // source filter
@@ -581,7 +590,7 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
                 <div className="empty-state">
                   <div style={{ fontSize:28, opacity:0.3 }}>◉</div>
                   <div style={{ fontWeight:600 }}>
-                    {hasFilter ? 'No topics match the current filters' : `No ${activeTab} topics`}
+                    {hasFilter ? 'No topics match the current filters' : `No ${TABS.find(t => t.key === activeTab)?.label.toLowerCase() ?? activeTab} topics`}
                   </div>
                   <div style={{ fontSize:12, color:'var(--text-muted)' }}>
                     {hasFilter
