@@ -2,6 +2,11 @@
 
 Base URL: `http://localhost:4000/api`
 
+If the server was started with `API_TOKEN` set (see `.env.example` /
+`SECURITY.md`), every route below except `/health` requires
+`Authorization: Bearer <API_TOKEN>`; unset (the default) leaves the API
+open, matching local-dev behavior.
+
 ## Health
 
 `GET /health`
@@ -24,7 +29,15 @@ Base URL: `http://localhost:4000/api`
 
 `GET /niches`
 
+`POST /niches`
+
+Creates a custom niche: `{name, keywords (>=2), targetPersona, monetizationKeywords?, negativeKeywords?}`. Used by the wizard's "+ Custom niche" path. 400 on validation failure, 409 if the name already exists.
+
 `GET /pages`
+
+`POST /pages`
+
+Creates a page under a niche: `{nicheId, name, platform?, handle?, brand?}`. 400 on validation failure or unknown `nicheId`, 409 on a duplicate handle within the niche.
 
 `GET /topics`
 
@@ -51,6 +64,20 @@ Marks all feed events as seen.
 Aggregated inbox payload: needs-you items (drafts + failed publishes), activity with outcome chips, since-yesterday digest, next scheduled posts.
 
 `PATCH /publish-jobs/:id` also accepts `{"action":"dismiss"}` for failed jobs (404 unknown id, 409 non-failed status).
+
+## Sources (per-page ingestion config)
+
+`GET /pages/:id/sources`
+
+Returns `{registry, map, keyPresent}` — the static `SOURCE_REGISTRY` manifest (every ingestion source, its config fields, and any env key it needs), the page's current `PageSourceMap` (or `null` if never generated), and which `needsKey` env vars are actually set on the server.
+
+`PUT /pages/:id/sources`
+
+Validated partial update (`sourceEnabled` toggles, subreddit/tag/query lists, RSS feed URLs, etc. — see `sourceMapValidation.ts`). 400 on invalid input (e.g. a malformed feed URL), 404 if no source map exists yet (regenerate first).
+
+`POST /pages/:id/sources/regenerate`
+
+Re-runs AI source-map generation for the page and merges the result with any existing user config (enabled/disabled toggles and custom feed overrides survive; the fresh AI-picked subreddits/tags/etc. otherwise win). 404 if the page doesn't exist.
 
 ## Approval
 

@@ -113,6 +113,53 @@
      are colored by decision thresholds (≥50 green / 35–49 amber / <35 red).
    - Backed by one aggregate endpoint (`GET /api/inbox`).
 
+12. **Configurability & self-host** *(Sprint U1 — universal self-host)*
+   - **Source registry + DB-backed maps**: `SOURCE_REGISTRY`
+     (`src/services/ingestion/sourceRegistry.ts`) is a static manifest of all
+     14 ingestion sources — id, label, description, which `PageSourceMap`
+     fields it exposes (subreddits, tags, search phrases, feed URLs), and
+     which env var (if any) it needs. It drives the Settings → Sources UI
+     generically (`SourcesPanel.tsx`) — no per-source UI code. Per-page
+     source config (`page_source_maps`, migration `007`) replaced the
+     gitignored `data/page-sources.json` cache; a fresh install starts empty
+     and the AI "regenerate" flow populates it, or a legacy cache is
+     one-time-imported on first read. `GET/PUT /api/pages/:id/sources` +
+     `POST /api/pages/:id/sources/regenerate` (validated via
+     `sourceMapValidation.ts`) are the only write paths; regenerate merges
+     rather than clobbers (user toggles/custom feeds survive a re-run).
+   - **Custom niches**: `POST /api/niches` lets the wizard's "+ Custom
+     niche" path create a niche (name, keywords, persona, monetization/
+     negative keywords) instead of picking from the seeded set; the wizard
+     then calls `POST /api/pages` and fires `sources/regenerate`
+     fire-and-forget for the new page.
+   - **Tunables**: constants that used to be hardcoded — automation
+     thresholds (`src/domain/automation.ts`: react/recycle/trend-alert
+     sensitivity) and per-source scoring quality multipliers
+     (`src/domain/scoring.ts`) — are now a defaults object + a live object
+     mutated by `applyAutomationOverrides()` / `applySourceQualityOverrides()`
+     (clamped to sane ranges; `null` resets to defaults). Both the API and
+     worker processes apply `AUTOMATION_THRESHOLDS` /
+     `SOURCE_QUALITY_OVERRIDES` (JSON blobs in `configStore`) at boot, so a
+     restart is required for tuning changes to take effect. Rendered by
+     `AdvancedTuning.tsx` under Settings → Advanced.
+   - **Docker packaging**: a single multi-stage `Dockerfile` builds once and
+     serves both process roles — `scripts/docker-entrypoint.sh` runs
+     migrations then execs either `dist/src/api/server.js` or
+     `dist/src/worker/index.js` depending on `TPCE_ROLE` (`api` | `worker`).
+     `docker-compose.yml`'s opt-in `full` profile (`docker compose --profile
+     full up`) adds `app-api` and `app-worker` services alongside the
+     existing `postgres`/`redis` services, both built from the same image.
+     Migrations resolve their directory via `MIGRATIONS_DIR` (set inside the
+     image) with a filesystem-probing fallback for non-Docker compiled runs
+     (`src/db/migrate.ts`). In production, the API process also serves the
+     built SPA (`dist-web/`, overridable via `WEB_DIST`) with an SPA
+     fallback route that excludes `/api`, `/uploads`, `/media`, `/queues`.
+   - **`API_TOKEN`**: optional single-user bearer token for `/api/*`
+     (`/api/health` exempt) — unset (default) matches today's open local-dev
+     behavior; the web client attaches it from `localStorage` if a self-host
+     operator sets one. Not a substitute for TLS/reverse-proxy — see
+     `SECURITY.md`.
+
 ## Migrations
 
 Schema changes live as numbered SQL files in `src/db/migrations/`
