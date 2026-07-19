@@ -37,3 +37,7 @@ Please report issues via [GitHub Issues](../../issues) on this repository.
 Avoid posting real credentials or exploit details for a live public
 instance in a public issue — describe the class of issue and we'll follow
 up for specifics if needed.
+
+Note: with `API_TOKEN` set, the Bull Board dashboard at `/queues` requires the
+same token (`Authorization: Bearer <token>` or `?token=<token>` in the browser).
+When exposing TPCE through a reverse proxy, consider blocking `/queues` entirely.

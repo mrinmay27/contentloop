@@ -77,10 +77,14 @@ app.use(express.json({ limit: "25mb" }));
 // need the token. Positioned after helmet/cors/json, before every route.
 const API_TOKEN = process.env.API_TOKEN;
 if (API_TOKEN) {
-  app.use("/api", (req, res, next) => {
-    if (req.path === "/health") return next();
+  // Guards the API and the Bull Board queue dashboard. /queues is a browser
+  // UI, so it additionally accepts ?token= (headers can't be set from the
+  // address bar); the API accepts the Bearer header only.
+  app.use(["/api", "/queues"], (req, res, next) => {
+    if (req.baseUrl === "/api" && req.path === "/health") return next();
     const auth = req.headers.authorization;
     if (auth === `Bearer ${API_TOKEN}`) return next();
+    if (req.baseUrl === "/queues" && req.query.token === API_TOKEN) return next();
     res.status(401).json({ error: "unauthorized" });
   });
 }
