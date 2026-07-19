@@ -40,7 +40,10 @@ import { connection, enqueueDailyPipeline } from "./queues.js";
 // thresholds/multipliers from the first tick.
 try {
   const at = configStore.get("AUTOMATION_THRESHOLDS");
-  if (at) applyAutomationOverrides(JSON.parse(at));
+  if (at) {
+    applyAutomationOverrides(JSON.parse(at));
+    console.log(`[config] automation overrides active: ${at}`);
+  }
   const sq = configStore.get("SOURCE_QUALITY_OVERRIDES");
   if (sq) applySourceQualityOverrides(JSON.parse(sq));
 } catch (err) { console.warn(`[config] invalid tuning overrides ignored: ${err}`); }
