@@ -18,6 +18,14 @@ import { query } from "../../db/pool.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+
+/** Substack publication slugs are subdomains: [a-z0-9-] only. The LLM
+ *  sometimes returns display names ("The AI Alignment Newsletter") — slugify
+ *  them; anything that sanitizes to empty is dropped. */
+function slugifySubstack(raw: string): string {
+  return raw.toLowerCase().trim().replace(/[^a-z0-9-\s]/g, "").replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 export interface PageSourceMap {
   pageId:             string;
   nicheName:          string;
@@ -200,7 +208,7 @@ export async function generateSourceMap(
           generatedAt:      new Date().toISOString(),
           mediumTags:       (parsed.mediumTags        ?? []).map(String),
           hackernewsTerms:  (parsed.hackernewsTerms   ?? []).map(String),
-          substackSlugs:    (parsed.substackSlugs     ?? []).map(String),
+          substackSlugs:    (parsed.substackSlugs     ?? []).map(String).map(slugifySubstack).filter(Boolean),
           redditSubreddits: (parsed.redditSubreddits  ?? []).map(String),
           devtoTags:        (parsed.devtoTags         ?? []).map(String),
           arxivCategories:  (parsed.arxivCategories   ?? []).map(String),

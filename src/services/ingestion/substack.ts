@@ -17,6 +17,10 @@ export async function fetchSubstackTrends(
   const trends: RawTrend[] = [];
 
   for (const slug of newsletterSlugs.slice(0, 8)) {
+    if (!/^[a-z0-9-]+$/i.test(slug)) {
+      console.warn(`[substack] Skipping invalid slug "${slug}" (not a subdomain)`);
+      continue;
+    }
     const feedUrl = `https://${slug}.substack.com/feed`;
     try {
       const res = await fetch(feedUrl, {
