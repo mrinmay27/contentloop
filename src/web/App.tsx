@@ -12,7 +12,10 @@ import { SettingsView }  from './views/SettingsView';
 import { ContentEditor }   from './components/editor/ContentEditor';
 import { CreatePageModal } from './components/modals/CreatePageModal';
 import { AddTopicDrawer }  from './components/pipeline/AddTopicDrawer';
+import { LoadingScreen, ErrorScreen, WelcomeScreen } from './components/layout/StartupScreens';
 import { api } from './lib/api';
+import { resolveStartupView } from './lib/startupView';
+import type { StartupStatus } from './lib/startupView';
 import type { NavKey, ThemePage, Topic, Stats } from './lib/types';
 
 const EMPTY_STATS: Stats = {
@@ -48,16 +51,27 @@ function App() {
   const [showCreate, setShowCreate]   = useState(false);
   const [showAddTopic, setShowAddTopic] = useState(false);
   const [notice, setNotice]           = useState<string|null>(null);
+  const [startupStatus, setStartupStatus] = useState<StartupStatus>('loading');
+  const [startupError, setStartupError]   = useState<string|null>(null);
 
-  // Load real pages from API once
-  useEffect(() => {
+  // Load real pages from API. The status is tracked explicitly because an
+  // empty `pages` array cannot distinguish "still loading" from "fetch failed"
+  // from "fresh install with no pages yet" — conflating them stranded new
+  // users on a permanent spinner. See lib/startupView.ts.
+  const loadPages = useCallback(() => {
+    setStartupStatus('loading');
     api.getPages().then((raw: any[]) => {
       const mapped = raw.map(mapApiPage);
       setPages(mapped);
-      if (mapped.length > 0 && !activePage) setActivePage(mapped[0].id);
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      if (mapped.length > 0) setActivePage(prev => prev || mapped[0].id);
+      setStartupStatus('ready');
+    }).catch((err: unknown) => {
+      setStartupError(err instanceof Error ? err.message : null);
+      setStartupStatus('error');
+    });
   }, []);
+
+  useEffect(() => { loadPages(); }, [loadPages]);
 
   // Editor state — tracks BOTH the topic and where we came from
   const [editingTopic, setEditingTopic] = useState<Topic|null>(null);
@@ -137,19 +151,44 @@ function App() {
 
   const currentPage = pages.find(p => p.id===activePage) ?? pages[0];
 
-  // Show loading screen while pages haven't loaded yet
-  if (!currentPage) {
+  const startupView = resolveStartupView({ status: startupStatus, pageCount: pages.length });
+
+  if (startupView === 'loading') return <LoadingScreen/>;
+  if (startupView === 'error')   return <ErrorScreen message={startupError} onRetry={loadPages}/>;
+
+  // Fresh install: the API answered, there are just no theme pages yet. Render
+  // the welcome screen alongside the create modal so the one call to action
+  // actually works — this is every new user's first screen.
+  if (startupView === 'welcome') {
     return (
-      <div style={{ display:'flex', flex:1, alignItems:'center', justifyContent:'center',
-        height:'100vh', background:'var(--bg-base)', flexDirection:'column', gap:12 }}>
-        <div style={{ width:32, height:32, border:'3px solid var(--border)',
-          borderTopColor:'var(--accent)', borderRadius:'50%',
-          animation:'spin 0.8s linear infinite' }}/>
-        <div style={{ fontSize:13, color:'var(--text-muted)' }}>Loading pages…</div>
-        <style>{`@keyframes spin { to { transform:rotate(360deg) } }`}</style>
-      </div>
+      <>
+        <WelcomeScreen onCreate={() => setShowCreate(true)}/>
+        {showCreate && (
+          <CreatePageModal
+            onClose={() => setShowCreate(false)}
+            onCreate={newPage => {
+              const id = newPage.id ?? ('tp' + (pages.length + 1));
+              setPages(p => [...p, { ...newPage, id }]);
+              setActivePage(id);
+              setShowCreate(false);
+            }}
+            onNotice={msg => { setNotice(msg); setTimeout(() => setNotice(null), 6000); }}
+          />
+        )}
+        {notice && (
+          <div style={{ position:'fixed', bottom:16, left:'50%', transform:'translateX(-50%)',
+            zIndex:9999, background:'var(--bg-surface)', border:'1px solid var(--border)',
+            color:'var(--text)', padding:'10px 16px', borderRadius:'var(--radius)', fontSize:12 }}>
+            {notice}
+          </div>
+        )}
+      </>
     );
   }
+
+  // Defensive: 'app' implies at least one page, but never render the main UI
+  // without one — every view below dereferences currentPage.
+  if (!currentPage) return <LoadingScreen/>;
 
   return (
     <>
