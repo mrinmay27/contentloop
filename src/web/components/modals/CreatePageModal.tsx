@@ -7,22 +7,9 @@ import { api } from '../../lib/api';
 // that would drag in server-only imports — this one wouldn't.
 import { CAPTION_TONES, DEFAULT_TONE } from '../../../domain/tone';
 import type { CaptionTone } from '../../../domain/tone';
+import { NICHE_PRESETS } from '../../../domain/nichePresets';
+import { validateLogoFile } from '../../lib/logoUpload';
 import type { ThemePage } from '../../lib/types';
-
-const NICHES = [
-  { id:'n1',  name:'AI Tools',         trendScore:97, monetizationScore:92, competition:'High', growth:'+34%', emoji:'🤖' },
-  { id:'n2',  name:'Side Hustles',      trendScore:94, monetizationScore:96, competition:'Med',  growth:'+28%', emoji:'💰' },
-  { id:'n3',  name:'Crypto & Web3',     trendScore:85, monetizationScore:88, competition:'High', growth:'+19%', emoji:'⛓️' },
-  { id:'n4',  name:'Fitness & Health',  trendScore:91, monetizationScore:85, competition:'High', growth:'+22%', emoji:'💪' },
-  { id:'n5',  name:'Personal Finance',  trendScore:89, monetizationScore:93, competition:'Med',  growth:'+31%', emoji:'📊' },
-  { id:'n6',  name:'Mental Health',     trendScore:88, monetizationScore:72, competition:'Low',  growth:'+41%', emoji:'🧠' },
-  { id:'n7',  name:'Productivity',      trendScore:86, monetizationScore:80, competition:'Med',  growth:'+18%', emoji:'⚡' },
-  { id:'n8',  name:'Travel Hacks',      trendScore:83, monetizationScore:78, competition:'Med',  growth:'+15%', emoji:'✈️' },
-  { id:'n9',  name:'Real Estate',       trendScore:80, monetizationScore:94, competition:'Low',  growth:'+12%', emoji:'🏠' },
-  { id:'n10', name:'Sustainable Living',trendScore:79, monetizationScore:70, competition:'Low',  growth:'+47%', emoji:'🌿' },
-  { id:'n11', name:'Creator Economy',   trendScore:88, monetizationScore:89, competition:'Med',  growth:'+26%', emoji:'🎬' },
-  { id:'n12', name:'Tech News',         trendScore:82, monetizationScore:75, competition:'High', growth:'+11%', emoji:'💻' },
-];
 
 const NAMES = ['AI Tools Daily','The AI Toolkit','Automate Everything','AI Insider Daily',
   'The Future Worker','AI Edge','Smart Tools HQ','The AI Stack','Build With AI','AI Creators Lab'];
@@ -56,6 +43,25 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
   const [selectedName, setSelectedName]   = useState<string|null>(null);
   const [primaryColor, setPrimaryColor]   = useState('#F5A623');
   const [captionTone, setCaptionTone]     = useState<CaptionTone>(DEFAULT_TONE);
+  const [logoDataUrl, setLogoDataUrl]     = useState<string|null>(null);
+  const [logoName, setLogoName]           = useState('');
+  const [logoError, setLogoError]         = useState<string|null>(null);
+
+  // Read the picked file into a data URL now; it's uploaded after the page
+  // exists, since the branding endpoint is keyed by page id.
+  const handleLogoPick = (file: File | null) => {
+    setLogoError(null);
+    if (!file) return;
+    const problem = validateLogoFile(file);
+    if (problem) { setLogoError(problem); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLogoDataUrl(typeof reader.result === 'string' ? reader.result : null);
+      setLogoName(file.name);
+    };
+    reader.onerror = () => setLogoError('That file could not be read. Try another image.');
+    reader.readAsDataURL(file);
+  };
 
   // Custom niche fields (Sprint U1 Task 5) — only used when
   // selectedNiche === CUSTOM_NICHE_ID.
@@ -66,7 +72,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
   const [creating, setCreating]     = useState(false);
   const [createError, setCreateError] = useState<string|null>(null);
 
-  const filteredNiches = NICHES.filter(n => n.name.toLowerCase().includes(nicheSearch.toLowerCase()));
+  const filteredNiches = NICHE_PRESETS.filter(n => n.name.toLowerCase().includes(nicheSearch.toLowerCase()));
   const isCustom = selectedNiche === CUSTOM_NICHE_ID;
   const customKeywordsList = parseCsv(customKeywordsRaw);
   const customValid = customName.trim().length >= 2 && customKeywordsList.length >= 2 && customPersona.trim().length >= 3;
@@ -81,37 +87,62 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
   // the comma-separated input so Step 2's existing add/remove-tag UI works
   // unchanged for both flows.
   const goNext = () => {
-    if (step === 1 && isCustom) setKeywords(customKeywordsList);
+    if (step === 1) {
+      // Seed Step 2 from whichever niche was chosen. Built-in niches used to
+      // fall through to a hardcoded AI keyword list regardless of the pick,
+      // so choosing "Fitness & Health" showed "ChatGPT, automation, …".
+      if (isCustom) setKeywords(customKeywordsList);
+      else {
+        const preset = NICHE_PRESETS.find(n => n.id === selectedNiche);
+        if (preset) setKeywords(preset.keywords);
+      }
+    }
     setStep(s => s + 1);
   };
 
+  /**
+   * Both paths now create a real niche + page on the server. The built-in path
+   * used to skip the API entirely and hand App a client-only fake id, so the
+   * page looked created but vanished on reload and nothing could ingest for it.
+   */
   const handleCreate = async () => {
-    if (!isCustom) {
-      const niche = NICHES.find(n => n.id===selectedNiche);
-      onCreate({ name: selectedName!, niche: niche?.name ?? 'Custom', nicheId: niche?.id ?? '', accent: primaryColor, status:'active', posts:0, followers:'0' });
-      onClose();
-      return;
-    }
-
     setCreating(true);
     setCreateError(null);
     try {
-      const { niche } = await api.createNiche({
-        name: customName,
-        keywords,
-        monetizationKeywords: parseCsv(customMonetizationRaw),
-        negativeKeywords: [],
-        targetPersona: customPersona,
-      });
+      const { niche } = isCustom
+        ? await api.createNiche({
+            name: customName,
+            keywords,
+            monetizationKeywords: parseCsv(customMonetizationRaw),
+            negativeKeywords: [],
+            targetPersona: customPersona,
+          })
+        // Server owns the preset definition; idempotent, so two people picking
+        // the same built-in niche reuse one row rather than colliding. Any
+        // edits made on Step 2 are passed through, otherwise that step would
+        // be another control that looks editable but changes nothing.
+        : await api.ensureNichePreset(selectedNiche!, keywords);
+
       const { page } = await api.createPage({
         nicheId: niche.id,
         name: selectedName!,
         brand: { accent: primaryColor, tone: captionTone },
       });
+
+      // Logo needs the page id, so it can only be uploaded after creation.
+      // A failed logo must not discard the page the user just made.
+      let logoFailed = false;
+      if (logoDataUrl) {
+        try { await api.uploadBrandLogo(page.id, logoDataUrl); }
+        catch { logoFailed = true; }
+      }
+
       // Fire-and-forget — the Sources panel shows progress/results; a failure
       // here shouldn't block the page from being created.
       api.regenerateSources(page.id).catch(() => {});
-      onNotice?.('Sources are being generated — review them in Settings → Sources.');
+      onNotice?.(logoFailed
+        ? 'Page created, but the logo could not be saved — add it in Settings. Sources are being generated.'
+        : 'Sources are being generated — review them in Settings → Sources.');
       onCreate({
         id: page.id,
         name: page.name,
@@ -124,7 +155,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
       });
       onClose();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create custom niche');
+      setCreateError(err instanceof Error ? err.message : 'Failed to create the theme page');
     } finally {
       setCreating(false);
     }
@@ -243,7 +274,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
             <div>
               <div style={{ marginBottom:12, padding:'10px 14px', background:'var(--bg-elevated)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)' }}>
                 <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:4 }}>Auto-generated for</div>
-                <div style={{ fontWeight:600 }}>{isCustom ? customName : NICHES.find(n=>n.id===selectedNiche)?.name}</div>
+                <div style={{ fontWeight:600 }}>{isCustom ? customName : NICHE_PRESETS.find(n=>n.id===selectedNiche)?.name}</div>
               </div>
               <div className="section-label" style={{ marginBottom:8 }}>Keywords — click to remove</div>
               <div className="keyword-tags" style={{ marginBottom:16 }}>
@@ -293,12 +324,33 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
           {step===4 && (
             <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
               <div>
-                <div className="section-label" style={{ marginBottom:8 }}>Logo</div>
-                <div className="upload-zone">
-                  <Icon name="upload" size={20}/>
-                  <span style={{ fontSize:13, fontWeight:500 }}>Upload logo image</span>
-                  <span style={{ fontSize:11, color:'var(--text-muted)' }}>PNG, SVG · recommended 400×400px</span>
-                </div>
+                <div className="section-label" style={{ marginBottom:8 }}>Logo <span style={{ textTransform:'none', fontWeight:400 }}>(optional)</span></div>
+                {logoDataUrl ? (
+                  <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+                    <img src={logoDataUrl} alt="Selected logo"
+                      style={{ width:64, height:64, objectFit:'contain', borderRadius:8,
+                        border:'1px solid var(--border)', background:'var(--bg-base)' }}/>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:12, fontWeight:500, overflow:'hidden',
+                        textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{logoName}</div>
+                      <button className="btn btn-ghost btn-sm" style={{ marginTop:6 }}
+                        onClick={() => { setLogoDataUrl(null); setLogoName(''); setLogoError(null); }}>
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="upload-zone" style={{ cursor:'pointer' }}>
+                    <input type="file" accept="image/*" style={{ display:'none' }}
+                      onChange={e => handleLogoPick(e.target.files?.[0] ?? null)}/>
+                    <Icon name="upload" size={20}/>
+                    <span style={{ fontSize:13, fontWeight:500 }}>Upload logo image</span>
+                    <span style={{ fontSize:11, color:'var(--text-muted)' }}>PNG, SVG · recommended 400×400px</span>
+                  </label>
+                )}
+                {logoError && (
+                  <div style={{ fontSize:11, color:'var(--red)', marginTop:8 }}>{logoError}</div>
+                )}
               </div>
               <div>
                 <div className="section-label" style={{ marginBottom:8 }}>Brand Color</div>

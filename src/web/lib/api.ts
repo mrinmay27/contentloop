@@ -29,6 +29,13 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }),
+  /** Built-in niche path: server resolves the preset and reuses it if it exists.
+   *  `keywords` carries any edits made on the wizard's Keywords step. */
+  ensureNichePreset: (presetId: string, keywords?: string[]) => req<any>('/niches/preset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ presetId, keywords }),
+  }),
   getPages: (nicheId?: string)         => req<any[]>(`/pages${nicheId ? `?nicheId=${nicheId}` : ''}`),
   createPage: (body: any) => req<any>('/pages', {
     method: 'POST',

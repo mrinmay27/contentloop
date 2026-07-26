@@ -15,6 +15,7 @@ import {
   listPages,
   createNiche,
   createPage,
+  ensureNiche,
   listScheduledPostsForMonth,
   listScheduledTimesForPage,
   listTopics,
@@ -365,6 +366,43 @@ app.post("/api/niches", async (req, res, next) => {
     if (err instanceof z.ZodError) return void res.status(400).json({ error: err.issues });
     // Unique violation on niches.name → friendly 409 instead of raw pg text.
     if (err?.code === '23505') return void res.status(409).json({ error: 'A niche with that name already exists' });
+    next(err);
+  }
+});
+
+/**
+ * Built-in niche selection (wizard step 1, non-custom path).
+ *
+ * Takes a preset id rather than keywords: the presets are defined server-side
+ * so a client cannot smuggle in arbitrary niche definitions through this
+ * route, and every user picking "AI Tools" gets the same real niche. Idempotent
+ * — the second person to pick a preset reuses the existing row instead of
+ * colliding with the UNIQUE constraint on niches.name.
+ */
+app.post("/api/niches/preset", async (req, res, next) => {
+  try {
+    const { presetId, keywords } = z.object({
+      presetId: z.string().min(1),
+      // Edits from the wizard's Keywords step. Only applied when the niche is
+      // new — ON CONFLICT leaves an existing niche's keywords alone, so one
+      // user's edits never silently rewrite a niche someone else is using.
+      keywords: z.array(z.string().min(1)).min(2).optional(),
+    }).parse(req.body);
+    const { findNichePreset } = await import("../domain/nichePresets.js");
+    const preset = findNichePreset(presetId);
+    if (!preset) return void res.status(404).json({ error: "Unknown niche preset" });
+
+    const { normalizeKeywords } = await import("../domain/keywords.js");
+    const niche = await ensureNiche({
+      name: preset.name,
+      keywords: normalizeKeywords(keywords ?? preset.keywords),
+      monetizationKeywords: normalizeKeywords(preset.monetizationKeywords),
+      negativeKeywords: [],
+      targetPersona: preset.targetPersona,
+    });
+    res.json({ ok: true, niche });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return void res.status(400).json({ error: err.issues });
     next(err);
   }
 });

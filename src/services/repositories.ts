@@ -65,6 +65,29 @@ export async function createPage(opts: {
   return mapPage(result.rows[0]);
 }
 
+/**
+ * Idempotent niche creation, used by the wizard's built-in-preset path.
+ *
+ * `niches.name` is UNIQUE, so a second user picking the same built-in niche
+ * would otherwise hit a 23505 and be unable to create their page. Presets are
+ * well-known and identical for everyone, so reusing the existing row is the
+ * correct behaviour. Deliberately separate from createNiche(), which keeps its
+ * stricter semantics for user-authored custom niches.
+ */
+export async function ensureNiche(opts: {
+  name: string; keywords: string[]; monetizationKeywords: string[];
+  negativeKeywords: string[]; targetPersona: string;
+}): Promise<Niche> {
+  const result = await query(
+    `INSERT INTO niches (name, keywords, monetization_keywords, negative_keywords, target_persona)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+     RETURNING *`,
+    [opts.name.trim(), opts.keywords, opts.monetizationKeywords, opts.negativeKeywords, opts.targetPersona.trim()]
+  );
+  return mapNiche(result.rows[0]);
+}
+
 export async function upsertRawTrend(nicheId: string, rawTrend: RawTrend): Promise<Topic> {
   const title = rawTrend.title.trim();
   const keywords = normalizeKeywords(rawTrend.keywords);
