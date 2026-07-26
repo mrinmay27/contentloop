@@ -15,6 +15,9 @@ data/
 *.db
 *.sqlite
 
+# Launcher-managed portable runtime (downloaded Node, install markers)
+.runtime/
+
 # Logs
 logs/
 *.log
