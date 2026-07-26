@@ -19,7 +19,7 @@ export const PROVIDERS: Record<string, {
 }> = {
   groq:        { name:'Groq',                emoji:'⚡', models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','llama-3.1-70b-versatile','mixtral-8x7b-32768','gemma2-9b-it','llama3-70b-8192'] },
   openai:      { name:'OpenAI',              emoji:'🟢', models:['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-4','gpt-3.5-turbo'] },
-  anthropic:   { name:'Anthropic Claude',    emoji:'🟠', models:['claude-3-5-sonnet-20241022','claude-3-5-haiku-20241022','claude-3-opus-20240229','claude-3-sonnet-20240229','claude-3-haiku-20240307'] },
+  anthropic:   { name:'Anthropic Claude',    emoji:'🟠', models:['claude-opus-5','claude-sonnet-5','claude-haiku-4-5-20251001','claude-3-5-sonnet-20241022','claude-3-5-haiku-20241022'] },
   gemini:      { name:'Google Gemini',       emoji:'🔵', models:['gemini-2.0-flash','gemini-2.0-flash-lite','gemini-1.5-pro','gemini-1.5-flash','gemini-1.5-flash-8b'] },
   deepseek:    { name:'DeepSeek',            emoji:'🐋', models:['deepseek-chat','deepseek-reasoner'] },
   mistral:     { name:'Mistral AI',          emoji:'🌬️', models:['mistral-large-latest','mistral-small-latest','open-mixtral-8x22b','open-mixtral-8x7b','open-mistral-7b'] },

@@ -20,7 +20,8 @@ export const LLM_PROVIDERS = {
     models: ['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-4','gpt-3.5-turbo'] },
 
   anthropic:   { name: 'Anthropic Claude',emoji: '🟠', baseUrl: 'https://api.anthropic.com/v1',
-    models: ['claude-3-5-sonnet-20241022','claude-3-5-haiku-20241022','claude-3-opus-20240229','claude-3-sonnet-20240229','claude-3-haiku-20240307'] },
+    models: ['claude-opus-5','claude-sonnet-5','claude-haiku-4-5-20251001',
+             'claude-3-5-sonnet-20241022','claude-3-5-haiku-20241022'] },
 
   gemini:      { name: 'Google Gemini',   emoji: '🔵', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     models: ['gemini-2.0-flash','gemini-2.0-flash-lite','gemini-1.5-pro','gemini-1.5-flash','gemini-1.5-flash-8b'] },

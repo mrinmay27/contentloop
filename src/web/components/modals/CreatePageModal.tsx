@@ -8,11 +8,9 @@ import { api } from '../../lib/api';
 import { CAPTION_TONES, DEFAULT_TONE } from '../../../domain/tone';
 import type { CaptionTone } from '../../../domain/tone';
 import { NICHE_PRESETS } from '../../../domain/nichePresets';
+import { suggestPageNames } from '../../../domain/pageNames';
 import { validateLogoFile } from '../../lib/logoUpload';
 import type { ThemePage } from '../../lib/types';
-
-const NAMES = ['AI Tools Daily','The AI Toolkit','Automate Everything','AI Insider Daily',
-  'The Future Worker','AI Edge','Smart Tools HQ','The AI Stack','Build With AI','AI Creators Lab'];
 
 const COLORS = ['#F5A623','#10B981','#6366F1','#EF4444','#0EA5E9','#EC4899','#8B5CF6','#14B8A6'];
 
@@ -46,6 +44,8 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
   const [logoDataUrl, setLogoDataUrl]     = useState<string|null>(null);
   const [logoName, setLogoName]           = useState('');
   const [logoError, setLogoError]         = useState<string|null>(null);
+  // Bumped by Regenerate to reshuffle the name suggestions.
+  const [nameSeed, setNameSeed]           = useState(1);
 
   // Read the picked file into a data URL now; it's uploaded after the page
   // exists, since the branding endpoint is keyed by page id.
@@ -74,6 +74,16 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
 
   const filteredNiches = NICHE_PRESETS.filter(n => n.name.toLowerCase().includes(nicheSearch.toLowerCase()));
   const isCustom = selectedNiche === CUSTOM_NICHE_ID;
+
+  // Suggestions follow the chosen niche instead of a fixed AI-themed list, and
+  // change whenever Regenerate bumps the seed.
+  const selectedPreset = NICHE_PRESETS.find(n => n.id === selectedNiche);
+  const nameSuggestions = suggestPageNames({
+    nicheName: isCustom ? customName : (selectedPreset?.name ?? ''),
+    shortName: isCustom ? undefined : selectedPreset?.shortName,
+    seed: nameSeed,
+    count: 10,
+  });
   const customKeywordsList = parseCsv(customKeywordsRaw);
   const customValid = customName.trim().length >= 2 && customKeywordsList.length >= 2 && customPersona.trim().length >= 3;
 
@@ -83,9 +93,16 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
     (step===3 && !!selectedName) ||
     step===4;
 
-  // Moving past the custom-niche step seeds the shared `keywords` state from
-  // the comma-separated input so Step 2's existing add/remove-tag UI works
-  // unchanged for both flows.
+  /** Restores the niche's suggested keywords after edits. Labelled "Reset"
+   *  rather than "Regenerate": there is nothing to regenerate without an LLM
+   *  call, and this control must work with no API key configured. */
+  const resetKeywords = () => {
+    if (isCustom) setKeywords(customKeywordsList);
+    else if (selectedPreset) setKeywords(selectedPreset.keywords);
+  };
+
+  // Moving past step 1 seeds the shared `keywords` state so Step 2's existing
+  // add/remove-tag UI works unchanged for both flows.
   const goNext = () => {
     if (step === 1) {
       // Seed Step 2 from whichever niche was chosen. Built-in niches used to
@@ -291,7 +308,9 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
                     setKeywords(k => [...k, (e.target as HTMLInputElement).value]);
                     (e.target as HTMLInputElement).value = '';
                   }}}/>
-                <button className="btn btn-ghost btn-sm"><Icon name="refresh" size={11}/> Regenerate</button>
+                <button className="btn btn-ghost btn-sm" onClick={resetKeywords} title="Restore the suggested keywords for this niche">
+                  <Icon name="refresh" size={11}/> Reset
+                </button>
               </div>
             </div>
           )}
@@ -301,21 +320,24 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
             <div>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
                 <div style={{ fontSize:13, color:'var(--text-secondary)' }}>Select a name or type your own</div>
-                <button className="btn btn-sm btn-ghost"><Icon name="refresh" size={11}/> Regenerate</button>
+                <button className="btn btn-sm btn-ghost" onClick={() => setNameSeed(s => s + 1)}>
+                  <Icon name="refresh" size={11}/> Regenerate
+                </button>
               </div>
               <input type="text" placeholder="Or type a custom name…" style={{ width:'100%', marginBottom:14 }}
                 onChange={e => setSelectedName(e.target.value || null)}/>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }} className="stagger">
-                {NAMES.map(name => (
+                {nameSuggestions.map(name => (
                   <div key={name} className={`name-suggestion ${selectedName===name?'selected':''}`}
                     onClick={() => setSelectedName(name)}>
                     <span style={{ fontWeight:500, fontSize:13 }}>{name}</span>
-                    <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                      <span style={{ fontSize:11, color:'var(--green)', fontFamily:'var(--mono)' }}>✓ Available</span>
-                      {selectedName===name && <Icon name="check" size={13}/>}
-                    </div>
+                    {selectedName===name && <Icon name="check" size={13}/>}
                   </div>
                 ))}
+              </div>
+              <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:10 }}>
+                Just a label for this page inside ContentLoop — it doesn’t claim the handle
+                on any platform.
               </div>
             </div>
           )}

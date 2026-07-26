@@ -117,9 +117,12 @@ async function probeAnthropic(apiKey: string): Promise<DiscoveredCapabilities> {
     .map((m: any): DiscoveredModel => ({
       id:          m.id,
       label:       m.display_name ?? m.id,
-      recommended: /claude-(sonnet|opus)-4|claude-3-5-sonnet/.test(m.id),
+      recommended: /claude-(sonnet|opus)-[45]|claude-3-5-sonnet/.test(m.id),
     }));
 
+  // Text only, deliberately: Anthropic's API has no image-generation endpoint.
+  // Claude can *read* images, but it cannot create them, so this provider must
+  // never appear in the image-generation chain.
   return okCaps(textModels, [], []);
 }
 

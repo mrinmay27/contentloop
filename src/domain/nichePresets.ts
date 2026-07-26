@@ -15,6 +15,9 @@ export type NichePreset = {
   id: string;
   name: string;
   emoji: string;
+  /** Short brandable core used to build page-name suggestions ("AI Tools" ->
+   *  "AI", so the wizard offers "AI Daily" rather than "AI Tools Daily"). */
+  shortName: string;
   /** Display-only signals shown on the niche cards. */
   trendScore: number;
   monetizationScore: number;
@@ -28,6 +31,7 @@ export type NichePreset = {
 export const NICHE_PRESETS: NichePreset[] = [
   {
     id: "n1", name: "AI Tools", emoji: "🤖",
+    shortName: "AI",
     trendScore: 97, monetizationScore: 92, competition: "High", growth: "+34%",
     keywords: ["ai tools", "chatgpt", "llm", "ai agents", "prompt engineering",
       "generative ai", "ai automation", "copilot"],
@@ -36,6 +40,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n2", name: "Side Hustles", emoji: "💰",
+    shortName: "Side Hustle",
     trendScore: 94, monetizationScore: 96, competition: "Med", growth: "+28%",
     keywords: ["side hustle", "passive income", "freelancing", "online business",
       "digital products", "solopreneur", "extra income"],
@@ -44,6 +49,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n3", name: "Crypto & Web3", emoji: "⛓️",
+    shortName: "Crypto",
     trendScore: 85, monetizationScore: 88, competition: "High", growth: "+19%",
     keywords: ["bitcoin", "ethereum", "defi", "stablecoin", "crypto regulation",
       "onchain", "web3", "tokenomics"],
@@ -52,6 +58,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n4", name: "Fitness & Health", emoji: "💪",
+    shortName: "Fitness",
     trendScore: 91, monetizationScore: 85, competition: "High", growth: "+22%",
     keywords: ["strength training", "hypertrophy", "nutrition", "protein",
       "fat loss", "mobility", "sleep quality", "longevity"],
@@ -60,6 +67,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n5", name: "Personal Finance", emoji: "📊",
+    shortName: "Money",
     trendScore: 89, monetizationScore: 93, competition: "Med", growth: "+31%",
     keywords: ["index funds", "budgeting", "compound interest", "retirement",
       "emergency fund", "debt payoff", "tax strategy", "savings rate"],
@@ -68,6 +76,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n6", name: "Mental Health", emoji: "🧠",
+    shortName: "Mindful",
     trendScore: 88, monetizationScore: 72, competition: "Low", growth: "+41%",
     keywords: ["anxiety", "burnout", "therapy", "cbt", "mindfulness",
       "emotional regulation", "boundaries", "nervous system"],
@@ -76,6 +85,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n7", name: "Productivity", emoji: "⚡",
+    shortName: "Focus",
     trendScore: 86, monetizationScore: 80, competition: "Med", growth: "+18%",
     keywords: ["deep work", "time blocking", "focus", "note taking",
       "second brain", "habit building", "task management"],
@@ -84,6 +94,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n8", name: "Travel Hacks", emoji: "✈️",
+    shortName: "Travel",
     trendScore: 83, monetizationScore: 78, competition: "Med", growth: "+15%",
     keywords: ["award travel", "points and miles", "cheap flights", "carry on",
       "visa rules", "digital nomad", "layover"],
@@ -92,6 +103,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n9", name: "Real Estate", emoji: "🏠",
+    shortName: "Property",
     trendScore: 80, monetizationScore: 94, competition: "Low", growth: "+12%",
     keywords: ["mortgage rates", "rental yield", "housing market", "reit",
       "first time buyer", "property tax", "landlord"],
@@ -100,6 +112,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n10", name: "Sustainable Living", emoji: "🌿",
+    shortName: "Green",
     trendScore: 79, monetizationScore: 70, competition: "Low", growth: "+47%",
     keywords: ["zero waste", "energy efficiency", "solar", "composting",
       "sustainable fashion", "carbon footprint", "repairability"],
@@ -108,6 +121,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n11", name: "Creator Economy", emoji: "🎬",
+    shortName: "Creator",
     trendScore: 88, monetizationScore: 89, competition: "Med", growth: "+26%",
     keywords: ["youtube algorithm", "audience growth", "newsletter", "sponsorship",
       "short form video", "personal brand", "creator tools"],
@@ -116,6 +130,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: "n12", name: "Tech News", emoji: "💻",
+    shortName: "Tech",
     trendScore: 82, monetizationScore: 75, competition: "High", growth: "+11%",
     keywords: ["product launch", "funding round", "acquisition", "open source",
       "developer tools", "security breach", "big tech", "chips"],
