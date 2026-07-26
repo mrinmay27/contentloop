@@ -1646,6 +1646,10 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _nextFunc
   res.status(500).json({ error: message });
 });
 
-app.listen(env.PORT, () => {
+// Desktop mode is a single-user app on a personal machine with no proxy and
+// usually no API_TOKEN — binding all interfaces would expose the API (and the
+// config routes that hold LLM keys) to the whole LAN. Server mode keeps
+// 0.0.0.0 because Docker/reverse-proxy owns that boundary.
+app.listen(env.PORT, isDesktop() ? "127.0.0.1" : "0.0.0.0", () => {
   console.log(`API listening on http://localhost:${env.PORT}`);
 });

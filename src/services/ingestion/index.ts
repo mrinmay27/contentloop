@@ -57,21 +57,33 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
     ? cachedMap.googleNewsQueries
     : (GOOGLE_NEWS_QUERIES[category] ?? []);
 
-  // HackerNews: merge niche-specific HN terms with user-defined keywords so
-  // custom niches (e.g. "Crypto Trading") retain their specific signals
-  const hnKeywords = [...new Set([...(HN_KEYWORDS[category] ?? []), ...niche.keywords])];
+  // HackerNews: an explicit map override wins (the Sources UI exposes this
+  // field); otherwise merge niche-specific HN terms with the niche keywords so
+  // custom niches (e.g. "Crypto Trading") retain their specific signals.
+  const hnKeywords = cachedMap?.hackernewsTerms?.length
+    ? cachedMap.hackernewsTerms
+    : [...new Set([...(HN_KEYWORDS[category] ?? []), ...niche.keywords])];
 
-  // Reddit: category-first; LLM map overrides if available
-  const subreddits = cachedMap?.redditSubreddits ?? SUBREDDITS[category] ?? [];
+  // Reddit / RSS / Substack: a NON-EMPTY map override wins; an empty list means
+  // "use the category defaults" (matches the Sources UI's "empty = defaults"
+  // labelling — plain `??` would treat [] as an override and fetch nothing).
+  const subreddits = cachedMap?.redditSubreddits?.length
+    ? cachedMap.redditSubreddits
+    : (SUBREDDITS[category] ?? []);
 
-  // RSS: category-first; LLM map overrides if available
-  const rssFeeds = cachedMap?.rssFeeds.map((f) => f.url) ?? RSS_FEEDS[category] ?? [];
+  const rssFeeds = cachedMap?.rssFeeds?.length
+    ? cachedMap.rssFeeds.map((f) => f.url)
+    : (RSS_FEEDS[category] ?? []);
+
+  // Medium: the Sources UI exposes mediumTags — honour it when set.
+  const mediumTags = cachedMap?.mediumTags ?? [];
 
   // Dev.to tags: tech-only by design
-  const devtoTags = cachedMap?.devtoTags ?? deriveDevToTags(niche);
+  const devtoTags = cachedMap?.devtoTags?.length ? cachedMap.devtoTags : deriveDevToTags(niche);
 
-  // Substack: category-first; LLM map overrides if available
-  const substackSlugs = cachedMap?.substackSlugs ?? SUBSTACK_SLUGS[category] ?? [];
+  const substackSlugs = cachedMap?.substackSlugs?.length
+    ? cachedMap.substackSlugs
+    : (SUBSTACK_SLUGS[category] ?? []);
 
   // arXiv categories: STEM niches only
   const arxivCategories = cachedMap?.arxivCategories ??
@@ -94,7 +106,7 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
     isEnabled("reddit")             ? fetchRedditTrends(subreddits, niche.keywords)                      : Promise.resolve([]),
     isEnabled("rss")                ? fetchRssTrends(rssFeeds)                                           : Promise.resolve([]),
     isEnabled("google_news")        ? fetchGoogleNewsTrends(googleNewsQueries)                           : Promise.resolve([]),
-    isEnabled("medium")             ? fetchMediumTrends(niche.name, niche.keywords)                      : Promise.resolve([]),
+    isEnabled("medium")             ? fetchMediumTrends(niche.name, mediumTags.length ? mediumTags : niche.keywords) : Promise.resolve([]),
     isEnabled("hacker_news")        ? fetchHackerNewsTrends(hnKeywords)                                  : Promise.resolve([]),
     isEnabled("devto")              && devtoTags.length > 0
       ? fetchDevToTrends(devtoTags, niche.keywords)                                                      : Promise.resolve([]),
