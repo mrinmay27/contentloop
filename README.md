@@ -25,11 +25,59 @@ performs — but nothing goes out the door without you approving it first.
 
 **Pipeline:** ingest → score → generate → QA → **you approve** → publish → learn
 
-## Quickstart (Docker)
+## Get started (no terminal needed)
+
+**Option A — download and run**
+
+1. Download the file for your computer from the
+   [latest release](https://github.com/mrinmay27/contentloop/releases/latest):
+   `…macos-arm64.zip`, `…windows-x64.zip` or `…linux-x64.zip`
+2. Unzip it.
+3. Double-click **Start ContentLoop**.
+
+Your browser opens when it's ready. Everything runs on your own computer.
+
+> **macOS only, first time:** if you see *"cannot be opened because it is from
+> an unidentified developer"*, right-click **Start ContentLoop** → **Open** →
+> **Open**. You only do this once. (ContentLoop is free and open-source, so it
+> isn't signed with a paid Apple certificate — this is macOS's normal warning
+> for that, not a sign anything is wrong.)
+
+**Option B — clone the repo** (no security prompt, needs internet on first run)
 
 ```bash
-git clone <this-repo-url>
-cd theme-page-content-engine
+git clone https://github.com/mrinmay27/contentloop.git
+cd contentloop
+```
+
+Then double-click **Start ContentLoop.command** (macOS),
+**Start ContentLoop.bat** (Windows) or **start-contentloop.sh** (Linux).
+The first launch downloads Node.js and installs ContentLoop (a few minutes);
+later launches take seconds.
+
+### What you need
+
+Nothing to install — no Docker, no Node.js, no database. ContentLoop bundles
+its own Postgres and runs entirely on your machine.
+
+AI features (writing captions, matching sources to your niche) need a free API
+key from Groq or Google AI Studio, which you paste into **Settings** after the
+app opens. Without a key everything still runs — discovery, scoring, scheduling
+and previews all work, with simpler generated text.
+
+> **Tested on:** macOS (Apple Silicon). The Windows and Linux launchers are
+> built and installed by CI on those platforms, but have not been hand-tested
+> — please open an issue if something breaks.
+
+---
+
+## Quickstart (Docker)
+
+For servers, teams, or anyone who already runs containers:
+
+```bash
+git clone https://github.com/mrinmay27/contentloop.git
+cd contentloop
 cp .env.example .env
 docker compose --profile full up
 ```
@@ -60,12 +108,12 @@ skipped (see the BYOK table below for which ones those are).
 
 ## Desktop mode (no Docker)
 
-For a single user who'd rather not run containers at all:
+This is what the one-click launcher above runs for you. To drive it by hand:
 
 ```bash
 npm install
 npm run build
-npm run desktop
+npm run start:desktop   # or `npm run desktop` to run from source via tsx
 ```
 
 This boots an embedded Postgres cluster inside your OS's app-data folder

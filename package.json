@@ -21,6 +21,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "desktop": "tsx src/desktop/main.ts",
+    "start:desktop": "node dist/src/desktop/main.js",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx"
   },
