@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Icon } from '../ui/Icon';
 import { api } from '../../lib/api';
+// Imported rather than duplicated: tone ids must match what the generator
+// reads from pages.brand.tone, and this module is pure (no node deps), so it
+// bundles cleanly. Local copies are the convention for server config shapes
+// that would drag in server-only imports — this one wouldn't.
+import { CAPTION_TONES, DEFAULT_TONE } from '../../../domain/tone';
+import type { CaptionTone } from '../../../domain/tone';
 import type { ThemePage } from '../../lib/types';
 
 const NICHES = [
@@ -49,6 +55,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
   const [keywords, setKeywords]           = useState(['AI tools','automation','ChatGPT','productivity hacks','side hustle','passive income','AI art','no code']);
   const [selectedName, setSelectedName]   = useState<string|null>(null);
   const [primaryColor, setPrimaryColor]   = useState('#F5A623');
+  const [captionTone, setCaptionTone]     = useState<CaptionTone>(DEFAULT_TONE);
 
   // Custom niche fields (Sprint U1 Task 5) — only used when
   // selectedNiche === CUSTOM_NICHE_ID.
@@ -99,7 +106,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
       const { page } = await api.createPage({
         nicheId: niche.id,
         name: selectedName!,
-        brand: { accent: primaryColor },
+        brand: { accent: primaryColor, tone: captionTone },
       });
       // Fire-and-forget — the Sources panel shows progress/results; a failure
       // here shouldn't block the page from being created.
@@ -305,9 +312,20 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
               <div>
                 <div className="section-label" style={{ marginBottom:8 }}>Caption Tone</div>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                  {['Educational','Bold & Direct','Casual','Professional'].map(tone => (
-                    <button key={tone} className={`btn btn-sm ${tone==='Educational'?'btn-primary':'btn-ghost'}`}>{tone}</button>
+                  {CAPTION_TONES.map(tone => (
+                    <button
+                      key={tone.id}
+                      type="button"
+                      aria-pressed={captionTone===tone.id}
+                      className={`btn btn-sm ${captionTone===tone.id?'btn-primary':'btn-ghost'}`}
+                      onClick={() => setCaptionTone(tone.id)}
+                    >
+                      {tone.label}
+                    </button>
                   ))}
+                </div>
+                <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:8 }}>
+                  Sets the voice ContentLoop writes captions and scripts in. You can change it later.
                 </div>
               </div>
             </div>

@@ -1,3 +1,5 @@
+import type { CaptionTone } from "./tone.js";
+
 export type QueueState =
   | "IDEA"
   | "SCORED"
@@ -58,6 +60,9 @@ export interface Page {
     colors: string[];
     fonts: string[];
     logoPlacement: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+    /** Caption voice picked in the create-page wizard. Optional: pages created
+     *  before this existed simply generate with the default tone. */
+    tone?: CaptionTone;
   };
 }
 

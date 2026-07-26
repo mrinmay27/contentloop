@@ -1,6 +1,7 @@
 import { llmClient, llmConfig } from "../config/llm.js";
 import { sanitizeLlmFormat, suggestFormatByRules } from "../domain/format-rules.js";
 import { scoreHook } from "../domain/scoring.js";
+import { tonePromptFor } from "../domain/tone.js";
 import type { FormatConfidence, GeneratedContent, Niche, Page, SuggestedFormat, Topic } from "../domain/types.js";
 
 const MAX_RETRIES = 3;
@@ -124,7 +125,9 @@ function buildPrompt(topic: Topic, niche: Niche, pages: Page[]): string {
       carousel: "exactly 8 slides: hook, slides 2-6 value, slide 7 summary, slide 8 CTA",
       captions: "platform-specific for instagram and youtube_shorts",
       hashtags: "exactly 10 relevant hashtags",
-      tone: "clear, useful, specific, not spammy",
+      // Per-page voice, chosen in the create-page wizard and stored in
+      // pages.brand.tone. Unset pages get the original default wording.
+      tone: tonePromptFor(pages.find((page) => page.brand?.tone)?.brand?.tone),
       suggested_format: [
         "Also decide the best Instagram format for this topic:",
         "  'post'     → breaking news, single insight, quote, announcement, hot take",
