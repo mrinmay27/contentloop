@@ -339,6 +339,13 @@ describe("cadence table", () => {
     expect(CATCH_UP_JOBS).not.toContain("render");
   });
 });
+
+describe("runJobGuarded", () => {
+  it("is exported so the API route can share the runner's in-flight guard", async () => {
+    const mod = await import("../src/worker/inProcessRunner.js");
+    expect(typeof mod.runJobGuarded).toBe("function");
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -424,8 +431,18 @@ async function recordRun(job: JobName, status: "ok" | "failed", error?: string):
 }
 
 /** In-flight guard: a long job (e.g. render) must not be re-entered by the
- *  next tick. */
+ *  next tick — AND must not race a manual POST /api/jobs/:name run. The
+ *  original BullMQ `concurrency: 1` on post/analyze encoded exactly this
+ *  (runLearningStep is not re-entrant); the set is module-level and the
+ *  runner is imported once per process, so both callers share it. */
 const running = new Set<JobName>();
+
+/** Public, guarded entrypoint. `POST /api/jobs/:name` MUST use this in
+ *  desktop mode rather than calling JOBS[name]() directly, or a double-click
+ *  can run `analyze` concurrently with the runner's own tick. */
+export async function runJobGuarded(job: JobName): Promise<void> {
+  await runJob(job);
+}
 
 async function runJob(job: JobName): Promise<void> {
   if (running.has(job)) return;
@@ -482,7 +499,7 @@ export async function startInProcessRunner(): Promise<() => void> {
 
 - [ ] **Step 5: Run tests + typecheck**
 
-Run: `npx vitest run` → 146 passed (137 + 9).
+Run: `npx vitest run` → 148 passed (138 + 10; baseline is 138 after the W1 parity test).
 Run: `npx tsc -p tsconfig.json --noEmit` → clean.
 
 - [ ] **Step 6: Commit**
@@ -678,6 +695,32 @@ media still resolves to `process.cwd()/data/media` (hardcoded in server.ts),
 so desktop mode writes media relative to the install dir rather than the data
 dir. Phase 2 (the Tauri shell) will make that path configurable — note it in
 your report rather than changing server.ts now.
+
+- [ ] **Step 4b: Gate the three media/render routes for desktop (REVIEW-MANDATED)**
+
+`src/api/server.ts` has three routes that enqueue directly —
+`POST /api/content/:id/synthesize`, `/render`, `/batch-render` — each with a
+local `const { queues } = await import("../worker/queues.js")`. In desktop
+mode that constructs an ioredis client with `maxRetriesPerRequest: null`, so
+the request **hangs forever** instead of failing. READ all three handlers and
+give each the same mode branch, using the SHARED guard so a manual trigger
+cannot race the runner:
+
+```ts
+    if (isDesktop()) {
+      const { runJobGuarded } = await import("../worker/inProcessRunner.js");
+      void runJobGuarded("media").catch((err: any) =>
+        console.warn(`[jobs] media failed: ${err?.message ?? err}`)
+      );
+      return void res.json({ ok: true, queued: "media" });
+    }
+```
+(use `"render"` for the `/render` and `/batch-render` handlers; preserve each
+route's existing response shape — READ them first and keep the same JSON keys
+they return today).
+
+ALSO update `POST /api/jobs/:name`'s desktop branch to call
+`runJobGuarded(params.name)` instead of `JOBS[params.name]()` directly.
 
 - [ ] **Step 5: Add the npm script**
 
