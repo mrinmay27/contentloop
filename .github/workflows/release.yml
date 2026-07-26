@@ -1,0 +1,118 @@
+name: Release bundles
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: macos-arm64
+            node_asset: node-v24.18.0-darwin-arm64.tar.gz
+          - os: windows-latest
+            platform: windows-x64
+            node_asset: node-v24.18.0-win-x64.zip
+          - os: ubuntu-latest
+            platform: linux-x64
+            node_asset: node-v24.18.0-linux-x64.tar.xz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Full install (dev deps are needed to build), then build.
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+
+      # Re-install runtime-only. Optional deps (the platform's
+      # embedded-postgres binaries) are kept by default — desktop mode needs them.
+      - name: Prune to runtime dependencies
+        shell: bash
+        run: |
+          rm -rf node_modules
+          npm ci --omit=dev --no-audit --no-fund
+
+      - name: Fetch + verify portable Node
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p .runtime/node tmp
+          curl -fsSL "https://nodejs.org/dist/v24.18.0/${{ matrix.node_asset }}" -o "tmp/${{ matrix.node_asset }}"
+          curl -fsSL "https://nodejs.org/dist/v24.18.0/SHASUMS256.txt" -o tmp/SHASUMS256.txt
+          expected=$(grep " ${{ matrix.node_asset }}$" tmp/SHASUMS256.txt | awk '{print $1}')
+          if command -v shasum >/dev/null 2>&1; then actual=$(shasum -a 256 "tmp/${{ matrix.node_asset }}" | awk '{print $1}')
+          else actual=$(sha256sum "tmp/${{ matrix.node_asset }}" | awk '{print $1}'); fi
+          [ "$expected" = "$actual" ] || { echo "Node checksum mismatch"; exit 1; }
+          case "${{ matrix.node_asset }}" in
+            *.zip)    unzip -q "tmp/${{ matrix.node_asset }}" -d tmp/x && mv tmp/x/*/* .runtime/node/ ;;
+            *.tar.gz) tar -xzf "tmp/${{ matrix.node_asset }}" -C .runtime/node --strip-components=1 ;;
+            *.tar.xz) tar -xJf "tmp/${{ matrix.node_asset }}" -C .runtime/node --strip-components=1 ;;
+          esac
+          rm -rf tmp
+
+      - name: Assemble bundle
+        shell: bash
+        run: |
+          set -eu
+          NAME="contentloop-${{ github.ref_name }}-${{ matrix.platform }}"
+          mkdir -p "out/$NAME"
+          cp -R dist dist-web node_modules .runtime package.json package-lock.json .env.example LICENSE README.md "out/$NAME/"
+          mkdir -p "out/$NAME/src/db"
+          cp -R src/db/migrations "out/$NAME/src/db/migrations"   # read at runtime
+          mkdir -p "out/$NAME/scripts/launcher"
+          cp scripts/launcher/lib.mjs "out/$NAME/scripts/launcher/"
+          # Seed the deps marker. Without it the launcher sees "no recorded hash",
+          # decides deps are stale and runs `npm ci` — so the offline bundle would
+          # demand a network on first launch. This is what makes it truly offline.
+          node scripts/launcher/lib.mjs deps-hash package-lock.json > "out/$NAME/.runtime/.deps-hash"
+          if [ "${{ matrix.platform }}" = "windows-x64" ]; then
+            cp scripts/launcher/bootstrap.ps1 "out/$NAME/scripts/launcher/"
+            cp "Start ContentLoop.bat" "out/$NAME/"
+          else
+            cp scripts/launcher/bootstrap.sh "out/$NAME/scripts/launcher/"
+            chmod +x "out/$NAME/scripts/launcher/bootstrap.sh"
+            if [ "${{ matrix.platform }}" = "macos-arm64" ]; then
+              cp "Start ContentLoop.command" "out/$NAME/"; chmod +x "out/$NAME/Start ContentLoop.command"
+            else
+              cp start-contentloop.sh "out/$NAME/"; chmod +x "out/$NAME/start-contentloop.sh"
+            fi
+          fi
+          printf '%s\n' \
+            'ContentLoop' '' \
+            'Double-click the "Start ContentLoop" file in this folder.' \
+            'Your browser opens automatically once it is ready.' '' \
+            'macOS: if you see "unidentified developer", right-click the file' \
+            'and choose Open, then click Open again. Only needed once.' '' \
+            'Everything runs on your own computer. Nothing is uploaded.' \
+            > "out/$NAME/HOW-TO-START.txt"
+          # `zip` is present on the macOS/Linux runners but NOT guaranteed on
+          # windows-latest, so fall back to PowerShell's Compress-Archive there.
+          # (Losing unix permission bits in that path is fine — the Windows
+          # bundle ships a .bat, which needs no executable bit.)
+          cd out
+          if command -v zip >/dev/null 2>&1; then
+            zip -qr "$NAME.zip" "$NAME"
+          else
+            powershell -NoProfile -Command "Compress-Archive -Path '$NAME' -DestinationPath '$NAME.zip' -Force"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contentloop-${{ matrix.platform }}
+          path: out/*.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.zip
