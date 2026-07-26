@@ -77,7 +77,9 @@ if (API_TOKEN) {
   // Guards the API and the Bull Board queue dashboard. /queues is a browser
   // UI, so it additionally accepts ?token= (headers can't be set from the
   // address bar); the API accepts the Bearer header only.
-  app.use(["/api", "/queues"], (req, res, next) => {
+  // /queues only exists in server mode; guarding a non-existent path would
+  // turn desktop's honest 404 into a misleading 401.
+  app.use(isDesktop() ? ["/api"] : ["/api", "/queues"], (req, res, next) => {
     if (req.baseUrl === "/api" && req.path === "/health") return next();
     const auth = req.headers.authorization;
     if (auth === `Bearer ${API_TOKEN}`) return next();
@@ -818,6 +820,9 @@ app.post("/api/pages/:id/sources/regenerate", async (req, res, next) => {
 
 app.post("/api/jobs/:name", async (req, res, next) => {
   try {
+    // Deliberately duplicated instead of derived from JOB_NAMES: a static
+    // import of jobs.ts would drag content-generator/videoRenderer/remotion
+    // into the API process. tests/jobs.test.ts asserts the two stay in sync.
     const params = z.object({ name: z.enum(["ingest", "score", "generate", "media", "render", "schedule", "post", "analyze"]) }).parse(req.params);
     if (isDesktop()) {
       // No queue in desktop mode — run the job in-process, fire-and-forget so
