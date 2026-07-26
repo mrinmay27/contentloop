@@ -38,6 +38,7 @@ import { listVoices, previewVoice, VOICE_PRESETS } from "../services/tts.js";
 import { applyAutomationOverrides } from "../domain/automation.js";
 import { applySourceQualityOverrides } from "../domain/scoring.js";
 import path from 'path';
+import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // Sprint U1 Task 6: apply user tuning overrides from the config store (JSON
@@ -1605,8 +1606,15 @@ app.post("/api/reset/pipeline", async (_req, res, next) => {
 // <repo-root>/dist-web (Docker COPYs both dist/ and dist-web/ as siblings
 // under /app). WEB_DIST overrides for non-standard layouts.
 if (env.NODE_ENV === "production") {
+  // Resolve dist-web for BOTH layouts: compiled (dist/src/api/server.js →
+  // ../../../dist-web = repo root) and source-via-tsx (src/api/server.ts →
+  // ../../dist-web). Desktop mode runs from source, so a single hardcoded
+  // depth silently resolves outside the repo and every page 500s.
+  const here = path.dirname(fileURLToPath(import.meta.url));
   const webDist = process.env.WEB_DIST
-    ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../dist-web");
+    ?? [path.join(here, "../../../dist-web"), path.join(here, "../../dist-web")]
+         .find((candidate) => fsSync.existsSync(path.join(candidate, "index.html")))
+    ?? path.join(here, "../../../dist-web");
   app.use(express.static(webDist));
   app.get(/^\/(?!api|uploads|media|queues).*/, (_req, res) => res.sendFile(path.join(webDist, "index.html")));
 }
