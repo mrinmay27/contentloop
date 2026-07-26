@@ -12,7 +12,7 @@ import type { RawTrend } from "../../domain/types.js";
 import { fetchRssTrends } from "./rss.js";
 
 // Finance/business newsletter RSS feeds
-const FINANCE_RSS_FEEDS = [
+export const FINANCE_RSS_FEEDS = [
   "https://www.cnbc.com/id/10000664/device/rss/rss.html",           // CNBC Finance
   "https://feeds.feedburner.com/entrepreneur/latest",                // Entrepreneur
   "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",      // NYT Business
@@ -26,7 +26,7 @@ const CRYPTO_RSS_FEEDS = [
   // removed: theblock.co (403 as of 2026-05-03)
 ];
 
-const GENERAL_BUSINESS_RSS_FEEDS = [
+export const GENERAL_BUSINESS_RSS_FEEDS = [
   "https://feeds.feedburner.com/FastCompany",                        // Fast Company
   "https://www.inc.com/rss.xml",                                     // Inc.
 ];

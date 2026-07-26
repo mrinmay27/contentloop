@@ -6,7 +6,7 @@
 
 import type { RawTrend } from "../../domain/types.js";
 
-const CRYPTO_FEEDS = [
+export const CRYPTO_FEEDS = [
   { name: "CoinDesk",      url: "https://www.coindesk.com/arc/outboundfeeds/rss/", engagementHint: 80 },
   { name: "Decrypt",       url: "https://decrypt.co/feed",                          engagementHint: 75 },
   { name: "CoinTelegraph", url: "https://cointelegraph.com/rss",                    engagementHint: 76 },

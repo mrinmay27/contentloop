@@ -18,6 +18,7 @@ export const SourcesPanel: React.FC = () => {
   const [registry, setRegistry] = useState<SourceMeta[]>([]);
   const [map, setMap] = useState<any | null>(null);
   const [keyPresent, setKeyPresent] = useState<Record<string, boolean>>({});
+  const [effective, setEffective] = useState<Record<string, { values: string[]; isDefault: boolean }>>({});
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -44,7 +45,8 @@ export const SourcesPanel: React.FC = () => {
     if (!pageId) return;
     setLoading(true);
     return api.getSources(pageId).then((d) => {
-      setRegistry(d.registry); setMap(d.map); setKeyPresent(d.keyPresent ?? {}); setDirty(false);
+      setRegistry(d.registry); setMap(d.map); setKeyPresent(d.keyPresent ?? {});
+      setEffective(d.effective ?? {}); setDirty(false);
     }).catch(() => {}).finally(() => setLoading(false));
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [pageId]);
@@ -195,6 +197,21 @@ export const SourcesPanel: React.FC = () => {
                   onChange={(e) => setInputs((st) => ({ ...st, [f.mapField]: e.target.value }))}
                   onKeyDown={(e) => { if (e.key === 'Enter') addValue(f); }} />
               </div>
+              {fieldValues(f).length === 0 && effective[f.mapField]?.isDefault && effective[f.mapField].values.length > 0 && (
+                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>using defaults:</span>
+                  {effective[f.mapField].values.slice(0, 6).map((v) => (
+                    <span key={v} className="badge badge-muted" style={{ opacity: 0.55 }} title={v}>
+                      {v.length > 38 ? `${v.slice(0, 38)}…` : v}
+                    </span>
+                  ))}
+                  {effective[f.mapField].values.length > 6 && (
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                      +{effective[f.mapField].values.length - 6} more
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -772,7 +772,28 @@ app.get("/api/pages/:id/sources", async (req, res, next) => {
     const map = await getCachedSourceMap(req.params.id);
     const keys: Record<string, boolean> = {};
     for (const s of SOURCE_REGISTRY) if (s.needsKey) keys[s.id] = Boolean(process.env[s.needsKey.env]);
-    res.json({ registry: SOURCE_REGISTRY, map, keyPresent: keys });
+
+    // Effective values: what ingestion ACTUALLY uses for each field — the
+    // user's override when set, otherwise the category/adapter default. The
+    // UI dims the defaults so empty fields aren't mistaken for "nothing".
+    const { buildEffectiveSources } = await import("../services/ingestion/effectiveSources.js");
+    const nicheRow = await query(
+      `SELECT n.name, n.keywords FROM pages p JOIN niches n ON n.id = p.niche_id WHERE p.id = $1`,
+      [req.params.id]
+    );
+    let effective: Record<string, { values: string[]; isDefault: boolean }> = {};
+    if (nicheRow.rows[0]) {
+      const { FINANCE_RSS_FEEDS, GENERAL_BUSINESS_RSS_FEEDS } = await import("../services/ingestion/finance-newsletters.js");
+      const { CRYPTO_FEEDS } = await import("../services/ingestion/crypto-news.js");
+      effective = buildEffectiveSources(
+        nicheRow.rows[0].name,
+        nicheRow.rows[0].keywords ?? [],
+        map,
+        [...FINANCE_RSS_FEEDS, ...GENERAL_BUSINESS_RSS_FEEDS],
+        CRYPTO_FEEDS.map((f) => f.url)
+      );
+    }
+    res.json({ registry: SOURCE_REGISTRY, map, keyPresent: keys, effective });
   } catch (error) { next(error); }
 });
 
