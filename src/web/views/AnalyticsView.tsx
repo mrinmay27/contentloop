@@ -185,7 +185,8 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
                           <div style={{ width:'100%', borderRadius:'3px 3px 0 0',
                             background:'var(--accent)', opacity:0.85,
                             height:`${(p.views/maxViews)*100}%`, minHeight:2,
-                            transition:'height 0.5s ease', cursor:'pointer' }}
+                            // Hover shows the title/views tooltip; the bar isn't clickable.
+                            transition:'height 0.5s ease', cursor:'default' }}
                             title={`${p.topic_title.substring(0,40)}: ${fmt(p.views)} views`}/>
                           <div style={{ width:'100%', borderRadius:'3px 3px 0 0',
                             background:'var(--green)',

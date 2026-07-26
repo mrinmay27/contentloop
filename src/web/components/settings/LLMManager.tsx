@@ -17,13 +17,13 @@ import { ConfirmModal } from '../modals/ConfirmModal';
 export const PROVIDERS: Record<string, {
   name: string; emoji: string; models: string[];
 }> = {
-  groq:        { name:'Groq',                emoji:'⚡', models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','llama-3.1-70b-versatile','mixtral-8x7b-32768','gemma2-9b-it','llama3-70b-8192'] },
+  groq:        { name:'Groq',                emoji:'⚡', models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','openai/gpt-oss-120b','openai/gpt-oss-20b','qwen/qwen3.6-27b','groq/compound'] },
   openai:      { name:'OpenAI',              emoji:'🟢', models:['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-4','gpt-3.5-turbo'] },
   anthropic:   { name:'Anthropic Claude',    emoji:'🟠', models:['claude-opus-5','claude-sonnet-5','claude-haiku-4-5-20251001','claude-3-5-sonnet-20241022','claude-3-5-haiku-20241022'] },
-  gemini:      { name:'Google Gemini',       emoji:'🔵', models:['gemini-2.0-flash','gemini-2.0-flash-lite','gemini-1.5-pro','gemini-1.5-flash','gemini-1.5-flash-8b'] },
+  gemini:      { name:'Google Gemini',       emoji:'🔵', models:['gemini-flash-latest','gemini-pro-latest','gemini-3.6-flash','gemini-3.5-flash','gemini-2.5-pro','gemini-2.5-flash','gemini-2.0-flash'] },
   deepseek:    { name:'DeepSeek',            emoji:'🐋', models:['deepseek-chat','deepseek-reasoner'] },
   mistral:     { name:'Mistral AI',          emoji:'🌬️', models:['mistral-large-latest','mistral-small-latest','open-mixtral-8x22b','open-mixtral-8x7b','open-mistral-7b'] },
-  openrouter:  { name:'OpenRouter',          emoji:'🔀', models:['meta-llama/llama-3.3-70b-instruct:free','google/gemini-flash-1.5:free','mistralai/mixtral-8x7b-instruct:free','anthropic/claude-3.5-sonnet','openai/gpt-4o','deepseek/deepseek-chat'] },
+  openrouter:  { name:'OpenRouter',          emoji:'🔀', models:['inclusionai/ling-3.0-flash:free','nvidia/nemotron-3-ultra-550b-a55b:free','anthropic/claude-sonnet-5','openai/gpt-5.6-terra','google/gemini-3.6-flash','deepseek/deepseek-chat'] },
   together:    { name:'Together AI',         emoji:'🤝', models:['meta-llama/Llama-3.3-70B-Instruct-Turbo','Qwen/Qwen2.5-72B-Instruct-Turbo','deepseek-ai/DeepSeek-V3','mistralai/Mixtral-8x7B-Instruct-v0.1'] },
   qwen:        { name:'Qwen (Alibaba)',       emoji:'🟣', models:['qwen-max','qwen-plus','qwen-turbo','qwen2.5-72b-instruct','qwen2.5-coder-32b-instruct'] },
   minimax:     { name:'MiniMax',             emoji:'🟡', models:['abab6.5s-chat','abab5.5-chat','abab6.5g-chat'] },

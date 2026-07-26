@@ -309,6 +309,61 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
   const [filterOpen, setFilterOpen]         = useState(false);
   const [filterRect, setFilterRect]         = useState<DOMRect | null>(null);
   const [sort, setSort]                     = useState<SortState>(DEFAULT_SORT);
+  const [bulkBusy, setBulkBusy]             = useState<'approve'|'schedule'|null>(null);
+  const [bulkMsg, setBulkMsg]               = useState<string|null>(null);
+
+  const flashBulk = (msg: string) => {
+    setBulkMsg(msg);
+    setTimeout(() => setBulkMsg(null), 4000);
+  };
+
+  /**
+   * Approves every selected topic. A topic doesn't carry its content id, so
+   * each one is resolved through getTopicPreview first — the same path the
+   * single Approve button on a card uses. Failures are counted rather than
+   * aborting the batch, so one bad item can't strand the rest.
+   */
+  const approveSelected = async () => {
+    const ids = [...selectedTopics];
+    if (ids.length === 0) return;
+    setBulkBusy('approve');
+    let ok = 0, failed = 0;
+    const approvedIds: string[] = [];
+    for (const topicId of ids) {
+      try {
+        const { preview } = await api.getTopicPreview(topicId, page.id);
+        if (!preview?.id) { failed++; continue; }
+        await api.approveContent(preview.id);
+        approvedIds.push(topicId);
+        ok++;
+      } catch { failed++; }
+    }
+    if (approvedIds.length) {
+      const done = new Set(approvedIds);
+      setLocalTopics(prev => prev.map(t =>
+        done.has(t.id) ? { ...t, status: 'approved', state: 'APPROVED' } : t
+      ));
+    }
+    setSelectedTopics(new Set());
+    setBulkBusy(null);
+    flashBulk(failed === 0
+      ? `✓ Approved ${ok}`
+      : `Approved ${ok}, ${failed} had no generated content yet`);
+  };
+
+  /** Runs the scheduler over approved content. The endpoint is global — it
+   *  can't be scoped to a selection — so the button says so. */
+  const scheduleApproved = async () => {
+    setBulkBusy('schedule');
+    try {
+      const { scheduled } = await api.scheduleApproved();
+      flashBulk(`✓ Scheduled ${scheduled?.length ?? 0}`);
+    } catch {
+      flashBulk('Scheduling failed');
+    } finally {
+      setBulkBusy(null);
+    }
+  };
   const btnRef                              = useRef<HTMLButtonElement>(null);
 
   // Sync localTopics when parent topics prop changes
@@ -448,8 +503,18 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
               <span style={{ fontSize:13, fontWeight:500, color:'var(--accent)' }}>
                 {selectedTopics.size} selected
               </span>
-              <button className="btn btn-sm btn-primary">Approve All</button>
-              <button className="btn btn-sm btn-surface">Schedule</button>
+              <button className="btn btn-sm btn-primary" disabled={bulkBusy !== null}
+                onClick={approveSelected}>
+                {bulkBusy === 'approve' ? 'Approving…' : `Approve ${selectedTopics.size}`}
+              </button>
+              <button className="btn btn-sm btn-surface" disabled={bulkBusy !== null}
+                onClick={scheduleApproved}
+                title="Schedules every approved item that isn't scheduled yet, not just the selected ones">
+                {bulkBusy === 'schedule' ? 'Scheduling…' : 'Schedule approved'}
+              </button>
+              {bulkMsg && (
+                <span style={{ fontSize:12, color:'var(--text-secondary)' }}>{bulkMsg}</span>
+              )}
               <button className="btn btn-sm btn-ghost" style={{ marginLeft:'auto' }}
                 onClick={() => setSelectedTopics(new Set())}>Clear</button>
             </div>

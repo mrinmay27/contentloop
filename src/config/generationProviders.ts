@@ -23,7 +23,7 @@ const FREE_PROVIDERS = new Set<ImageProvider>(['pollinations']);
 
 const DEFAULT_MODELS: Record<ImageProvider, string> = {
   openai:       'dall-e-3',
-  google:       'gemini-2.0-flash-preview-image-generation',
+  google:       'gemini-3-pro-image',
   stability:    'stable-diffusion-3-5-large',
   fal:          'fal-ai/ideogram/v2',
   replicate:    'black-forest-labs/flux-1.1-pro',

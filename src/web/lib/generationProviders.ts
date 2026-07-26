@@ -45,7 +45,10 @@ export const IMAGE_PROVIDER_DEFS: ImageProviderDef[] = [
     id: 'google', name: 'Google Gemini (Image)', icon: '🔵',
     keyName: 'GOOGLE_AI_API_KEY', logoRank: 3,
     models: [
-      { id: 'gemini-2.0-flash-preview-image-generation', label: 'Gemini 2.0 Flash (Image)', description: 'AI Studio key · free tier · fast' },
+      { id: 'gemini-3-pro-image',     label: 'Gemini 3 Pro (Image)',    description: 'Highest quality · AI Studio key' },
+      { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Flash (Image)', description: 'Faster, cheaper' },
+      { id: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash (Image)', description: 'Older, still supported' },
+      { id: 'imagen-4.0-generate-001',label: 'Imagen 4',                 description: 'Google\u2019s dedicated image model' },
     ],
     docsUrl: 'https://aistudio.google.com/app/apikey', docsLabel: 'Google AI Studio →',
     note: 'Uses your Google AI Studio key — works with free tier',

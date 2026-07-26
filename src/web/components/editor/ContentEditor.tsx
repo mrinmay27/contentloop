@@ -65,6 +65,7 @@ const FORMAT_LABELS: Record<SuggestedFormat, string> = {
 export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack }) => {
   const [hook, setHook]       = useState(topic.title);
   const [caption, setCaption] = useState(`Deep dive into: ${topic.title}\n\n👇 Save this for later`);
+  const [cta, setCta]         = useState('Follow for daily breakdowns →');
 
   // Task 3.1: Pre-select format tab from topic.suggestedFormat
   const [previewTab, setPreviewTab] = useState<SuggestedFormat>(
@@ -132,6 +133,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
         // Hydrate text fields saved from a previous session
         if (p.hook)    setHook(p.hook);
         if (p.caption) setCaption(p.caption);
+        if (p.cta)     setCta(p.cta);
         if (Array.isArray(p.slides) && p.slides.length > 0) setSlides(p.slides);
         if (p.reelScript) setReelScript(p.reelScript);
         if (p.reelTarget) setReelTarget(p.reelTarget as any);
@@ -228,7 +230,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
     try {
       // Auto-save current content first, then flip status to approved
       const contentPayload: Record<string, unknown> = { hook, caption };
-      if (previewTab === 'carousel') contentPayload.slides = slides;
+      if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; }
       if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; }
       await api.patchContent(draftId, contentPayload);
       await api.approveContent(draftId);
@@ -247,7 +249,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
     try {
       // Persist hook + caption + format-specific fields
       const contentPayload: Record<string, unknown> = { hook, caption };
-      if (previewTab === 'carousel') contentPayload.slides = slides;
+      if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; }
       if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; }
       await api.patchContent(draftId, contentPayload);
 
@@ -497,7 +499,8 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
               </div>
               <div>
                 <div className="editor-section-title">CTA</div>
-                <input type="text" defaultValue="Follow for daily breakdowns →" style={{ marginTop:8 }}/>
+                <input type="text" value={cta} style={{ marginTop:8 }}
+                  onChange={e => { setCta(e.target.value); setIsDirty(true); }}/>
               </div>
             </>
           )}
@@ -592,19 +595,29 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
             </div>
           )}
 
-          {/* Branding — always visible */}
+          {/* Branding — always visible. Shows this page's real brand (the same
+              values fed to image prompts). It used to be three decorative
+              swatches and a checkbox with no handler, which implied per-content
+              branding overrides that don't exist. */}
           <div>
             <div className="editor-section-title">Branding</div>
-            <div style={{ display:'flex', gap:8, marginTop:8, alignItems:'center' }}>
-              <div style={{ width:28, height:28, borderRadius:6, background:'var(--accent)', border:'2px solid var(--accent)' }}/>
-              <div style={{ width:28, height:28, borderRadius:6, background:'var(--bg-hover)', border:'1px solid var(--border)' }}/>
-              <div style={{ width:28, height:28, borderRadius:6, background:'var(--bg-elevated)', border:'1px dashed var(--border)',
-                display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-                <Icon name="plus" size={10}/>
+            <div style={{ display:'flex', gap:10, marginTop:8, alignItems:'center' }}>
+              {brand.logoUrl && (
+                <img src={brand.logoUrl} alt=""
+                  style={{ width:28, height:28, objectFit:'contain', borderRadius:6,
+                    border:'1px solid var(--border)', background:'var(--bg-base)' }}/>
+              )}
+              <div title={`Accent ${brand.accent}`}
+                style={{ width:28, height:28, borderRadius:6, background:brand.accent,
+                  border:'1px solid var(--border)' }}/>
+              <div style={{ fontSize:12, color:'var(--text-secondary)', lineHeight:1.5 }}>
+                <div style={{ fontFamily:'var(--mono)' }}>{brand.accent}</div>
+                <div style={{ fontSize:11, color:'var(--text-muted)' }}>
+                  {brand.font}{brand.tone ? ` · ${brand.tone} tone` : ''}
+                </div>
               </div>
-              <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', fontSize:12, color:'var(--text-secondary)' }}>
-                <input type="checkbox" defaultChecked id="use-theme"/>
-                <label htmlFor="use-theme">Use default branding</label>
+              <div style={{ marginLeft:'auto', fontSize:11, color:'var(--text-muted)' }}>
+                Set in Settings → Branding
               </div>
             </div>
           </div>
@@ -785,7 +798,8 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
               <div style={{ padding:'10px 14px', display:'flex', gap:10, borderTop:'0.5px solid var(--border)' }}>
                 {(previewTab === 'reel' && reelTarget !== 'instagram'
                   ? ['👍','👎','💬','↗️'] : ['♥','💬','↗']).map(icon =>
-                  <span key={icon} style={{ fontSize:16, cursor:'pointer' }}>{icon}</span>
+                  // Part of the platform mockup, not controls — no pointer cursor.
+                  <span key={icon} style={{ fontSize:16 }}>{icon}</span>
                 )}
               </div>
               <div style={{ padding:'0 14px 10px', fontSize:11, color:'var(--text-secondary)', lineHeight:1.5 }}>
