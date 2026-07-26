@@ -1,6 +1,6 @@
-# Theme Page Content Engine (TPCE)
+# ContentLoop
 
-TPCE is a self-hosted content-operations tool for running "theme page" social
+ContentLoop is a self-hosted content-operations tool for running "theme page" social
 accounts (Instagram, YouTube Shorts, and similar) without babysitting every
 step by hand. It watches trend sources for your niche, scores what's worth
 writing about, drafts captions/reels/carousels with an LLM (or a
@@ -24,20 +24,20 @@ process — no separate frontend server needed.
 
 Open **http://localhost:4000**, walk through the wizard to create your first
 page (pick a built-in niche or define a custom one), then check
-**Settings → Sources** to see what TPCE will actually pull from for that
+**Settings → Sources** to see what ContentLoop will actually pull from for that
 page and tune it.
 
 > **Note on keys with Docker:** `docker compose --profile full up` only
-> forwards `DATABASE_URL`, `REDIS_URL`, and `TPCE_ROLE` into the `app-api` /
+> forwards `DATABASE_URL`, `REDIS_URL`, and `CONTENTLOOP_ROLE` into the `app-api` /
 > `app-worker` containers — it does **not** auto-forward the rest of your
 > `.env` file into those containers. The simplest path is to leave `.env`
 > mostly empty and enter optional provider keys through the in-app
-> **Settings** page once TPCE is running (see BYOK table below); those are
+> **Settings** page once ContentLoop is running (see BYOK table below); those are
 > stored in `data/app.config.json` inside the container. If you'd rather
 > drive everything from `.env`, add `env_file: .env` to the `app-api` and
 > `app-worker` services in `docker-compose.yml`.
 
-TPCE runs perfectly well with **no keys at all**: content generation falls
+ContentLoop runs perfectly well with **no keys at all**: content generation falls
 back to a deterministic template, scoring falls back to keyword-only
 matching, and every ingestion source that needs a credential is simply
 skipped (see the BYOK table below for which ones those are).
@@ -53,7 +53,7 @@ npm run desktop
 ```
 
 This boots an embedded Postgres cluster inside your OS's app-data folder
-(override with `TPCE_DATA_DIR`), applies migrations, and serves the built
+(override with `CONTENTLOOP_DATA_DIR`), applies migrations, and serves the built
 dashboard — all from one process, no Redis. Background jobs run in-process
 on an elapsed-time schedule (not wall-clock cron) with a catch-up pass at
 launch, so a post scheduled for 17:00 still goes out the next time you open
@@ -63,7 +63,7 @@ the app, even if that's 10am the next day. Open **http://localhost:4173**
 First launch takes about a minute while Postgres initializes; later
 launches reuse the existing cluster and are up in well under 30 seconds.
 The Docker quickstart above is still the better fit for multi-page/team
-deployments — desktop mode is the easiest path for running TPCE for
+deployments — desktop mode is the easiest path for running ContentLoop for
 yourself.
 
 ## Dev setup
@@ -93,7 +93,7 @@ npm run build         # type-check + build the dashboard (dist-web/)
 
 ## BYOK — bring your own keys (all optional)
 
-TPCE is keyless by default. Every credential below unlocks one specific
+ContentLoop is keyless by default. Every credential below unlocks one specific
 feature; nothing is required to run the pipeline end-to-end in dry-run.
 
 | Env var | Unlocks | Without it |
@@ -128,7 +128,7 @@ configured entirely through the Settings UI instead of `.env` — see
   per-source scoring quality multipliers — plus the self-host API token
   field. Workers pick up changes on their next restart.
 - **`API_TOKEN`**: unset by default (open API, matching local-dev
-  behavior). Set it before exposing TPCE beyond `localhost` — see
+  behavior). Set it before exposing ContentLoop beyond `localhost` — see
   `SECURITY.md`.
 
 ## Architecture
@@ -141,6 +141,6 @@ feedback loop, growth automation, and self-host configurability) and
 ## License
 
 AGPL-3.0 — see [`LICENSE`](LICENSE). In short: you're free to run, modify,
-and redistribute TPCE, but if you run a modified version as a network
+and redistribute ContentLoop, but if you run a modified version as a network
 service for others, you must make that modified source available to them
 too.

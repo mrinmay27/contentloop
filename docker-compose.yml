@@ -27,7 +27,7 @@ services:
 
   # ── Sprint U1 Task 7: single-container self-host, opt-in via
   # `docker compose --profile full up`. Both services build the same image
-  # (TPCE_ROLE picks api vs worker in scripts/docker-entrypoint.sh) and talk
+  # (CONTENTLOOP_ROLE picks api vs worker in scripts/docker-entrypoint.sh) and talk
   # to postgres/redis over the compose network, so the DSNs use the service
   # names as hostnames rather than the host-mapped ports above (55432/6379).
   app-api:
@@ -36,7 +36,7 @@ services:
     environment:
       - DATABASE_URL=postgres://theme:theme@postgres:5432/theme_engine
       - REDIS_URL=redis://redis:6379
-      - TPCE_ROLE=api
+      - CONTENTLOOP_ROLE=api
     ports: ["4000:4000"]
     depends_on:
       postgres:
@@ -50,7 +50,7 @@ services:
     environment:
       - DATABASE_URL=postgres://theme:theme@postgres:5432/theme_engine
       - REDIS_URL=redis://redis:6379
-      - TPCE_ROLE=worker
+      - CONTENTLOOP_ROLE=worker
     depends_on:
       postgres:
         condition: service_healthy

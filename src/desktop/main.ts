@@ -8,7 +8,7 @@ import { resolveDataDir, startEmbeddedPostgres } from "../db/embedded.js";
 // .default(4000)`), and db/pool.ts pulls it in transitively. Every env var
 // the app reads must therefore be set BEFORE the first dynamic import below —
 // static imports of app modules would be too late.
-process.env.TPCE_MODE = "desktop";
+process.env.CONTENTLOOP_MODE = "desktop";
 process.env.NODE_ENV = process.env.NODE_ENV ?? "production";
 process.env.PORT = process.env.PORT ?? "4173";
 
@@ -23,7 +23,7 @@ try {
   console.error(
     `[desktop] startup failed: ${err ?? "Postgres exited during start"}\n` +
     `  Data dir: ${resolveDataDir()}\n` +
-    `  Another TPCE instance may already be running, or a previous run was\n` +
+    `  Another ContentLoop instance may already be running, or a previous run was\n` +
     `  force-quit and left a stray postgres process holding this data dir.`
   );
   process.exit(1);
@@ -51,7 +51,7 @@ for (let attempt = 0; attempt < 100; attempt++) {
   } catch { /* not accepting yet */ }
   await new Promise((r) => setTimeout(r, 100));
 }
-console.log(`TPCE ready at ${readyUrl}`);
+console.log(`ContentLoop ready at ${readyUrl}`);
 
 const { startInProcessRunner } = await import("../worker/inProcessRunner.js");
 const stopRunner = await startInProcessRunner();

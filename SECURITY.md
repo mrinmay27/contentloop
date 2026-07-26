@@ -1,6 +1,6 @@
 # Security
 
-TPCE is built for **single-user, self-hosted** use — one operator running
+ContentLoop is built for **single-user, self-hosted** use — one operator running
 their own instance, not a multi-tenant SaaS. That scope shapes the security
 model below; if you need multi-user isolation, you'll need to add it.
 
@@ -15,18 +15,18 @@ model below; if you need multi-user isolation, you'll need to add it.
 - **`.env`**: bootstrap defaults (also unencrypted, also gitignored).
 
 None of this is hashed, salted, or encrypted at rest. Treat the machine (or
-container/volume) running TPCE as sensitive — anyone with filesystem or DB
+container/volume) running ContentLoop as sensitive — anyone with filesystem or DB
 access has your keys.
 
 ## Do not expose this publicly without protection
 
 The API has no authentication by default (matching today's local-dev
-behavior). Before putting TPCE behind a public URL:
+behavior). Before putting ContentLoop behind a public URL:
 
 1. Set `API_TOKEN` (see `.env.example`) so `/api/*` requires
    `Authorization: Bearer <token>` (except `/api/health`).
 2. Put a reverse proxy (nginx, Caddy, Traefik, etc.) in front with TLS —
-   TPCE itself does not terminate HTTPS.
+   ContentLoop itself does not terminate HTTPS.
 3. Don't rely on `API_TOKEN` alone as your only defense on the open
    internet; it's a single static bearer token, not a full auth system.
 
@@ -40,4 +40,4 @@ up for specifics if needed.
 
 Note: with `API_TOKEN` set, the Bull Board dashboard at `/queues` requires the
 same token (`Authorization: Bearer <token>` or `?token=<token>` in the browser).
-When exposing TPCE through a reverse proxy, consider blocking `/queues` entirely.
+When exposing ContentLoop through a reverse proxy, consider blocking `/queues` entirely.

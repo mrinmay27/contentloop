@@ -1,5 +1,11 @@
 # Architecture
 
+> **Naming note:** this project was called **TPCE (Theme Page Content Engine)**
+> before it was renamed to **ContentLoop**. The dated sprint specs and plans
+> under `docs/superpowers/` still use the old name — they are historical
+> records, deliberately left as written. `TPCE_MODE`, `TPCE_DATA_DIR` and
+> `TPCE_ROLE` are still honoured as aliases of the `CONTENTLOOP_*` names.
+
 ## Modules
 
 1. Trend ingestion
@@ -145,7 +151,7 @@
    - **Docker packaging**: a single multi-stage `Dockerfile` builds once and
      serves both process roles — `scripts/docker-entrypoint.sh` runs
      migrations then execs either `dist/src/api/server.js` or
-     `dist/src/worker/index.js` depending on `TPCE_ROLE` (`api` | `worker`).
+     `dist/src/worker/index.js` depending on `CONTENTLOOP_ROLE` (`api` | `worker`).
      `docker-compose.yml`'s opt-in `full` profile (`docker compose --profile
      full up`) adds `app-api` and `app-worker` services alongside the
      existing `postgres`/`redis` services, both built from the same image.
@@ -161,7 +167,7 @@
      `SECURITY.md`.
 
 13. **Run modes** *(Sprint D2 — desktop mode)*
-   - **`TPCE_MODE`** (`src/config/mode.ts`) gates the differences: `server`
+   - **`CONTENTLOOP_MODE`** (`src/config/mode.ts`) gates the differences: `server`
      (default) runs BullMQ workers against Redis and an external Postgres,
      with `api` and `worker` as separate processes (the Docker/`npm run dev`
      topology) and bull-board mounted at `/queues`. `desktop` runs a single
@@ -190,7 +196,7 @@
      in-process runner — all in one process.
    - **Known limitation**: generated media still resolves to
      `process.cwd()/data/media` (hardcoded), so desktop mode currently writes
-     media relative to the install directory rather than `TPCE_DATA_DIR`.
+     media relative to the install directory rather than `CONTENTLOOP_DATA_DIR`.
      A Phase 2 fix will make the media directory configurable.
 
 ## Migrations

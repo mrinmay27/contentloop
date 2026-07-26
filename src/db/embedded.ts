@@ -4,14 +4,31 @@ import os from "node:os";
 import path from "node:path";
 
 /** Where desktop mode keeps its Postgres cluster and generated media.
- *  Override with TPCE_DATA_DIR (used by tests and by the Phase 2 shell). */
+ *  Override with CONTENTLOOP_DATA_DIR (TPCE_DATA_DIR still honoured — the
+ *  project was called TPCE before the rename).
+ *
+ *  Migration safety: the app used to store data under a "TPCE" folder. If
+ *  that folder already holds a cluster and the new one doesn't exist yet, we
+ *  keep using it — renaming the default would make an existing user's data
+ *  look like it had vanished. */
 export function resolveDataDir(): string {
-  const override = process.env.TPCE_DATA_DIR;
+  const override = process.env.CONTENTLOOP_DATA_DIR ?? process.env.TPCE_DATA_DIR;
   if (override && override.trim()) return path.resolve(override.trim());
+
   const home = os.homedir();
-  if (process.platform === "darwin") return path.join(home, "Library", "Application Support", "TPCE");
-  if (process.platform === "win32") return path.join(process.env.APPDATA ?? path.join(home, "AppData", "Roaming"), "TPCE");
-  return path.join(process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"), "tpce");
+  const [base, legacyName, name] = process.platform === "darwin"
+    ? [path.join(home, "Library", "Application Support"), "TPCE", "ContentLoop"]
+    : process.platform === "win32"
+      ? [process.env.APPDATA ?? path.join(home, "AppData", "Roaming"), "TPCE", "ContentLoop"]
+      : [process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"), "tpce", "contentloop"];
+
+  const current = path.join(base, name);
+  const legacy = path.join(base, legacyName);
+  if (!fs.existsSync(current) && fs.existsSync(path.join(legacy, "pgdata", "PG_VERSION"))) {
+    console.log(`[pg] using existing data dir from before the rename: ${legacy}`);
+    return legacy;
+  }
+  return current;
 }
 
 /** Ask the OS for a free port by binding :0 and releasing it. */

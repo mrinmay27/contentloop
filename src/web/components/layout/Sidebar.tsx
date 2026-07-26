@@ -31,7 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className="sidebar-logo">
       <div className="logo-mark">TC</div>
       <div>
-        <div className="logo-text">TPCE</div>
+        <div className="logo-text">ContentLoop</div>
         <div className="logo-sub">Content Engine</div>
       </div>
     </div>

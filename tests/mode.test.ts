@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveMode } from "../src/config/mode.js";
 
-afterEach(() => { delete process.env.TPCE_MODE; });
+afterEach(() => { delete process.env.TPCE_MODE; delete process.env.CONTENTLOOP_MODE; });
 
 describe("resolveMode", () => {
   it("defaults to server when unset", () => {
@@ -18,6 +18,22 @@ describe("resolveMode", () => {
   });
   it("falls back to server for unknown values", () => {
     process.env.TPCE_MODE = "banana";
+    expect(resolveMode()).toBe("server");
+  });
+});
+
+describe("rename compatibility", () => {
+  it("honours the current CONTENTLOOP_MODE name", () => {
+    process.env.CONTENTLOOP_MODE = "desktop";
+    expect(resolveMode()).toBe("desktop");
+  });
+  it("still honours the legacy TPCE_MODE so existing .env files keep working", () => {
+    process.env.TPCE_MODE = "desktop";
+    expect(resolveMode()).toBe("desktop");
+  });
+  it("prefers the current name when both are set", () => {
+    process.env.CONTENTLOOP_MODE = "server";
+    process.env.TPCE_MODE = "desktop";
     expect(resolveMode()).toBe("server");
   });
 });

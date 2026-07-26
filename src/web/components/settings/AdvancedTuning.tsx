@@ -63,7 +63,8 @@ function safeParse(raw: string): Record<string, number> {
 
 // localStorage key the shared req() helper in web/lib/api.ts reads to
 // attach `Authorization: Bearer <token>` — see Sprint U1 Task 7.
-const TOKEN_KEY = 'tpce_token';
+const TOKEN_KEY = 'contentloop_token';
+const LEGACY_TOKEN_KEY = 'tpce_token'; // pre-rename; read so saved tokens survive
 
 export const AdvancedTuning: React.FC = () => {
   const [thresholds, setThresholds] = useState<Record<string, number>>({});
@@ -76,7 +77,7 @@ export const AdvancedTuning: React.FC = () => {
   const [apiToken, setApiToken] = useState('');
   const [tokenSaved, setTokenSaved] = useState(false);
   useEffect(() => {
-    setApiToken(localStorage.getItem(TOKEN_KEY) ?? '');
+    setApiToken(localStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(LEGACY_TOKEN_KEY) ?? '');
   }, []);
   const saveToken = () => {
     const trimmed = apiToken.trim();
