@@ -826,9 +826,10 @@ app.post("/api/jobs/:name", async (req, res, next) => {
     const params = z.object({ name: z.enum(["ingest", "score", "generate", "media", "render", "schedule", "post", "analyze"]) }).parse(req.params);
     if (isDesktop()) {
       // No queue in desktop mode — run the job in-process, fire-and-forget so
-      // the request returns immediately (same contract as enqueueing).
-      const { JOBS } = await import("../worker/jobs.js");
-      JOBS[params.name]().catch((err: any) =>
+      // the request returns immediately (same contract as enqueueing). Uses
+      // the shared guard so this can't race the runner's own tick.
+      const { runJobGuarded } = await import("../worker/inProcessRunner.js");
+      runJobGuarded(params.name).catch((err: any) =>
         console.warn(`[jobs] ${params.name} failed: ${err?.message ?? err}`)
       );
     } else {
@@ -888,6 +889,15 @@ app.get("/api/content/:id/media", async (req, res, next) => {
 app.post("/api/content/:id/synthesize", async (req, res, next) => {
   try {
     const { voice, rate } = req.body as { voice?: string; rate?: string };
+    if (isDesktop()) {
+      // No queue in desktop mode — run the batch media job in-process via the
+      // shared guard so it can't race the runner's own tick.
+      const { runJobGuarded } = await import("../worker/inProcessRunner.js");
+      void runJobGuarded("media").catch((err: any) =>
+        console.warn(`[jobs] media failed: ${err?.message ?? err}`)
+      );
+      return void res.json({ ok: true, queued: 'media', contentId: req.params.id });
+    }
     // Enqueue media job with specific content ID
     const { queues } = await import("../worker/queues.js");
     await queues.media.add(`manual-tts-${req.params.id}`, { contentId: req.params.id, voice, rate }, {
@@ -900,6 +910,13 @@ app.post("/api/content/:id/synthesize", async (req, res, next) => {
 // POST trigger video render for a specific content item
 app.post("/api/content/:id/render", async (req, res, next) => {
   try {
+    if (isDesktop()) {
+      const { runJobGuarded } = await import("../worker/inProcessRunner.js");
+      void runJobGuarded("render").catch((err: any) =>
+        console.warn(`[jobs] render failed: ${err?.message ?? err}`)
+      );
+      return void res.json({ ok: true, queued: 'render', contentId: req.params.id });
+    }
     const { queues } = await import("../worker/queues.js");
     await queues.render.add(`manual-render-${req.params.id}`, { contentId: req.params.id }, {
       removeOnComplete: 25, removeOnFail: 25,
@@ -926,15 +943,24 @@ app.post("/api/content/:id/batch-render", async (req, res, next) => {
     }
 
     const variantGroup = crypto.randomUUID();
-    const { queues } = await import("../worker/queues.js");
-    for (let i = 0; i < jobs.length; i++) {
-      await queues.render.add(`batch-render-${req.params.id}-v${i}`, {
-        contentId: req.params.id,
-        variantIndex: i,
-        variantGroup,
-        transition: jobs[i].transition,
-        aspect: jobs[i].aspect,
-      }, { removeOnComplete: 25, removeOnFail: 25 });
+    if (isDesktop()) {
+      // No queue in desktop mode — one guarded in-process render pass covers
+      // all variants (the render job itself renders everything pending).
+      const { runJobGuarded } = await import("../worker/inProcessRunner.js");
+      void runJobGuarded("render").catch((err: any) =>
+        console.warn(`[jobs] render failed: ${err?.message ?? err}`)
+      );
+    } else {
+      const { queues } = await import("../worker/queues.js");
+      for (let i = 0; i < jobs.length; i++) {
+        await queues.render.add(`batch-render-${req.params.id}-v${i}`, {
+          contentId: req.params.id,
+          variantIndex: i,
+          variantGroup,
+          transition: jobs[i].transition,
+          aspect: jobs[i].aspect,
+        }, { removeOnComplete: 25, removeOnFail: 25 });
+      }
     }
 
     res.json({
