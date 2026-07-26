@@ -1,6 +1,3 @@
-import { ExpressAdapter } from "@bull-board/express";
-import { createBullBoard } from "@bull-board/api";
-import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
@@ -29,10 +26,10 @@ import {
   scheduleContentBatch,
   getContentItemFull,
 } from "../services/repositories.js";
-import { queues } from "../worker/queues.js";
 import * as canva from "../services/canva.js";
 import * as instagram from "../services/instagram.js";
 import { configStore, CONFIG_META, type ConfigKey } from "../config/configStore.js";
+import { isDesktop } from "../config/mode.js";
 import { generateImage as genImage } from "../config/generationProviders.js";
 import { llmConfigStore, LLM_PROVIDERS, resolveBaseUrl } from "../config/llmConfigStore.js";
 import { probeProvider, loadCapabilities } from "../config/modelDiscovery.js";
@@ -104,13 +101,24 @@ app.use("/media", express.static(MEDIA_DIR, {
   fallthrough: true,
 }));
 
-const boardServer = new ExpressAdapter();
-boardServer.setBasePath("/queues");
-createBullBoard({
-  queues: Object.values(queues).map((queue) => new BullMQAdapter(queue)),
-  serverAdapter: boardServer
-});
-app.use("/queues", boardServer.getRouter());
+// Bull Board is server-mode only: desktop has no Redis/queues. Mounted here
+// (before the SPA fallback) but the fallback's negative lookahead already
+// excludes /queues, so ordering is not load-bearing.
+if (!isDesktop()) {
+  const [{ ExpressAdapter }, { createBullBoard }, { BullMQAdapter }, { queues }] = await Promise.all([
+    import("@bull-board/express"),
+    import("@bull-board/api"),
+    import("@bull-board/api/bullMQAdapter"),
+    import("../worker/queues.js"),
+  ]);
+  const boardServer = new ExpressAdapter();
+  boardServer.setBasePath("/queues");
+  createBullBoard({
+    queues: Object.values(queues).map((queue) => new BullMQAdapter(queue)),
+    serverAdapter: boardServer,
+  });
+  app.use("/queues", boardServer.getRouter());
+}
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, mode: env.NODE_ENV, approvalRequired: env.APPROVAL_REQUIRED, postingDryRun: env.POSTING_DRY_RUN });
@@ -811,7 +819,17 @@ app.post("/api/pages/:id/sources/regenerate", async (req, res, next) => {
 app.post("/api/jobs/:name", async (req, res, next) => {
   try {
     const params = z.object({ name: z.enum(["ingest", "score", "generate", "media", "render", "schedule", "post", "analyze"]) }).parse(req.params);
-    await queues[params.name].add(`manual-${params.name}`, {}, { removeOnComplete: 25, removeOnFail: 25 });
+    if (isDesktop()) {
+      // No queue in desktop mode — run the job in-process, fire-and-forget so
+      // the request returns immediately (same contract as enqueueing).
+      const { JOBS } = await import("../worker/jobs.js");
+      JOBS[params.name]().catch((err: any) =>
+        console.warn(`[jobs] ${params.name} failed: ${err?.message ?? err}`)
+      );
+    } else {
+      const { queues } = await import("../worker/queues.js");
+      await queues[params.name].add(`manual-${params.name}`, {}, { removeOnComplete: 25, removeOnFail: 25 });
+    }
     res.json({ ok: true, queued: params.name });
   } catch (error) {
     next(error);
@@ -866,6 +884,7 @@ app.post("/api/content/:id/synthesize", async (req, res, next) => {
   try {
     const { voice, rate } = req.body as { voice?: string; rate?: string };
     // Enqueue media job with specific content ID
+    const { queues } = await import("../worker/queues.js");
     await queues.media.add(`manual-tts-${req.params.id}`, { contentId: req.params.id, voice, rate }, {
       removeOnComplete: 25, removeOnFail: 25,
     });
@@ -876,6 +895,7 @@ app.post("/api/content/:id/synthesize", async (req, res, next) => {
 // POST trigger video render for a specific content item
 app.post("/api/content/:id/render", async (req, res, next) => {
   try {
+    const { queues } = await import("../worker/queues.js");
     await queues.render.add(`manual-render-${req.params.id}`, { contentId: req.params.id }, {
       removeOnComplete: 25, removeOnFail: 25,
     });
@@ -901,6 +921,7 @@ app.post("/api/content/:id/batch-render", async (req, res, next) => {
     }
 
     const variantGroup = crypto.randomUUID();
+    const { queues } = await import("../worker/queues.js");
     for (let i = 0; i < jobs.length; i++) {
       await queues.render.add(`batch-render-${req.params.id}-v${i}`, {
         contentId: req.params.id,
