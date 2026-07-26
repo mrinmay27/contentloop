@@ -1,4 +1,20 @@
-# ContentLoop
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logo-dark.png">
+    <img src="public/logo.png" alt="ContentLoop" width="320">
+  </picture>
+</p>
+
+<p align="center">
+  <em>Discover → score → draft → publish → <strong>learn</strong> → repeat.</em><br>
+  A self-hosted content engine for theme pages that gets smarter from your own results.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
+  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-brightgreen">
+  <img alt="tests" src="https://img.shields.io/badge/tests-159%20passing-brightgreen">
+</p>
 
 ContentLoop is a self-hosted content-operations tool for running "theme page" social
 accounts (Instagram, YouTube Shorts, and similar) without babysitting every

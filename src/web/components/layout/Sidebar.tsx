@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => (
   <div className="sidebar">
     <div className="sidebar-logo">
-      <div className="logo-mark">TC</div>
+      <img className="logo-mark" src="/mark.png" alt="ContentLoop" />
       <div>
         <div className="logo-text">ContentLoop</div>
         <div className="logo-sub">Content Engine</div>
