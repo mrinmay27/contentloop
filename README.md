@@ -42,6 +42,30 @@ back to a deterministic template, scoring falls back to keyword-only
 matching, and every ingestion source that needs a credential is simply
 skipped (see the BYOK table below for which ones those are).
 
+## Desktop mode (no Docker)
+
+For a single user who'd rather not run containers at all:
+
+```bash
+npm install
+npm run build
+npm run desktop
+```
+
+This boots an embedded Postgres cluster inside your OS's app-data folder
+(override with `TPCE_DATA_DIR`), applies migrations, and serves the built
+dashboard — all from one process, no Redis. Background jobs run in-process
+on an elapsed-time schedule (not wall-clock cron) with a catch-up pass at
+launch, so a post scheduled for 17:00 still goes out the next time you open
+the app, even if that's 10am the next day. Open **http://localhost:4173**
+(override with `PORT`).
+
+First launch takes about a minute while Postgres initializes; later
+launches reuse the existing cluster and are up in well under 30 seconds.
+The Docker quickstart above is still the better fit for multi-page/team
+deployments — desktop mode is the easiest path for running TPCE for
+yourself.
+
 ## Dev setup
 
 For active development (hot reload, no Docker image build):

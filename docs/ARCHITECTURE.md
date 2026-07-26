@@ -160,6 +160,39 @@
      operator sets one. Not a substitute for TLS/reverse-proxy — see
      `SECURITY.md`.
 
+13. **Run modes** *(Sprint D2 — desktop mode)*
+   - **`TPCE_MODE`** (`src/config/mode.ts`) gates the differences: `server`
+     (default) runs BullMQ workers against Redis and an external Postgres,
+     with `api` and `worker` as separate processes (the Docker/`npm run dev`
+     topology) and bull-board mounted at `/queues`. `desktop` runs a single
+     process (`src/desktop/main.ts`, `npm run desktop`) with an embedded
+     Postgres cluster (`embedded-postgres`, an *optional* dependency — server-
+     mode/Docker installs don't pull its ~144MB of platform binaries), no
+     Redis, and no bull-board (`/queues` 404s).
+   - **Shared job bodies**: both modes run the same eight pipeline jobs
+     (`ingest`, `score`, `generate`, `media`, `render`, `schedule`, `post`,
+     `analyze`), defined once in `src/worker/jobs.ts`. Server mode wires them
+     into BullMQ `Worker`s (`src/worker/index.ts`); desktop mode drives them
+     from an in-process runner (`src/worker/inProcessRunner.ts`).
+   - **Desktop scheduling is elapsed-time, not wall-clock cron**: a
+     `job_runs` table (migration `008`) persists each job's last-run
+     timestamp so schedule state survives restarts (proven: a restart
+     reusing an existing cluster applies zero migrations and does not
+     re-initialise). On launch the runner does a catch-up pass (`post` →
+     `schedule` → `analyze` → `ingest` → `score` → `generate`, skipping the
+     heavier `media`/`render`) so a job that came due while the app was
+     closed — e.g. a post scheduled 2 hours in the past — still runs within
+     seconds of the next launch, then ticks every 60s comparing elapsed time
+     against each job's cadence.
+   - **Boot order**: `src/desktop/main.ts` starts embedded Postgres, applies
+     migrations, starts Express serving the built UI (`dist-web`, cold start
+     ~60s on first run for `initdb`, ~25s on a warm restart), then starts the
+     in-process runner — all in one process.
+   - **Known limitation**: generated media still resolves to
+     `process.cwd()/data/media` (hardcoded), so desktop mode currently writes
+     media relative to the install directory rather than `TPCE_DATA_DIR`.
+     A Phase 2 fix will make the media directory configurable.
+
 ## Migrations
 
 Schema changes live as numbered SQL files in `src/db/migrations/`
