@@ -32,6 +32,9 @@ export interface StockVideo {
   id: number;
   url: string;
   downloadUrl: string;
+  /** Still frame Pexels provides — lets a picker show results without
+   *  downloading every clip first. */
+  previewImage?: string;
   width: number;
   height: number;
   duration: number;
@@ -132,6 +135,7 @@ export async function searchVideos(
           id: v.id,
           url: v.url,
           downloadUrl: best.link,
+          previewImage: v.image,
           width: best.width,
           height: best.height,
           duration: v.duration,

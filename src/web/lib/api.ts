@@ -160,6 +160,14 @@ export const api = {
       headers: { 'Content-Type': file.type || 'video/mp4' },
       body: file,
     }),
+  /** needsKey:true means no Pexels key — the UI points at Settings, not an error. */
+  searchStockVideos: (q: string) =>
+    req<{ needsKey: boolean; videos: any[] }>(`/stock/videos?q=${encodeURIComponent(q)}`),
+  attachStockVideo: (contentId: string, body: Record<string, unknown>) =>
+    req<{ ok: boolean; url: string }>(`/content/${contentId}/stock-video`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   /** srt === null means no Groq key — the UI falls back to manual captions. */
   transcribeContentVideo: (contentId: string) =>
     req<{ ok: boolean; srt: string | null; segments?: number; note?: string }>(

@@ -9,6 +9,7 @@ import { ReelComposition, reelDurationFrames, REEL_FPS, REEL_WIDTH, REEL_HEIGHT 
 import { parseReelScript } from '../../../remotion/parseReelScript';
 import { ReelScriptGenerator } from './ReelScriptGenerator';
 import { VideoUploadPanel } from './VideoUploadPanel';
+import { StockFootagePicker } from './StockFootagePicker';
 import { REEL_PATHS, resolveReelPath, type ReelPath } from '../../../domain/reelPath';
 import { PublishPanel } from './PublishPanel';
 
@@ -71,8 +72,9 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
   // Which route this reel is being made by. Persisted so the render job knows
   // which renderer to use, and so reopening the editor lands where you left off.
   const [reelPath, setReelPath] = useState<ReelPath>('slideshow');
-  /** Slides whose background is a video clip rather than a still. */
-  const [slideVideo, setSlideVideo] = useState<Set<number>>(new Set());
+  /** Per-slide background source. Stock is the Pexels picker; video is the
+   *  creator's own or an AI clip; image is a generated still. */
+  const [slideBg, setSlideBg] = useState<Record<number, 'image' | 'stock' | 'video'>>({});
 
   // Task 3.1: Pre-select format tab from topic.suggestedFormat
   const [previewTab, setPreviewTab] = useState<SuggestedFormat>(
@@ -576,7 +578,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                   panel — the same clutter the path chooser removed, one level
                   down. Same principle: pick one, show one. */}
               {parseReelScript(reelScript).filter(s => s !== 'No script yet').map((slideText, i) => {
-                const useVideo = slideVideo.has(i);
+                const bg = slideBg[i] ?? 'image';
                 return (
                   <div key={i} style={{ marginBottom: 14 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
@@ -584,27 +586,33 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                         Slide {i + 1} background
                       </span>
                       <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
-                        {(['image','video'] as const).map(kind => (
+                        {([
+                          ['image', '🖼 Image'],
+                          ['stock', '🎬 Stock video'],
+                          ['video', '⬆️ My clip'],
+                        ] as const).map(([kind, label]) => (
                           <button key={kind}
-                            onClick={() => setSlideVideo(prev => {
-                              const next = new Set(prev);
-                              if (kind === 'video') next.add(i); else next.delete(i);
-                              return next;
-                            })}
+                            onClick={() => setSlideBg(prev => ({ ...prev, [i]: kind }))}
                             style={{
                               fontSize:10, padding:'2px 10px', borderRadius:'var(--radius-sm)',
                               cursor:'pointer',
-                              border:`1px solid ${(kind === 'video') === useVideo ? 'var(--accent)' : 'var(--border)'}`,
-                              background:(kind === 'video') === useVideo ? 'var(--accent-dim)' : 'transparent',
+                              border:`1px solid ${bg === kind ? 'var(--accent)' : 'var(--border)'}`,
+                              background: bg === kind ? 'var(--accent-dim)' : 'transparent',
                               color:'var(--text-primary)',
                             }}>
-                            {kind === 'image' ? '🖼 Image' : '🎬 Video'}
+                            {label}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {useVideo ? (
+                    {bg === 'stock' ? (
+                      <StockFootagePicker
+                        contentId={draftId}
+                        slideIndex={i}
+                        defaultQuery={(topic.keywords ?? []).slice(0, 2).join(' ') || topic.title}
+                      />
+                    ) : bg === 'video' ? (
                       <VideoUploadPanel
                         contentId={draftId}
                         slideIndex={i}

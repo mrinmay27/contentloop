@@ -698,6 +698,62 @@ app.post("/api/content/:id/transcribe", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Stock footage search. Returns needsKey:true rather than an error when no
+// Pexels key is configured, so the UI can point at Settings instead of showing
+// a dead end.
+app.get("/api/stock/videos", async (req, res, next) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    if (!q) return void res.status(400).json({ error: "A search term is required." });
+    if (!(configStore.get("PEXELS_API_KEY") || process.env.PEXELS_API_KEY)) {
+      return void res.json({ needsKey: true, videos: [] });
+    }
+    const { searchVideos } = await import("../services/stockFootage.js");
+    const videos = await searchVideos(q, "portrait", 12);
+    res.json({ needsKey: false, videos });
+  } catch (err) { next(err); }
+});
+
+// Attach a chosen stock clip to a slide. Downloads server-side into MEDIA_DIR
+// (Remotion can only composite assets under its publicDir) and writes
+// footage_urls[slideIndex], the same slot a manual upload uses.
+app.post("/api/content/:id/stock-video", async (req, res, next) => {
+  try {
+    const { downloadUrl, slideIndex, width, height, durationSec } = req.body as {
+      downloadUrl?: string; slideIndex?: number;
+      width?: number; height?: number; durationSec?: number;
+    };
+    if (!downloadUrl || !/^https:\/\//.test(downloadUrl)) {
+      return void res.status(400).json({ error: "A stock clip must be chosen first." });
+    }
+    if (!Number.isInteger(slideIndex) || (slideIndex as number) < 0) {
+      return void res.status(400).json({ error: "slideIndex must be a non-negative integer." });
+    }
+
+    const { rows } = await query<{ footage_urls: any }>(
+      `SELECT footage_urls FROM content_items WHERE id = $1`, [req.params.id]
+    );
+    if (!rows[0]) return void res.status(404).json({ error: "Content item not found" });
+
+    const { downloadMedia } = await import("../services/stockFootage.js");
+    const filename = `slide_${slideIndex}.mp4`;
+    const localPath = await downloadMedia(downloadUrl, req.params.id, filename);
+    const publicUrl = `/media/${req.params.id}/footage/${filename}`;
+
+    const footage: any[] = Array.isArray(rows[0].footage_urls) ? [...rows[0].footage_urls] : [];
+    while (footage.length <= (slideIndex as number)) footage.push(null);
+    footage[slideIndex as number] = {
+      localPath, publicUrl, type: "video",
+      width: width ?? 1080, height: height ?? 1920, durationSec: durationSec ?? null,
+    };
+    await query(
+      `UPDATE content_items SET footage_urls = $2, render_status = 'pending', updated_at = now() WHERE id = $1`,
+      [req.params.id, JSON.stringify(footage)]
+    );
+    res.json({ ok: true, url: publicUrl });
+  } catch (err) { next(err); }
+});
+
 // Content: upload an image for a content_item at a specific slide index.
 // payload.images is an array — index N is overwritten in place; gaps fill with null.
 app.post("/api/content/:id/images", async (req, res, next) => {
