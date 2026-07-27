@@ -235,6 +235,24 @@ export async function downloadMedia(
  * Downloads one image per slide (or fewer if not enough results).
  * Returns an array of local file paths that can be served via Express static.
  */
+/** Decide, per slide, whether to use a video clip or a still.
+ *  Video is preferred — stills are the fallback that made every reel look like
+ *  a slideshow. Returns [] when neither is available so the composition uses
+ *  its existing gradient backgrounds. */
+export function pickBackgroundPlan(
+  slideCount: number,
+  videosAvailable: number,
+  imagesAvailable: number,
+): Array<'video' | 'image'> {
+  const plan: Array<'video' | 'image'> = [];
+  for (let i = 0; i < slideCount; i++) {
+    if (i < videosAvailable) plan.push('video');
+    else if (imagesAvailable > 0) plan.push('image');
+    else break;
+  }
+  return plan;
+}
+
 export async function sourceReelBackgrounds(
   contentId: string,
   keywords: string[],
@@ -242,38 +260,58 @@ export async function sourceReelBackgrounds(
   aspect: VideoAspect = 'portrait',
 ): Promise<DownloadedMedia[]> {
   const searchTerm = keywords.slice(0, 3).join(' ');
-  const images = await searchImages(searchTerm, aspect, slideCount + 5);
 
-  if (images.length === 0) {
-    console.log(`[stockFootage] No images found — Reel will use gradient backgrounds`);
+  // Video first — this is what stops reels being slideshows. searchVideos()
+  // was fully implemented and called from nowhere until now.
+  const [videos, images] = await Promise.all([
+    searchVideos(searchTerm, aspect, slideCount + 3),
+    searchImages(searchTerm, aspect, slideCount + 5),
+  ]);
+
+  const plan = pickBackgroundPlan(slideCount, videos.length, images.length);
+  if (plan.length === 0) {
+    console.log(`[stockFootage] No footage found — Reel will use gradient backgrounds`);
     return [];
   }
 
-  // Download up to slideCount images
-  const toDownload = images.slice(0, slideCount);
   const results: DownloadedMedia[] = [];
+  let videoIdx = 0;
+  let imageIdx = 0;
 
-  for (let i = 0; i < toDownload.length; i++) {
-    const img = toDownload[i];
-    const ext = img.downloadUrl.match(/\.(\w+)\?/)
-      ? img.downloadUrl.match(/\.(\w+)\?/)![1]
-      : 'jpg';
-    const filename = `bg_${i}.${ext}`;
-
+  for (let i = 0; i < plan.length; i++) {
     try {
-      const localPath = await downloadMedia(img.downloadUrl, contentId, filename);
-      results.push({
-        localPath,
-        publicUrl: `/media/${contentId}/footage/${filename}`,
-        type: 'image',
-        width: img.width,
-        height: img.height,
-      });
+      if (plan[i] === 'video') {
+        const v = videos[videoIdx++];
+        const filename = `bg_${i}.mp4`;
+        const localPath = await downloadMedia(v.downloadUrl, contentId, filename);
+        results.push({
+          localPath,
+          publicUrl: `/media/${contentId}/footage/${filename}`,
+          type: 'video',
+          width: v.width,
+          height: v.height,
+          durationSec: v.duration,
+        });
+      } else {
+        const img = images[imageIdx++];
+        const ext = img.downloadUrl.match(/\.(\w+)\?/)?.[1] ?? 'jpg';
+        const filename = `bg_${i}.${ext}`;
+        const localPath = await downloadMedia(img.downloadUrl, contentId, filename);
+        results.push({
+          localPath,
+          publicUrl: `/media/${contentId}/footage/${filename}`,
+          type: 'image',
+          width: img.width,
+          height: img.height,
+        });
+      }
     } catch (err: any) {
-      console.error(`[stockFootage] Failed to download image ${i}: ${err.message}`);
+      // One bad download must not sink the whole reel.
+      console.error(`[stockFootage] Failed to download background ${i}: ${err.message}`);
     }
   }
 
-  console.log(`[stockFootage] Sourced ${results.length}/${slideCount} background images for reel`);
+  const videoCount = results.filter(r => r.type === 'video').length;
+  console.log(`[stockFootage] Sourced ${results.length}/${slideCount} backgrounds (${videoCount} video, ${results.length - videoCount} image)`);
   return results;
 }
