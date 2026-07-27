@@ -511,7 +511,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
             <div>
               {/* Route 2/3 — your own footage. Sits above the generated-reel
                   flow because it is a distinct path, not a step within it. */}
-              <VideoUploadPanel contentId={draftId}/>
+              <VideoUploadPanel contentId={draftId} topic={topic.title} niche={page.niche}/>
 
               <div style={{ display:'flex', alignItems:'center', gap:10, margin:'4px 0 14px' }}>
                 <div style={{ flex:1, height:1, background:'var(--border)' }}/>

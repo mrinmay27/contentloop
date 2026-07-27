@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Icon } from '../ui/Icon';
 import { api } from '../../lib/api';
+import { VideoPromptBridge } from './VideoPromptBridge';
 
 /**
  * Route 2/3 — bring your own footage.
@@ -15,6 +16,9 @@ import { api } from '../../lib/api';
 type Props = {
   contentId: string | null;
   accent?: string;
+  /** Used to build the AI-generation prompt (Route 4a). */
+  topic?: string;
+  niche?: string;
 };
 
 type Asset = {
@@ -24,7 +28,7 @@ type Asset = {
 
 const fmtMb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-export const VideoUploadPanel: React.FC<Props> = ({ contentId }) => {
+export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche }) => {
   const [asset, setAsset]       = useState<Asset | null>(null);
   const [busy, setBusy]         = useState<'upload' | 'captions' | null>(null);
   const [error, setError]       = useState<string | null>(null);
@@ -74,6 +78,11 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId }) => {
         up to 3 minutes. Generated somewhere else? Download the file first, then
         choose it here.
       </div>
+
+      {/* Route 4a — generate elsewhere, come back through the same drop zone. */}
+      {!asset && topic && (
+        <VideoPromptBridge topic={topic} niche={niche} disabled={disabled}/>
+      )}
 
       {!asset ? (
         <div
