@@ -35,6 +35,9 @@ export interface StockVideo {
   /** Still frame Pexels provides — lets a picker show results without
    *  downloading every clip first. */
   previewImage?: string;
+  /** Who filmed it. Pexels' guidelines ask for a credit, and this is the only
+   *  moment we have the information — the downloaded .mp4 carries no trace. */
+  author?: string;
   width: number;
   height: number;
   duration: number;
@@ -58,6 +61,8 @@ export interface DownloadedMedia {
   width: number;
   height: number;
   durationSec?: number;
+  /** Credit, captured at download time — unrecoverable afterwards. */
+  attribution?: { provider: 'pexels'; author?: string; sourceUrl?: string };
 }
 
 // ── Pexels API aspect mapping ─────────────────────────────────────────────────
@@ -136,6 +141,7 @@ export async function searchVideos(
           url: v.url,
           downloadUrl: best.link,
           previewImage: v.image,
+          author: v.user?.name,
           width: best.width,
           height: best.height,
           duration: v.duration,
@@ -301,6 +307,7 @@ export async function sourceReelBackgrounds(
           width: v.width,
           height: v.height,
           durationSec: v.duration,
+          attribution: { provider: 'pexels', author: v.author, sourceUrl: v.url },
         });
       } else {
         const img = images[imageIdx++];
@@ -313,6 +320,7 @@ export async function sourceReelBackgrounds(
           type: 'image',
           width: img.width,
           height: img.height,
+          attribution: { provider: 'pexels', author: img.photographer, sourceUrl: img.url },
         });
       }
     } catch (err: any) {

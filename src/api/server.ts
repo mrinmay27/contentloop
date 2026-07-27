@@ -719,9 +719,10 @@ app.get("/api/stock/videos", async (req, res, next) => {
 // footage_urls[slideIndex], the same slot a manual upload uses.
 app.post("/api/content/:id/stock-video", async (req, res, next) => {
   try {
-    const { downloadUrl, slideIndex, width, height, durationSec } = req.body as {
+    const { downloadUrl, slideIndex, width, height, durationSec, author, sourceUrl } = req.body as {
       downloadUrl?: string; slideIndex?: number;
       width?: number; height?: number; durationSec?: number;
+      author?: string; sourceUrl?: string;
     };
     if (!downloadUrl || !/^https:\/\//.test(downloadUrl)) {
       return void res.status(400).json({ error: "A stock clip must be chosen first." });
@@ -745,6 +746,8 @@ app.post("/api/content/:id/stock-video", async (req, res, next) => {
     footage[slideIndex as number] = {
       localPath, publicUrl, type: "video",
       width: width ?? 1080, height: height ?? 1920, durationSec: durationSec ?? null,
+      // Captured here because it is unrecoverable once the clip is on disk.
+      attribution: { provider: "pexels", author, sourceUrl },
     };
     await query(
       `UPDATE content_items SET footage_urls = $2, render_status = 'pending', updated_at = now() WHERE id = $1`,

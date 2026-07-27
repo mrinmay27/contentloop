@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../../lib/api';
+import { creditLine } from '../../../domain/attribution';
 
 /**
  * Pexels stock video, pickable per slide.
@@ -26,6 +27,8 @@ export const StockFootagePicker: React.FC<Props> = ({
   const [needsKey, setNeedsKey] = useState(false);
   const [busy, setBusy]       = useState<'search' | 'attach' | null>(null);
   const [chosen, setChosen]   = useState<string | null>(null);
+  const [credit, setCredit]   = useState<string | null>(null);
+  const [creditUrl, setCreditUrl] = useState<string | null>(null);
   const [error, setError]     = useState<string | null>(null);
 
   const disabled = !contentId;
@@ -49,8 +52,11 @@ export const StockFootagePicker: React.FC<Props> = ({
       const { url } = await api.attachStockVideo(contentId, {
         downloadUrl: v.downloadUrl, slideIndex,
         width: v.width, height: v.height, durationSec: v.duration,
+        author: v.author, sourceUrl: v.url,
       });
       setChosen(url);
+      setCredit(creditLine({ provider: 'pexels', author: v.author }));
+      setCreditUrl(v.url ?? null);
       onAttached?.(url);
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'Could not attach that clip';
@@ -63,9 +69,20 @@ export const StockFootagePicker: React.FC<Props> = ({
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
         <video src={chosen} controls
           style={{ width: 110, borderRadius: 6, border: '1px solid var(--border)', background: '#000' }}/>
-        <button className="btn btn-ghost btn-sm" onClick={() => { setChosen(null); setVideos(null); }}>
-          Pick a different clip
-        </button>
+        <div>
+          {credit && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6 }}>
+              {creditUrl
+                ? <a href={creditUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'var(--text-muted)' }}>{credit} ↗</a>
+                : credit}
+            </div>
+          )}
+          <button className="btn btn-ghost btn-sm"
+            onClick={() => { setChosen(null); setVideos(null); setCredit(null); setCreditUrl(null); }}>
+            Pick a different clip
+          </button>
+        </div>
       </div>
     );
   }
