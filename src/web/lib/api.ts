@@ -151,6 +151,18 @@ export const api = {
     ),
 
   // ── Image storage (file-based, replaces stuffing data URLs into JSONB) ────────
+  /** Raw-body upload: the File is the body, so no multipart is needed.
+   *  req() merges headers and passes body through untouched (verified). */
+  uploadContentVideo: (contentId: string, file: File) =>
+    req<{ ok: boolean; asset: any }>(`/content/${contentId}/video`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'video/mp4' },
+      body: file,
+    }),
+  /** srt === null means no Groq key — the UI falls back to manual captions. */
+  transcribeContentVideo: (contentId: string) =>
+    req<{ ok: boolean; srt: string | null; segments?: number; note?: string }>(
+      `/content/${contentId}/transcribe`, { method: 'POST' }),
   uploadBrandLogo: (pageId: string, dataUrl: string) =>
     req<{ ok: boolean; url: string; bytes: number }>(`/pages/${pageId}/branding/logo`, {
       method: 'POST',

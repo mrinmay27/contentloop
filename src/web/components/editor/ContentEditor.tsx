@@ -8,6 +8,7 @@ import type { NavKey, SuggestedFormat, Topic, ThemePage } from '../../lib/types'
 import { ReelComposition, reelDurationFrames, REEL_FPS, REEL_WIDTH, REEL_HEIGHT } from '../../../remotion/ReelComposition';
 import { parseReelScript } from '../../../remotion/parseReelScript';
 import { ReelScriptGenerator } from './ReelScriptGenerator';
+import { VideoUploadPanel } from './VideoUploadPanel';
 import { PublishPanel } from './PublishPanel';
 
 // Build an image prompt that incorporates brand context. The user can override per-image.
@@ -508,6 +509,17 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
           {/* Reel Script — only visible on Reel tab */}
           {previewTab === 'reel' && (
             <div>
+              {/* Route 2/3 — your own footage. Sits above the generated-reel
+                  flow because it is a distinct path, not a step within it. */}
+              <VideoUploadPanel contentId={draftId}/>
+
+              <div style={{ display:'flex', alignItems:'center', gap:10, margin:'4px 0 14px' }}>
+                <div style={{ flex:1, height:1, background:'var(--border)' }}/>
+                <span style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase',
+                  letterSpacing:'0.06em', fontWeight:600 }}>Or generate a reel</span>
+                <div style={{ flex:1, height:1, background:'var(--border)' }}/>
+              </div>
+
               <div className="editor-section-title">Reel Script</div>
 
               <ReelScriptGenerator
