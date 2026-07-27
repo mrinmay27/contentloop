@@ -514,3 +514,60 @@ export function listBgmTracks(): Array<{ filename: string; path: string }> {
       path: path.join(BGM_DIR, filename),
     }));
 }
+
+/**
+ * Route 2/3 — render a creator's uploaded clip with captions composited on top.
+ *
+ * Separate from renderVideo(), which builds a slide-based reel. Both share the
+ * same publicDir/staticFile mechanics: assets must live under MEDIA_DIR and be
+ * referenced relative to it, because Remotion rejects absolute and file:// paths.
+ */
+export async function renderCaptionedVideo(options: {
+  contentId: string;
+  /** Absolute path to the uploaded source, inside MEDIA_DIR. */
+  sourcePath: string;
+  srt: string;
+  accent?: string;
+  durationSec: number;
+  /** Absolute path to a brand logo inside MEDIA_DIR, if any. */
+  logoPath?: string;
+}): Promise<RenderResult> {
+  const outputDir = path.join(MEDIA_DIR, options.contentId);
+  ensureDir(outputDir);
+  const outPath = path.join(outputDir, 'captioned.mp4');
+
+  const { bundle } = await import('@remotion/bundler');
+  const { renderMedia, selectComposition } = await import('@remotion/renderer');
+
+  const bundleLocation = await bundle({
+    entryPoint: path.resolve(process.cwd(), 'src/remotion/ReelRoot.tsx'),
+    publicDir: MEDIA_DIR,
+  });
+
+  const inputProps = {
+    videoSrc: toRenderableSrc(options.sourcePath),
+    srt: options.srt,
+    accent: options.accent ?? '#F5A623',
+    logoSrc: options.logoPath ? toRenderableSrc(options.logoPath) : undefined,
+    durationSec: options.durationSec,
+  };
+
+  const composition = await selectComposition({
+    serveUrl: bundleLocation, id: 'CaptionedVideo', inputProps,
+  });
+
+  console.log(`[render] Captioning ${options.contentId}: ${composition.durationInFrames} frames`);
+  await renderMedia({
+    composition, serveUrl: bundleLocation, codec: 'h264',
+    outputLocation: outPath, inputProps,
+  });
+
+  const stat = fs.statSync(outPath);
+  return {
+    videoPath: outPath,
+    publicUrl: `/media/${options.contentId}/captioned.mp4`,
+    durationSec: await getMediaDuration(outPath),
+    fileSizeBytes: stat.size,
+    status: 'done',
+  };
+}

@@ -11,6 +11,7 @@ import {
                               // source with webpack, which does not resolve
                               // .js -> .tsx. moduleResolution is "Bundler",
                               // so tsc accepts it too.
+import { CaptionedVideo, type CaptionedVideoProps } from './CaptionedVideo';
 
 // Default props for the studio / preview
 const DEFAULT_SLIDES = [
@@ -61,6 +62,28 @@ export const RemotionRoot: React.FC = () => (
       width={ASPECT_CONFIGS.landscape.width}
       height={ASPECT_CONFIGS.landscape.height}
       defaultProps={{ ...DEFAULT_PROPS, aspect: 'landscape' as VideoAspect }}
+    />
+
+    {/* Route 2/3 — a creator's own footage with composited captions. Its
+        duration comes from the uploaded clip, so calculateMetadata derives it
+        from durationSec rather than using a fixed length that would truncate
+        or pad real footage. */}
+    <Composition
+      id="CaptionedVideo"
+      component={CaptionedVideo as any}
+      durationInFrames={30 * 10}
+      fps={REEL_FPS}
+      width={ASPECT_CONFIGS.portrait.width}
+      height={ASPECT_CONFIGS.portrait.height}
+      defaultProps={{
+        videoSrc: '', srt: '', accent: '#F5A623',
+      } as CaptionedVideoProps}
+      calculateMetadata={({ props }: any) => ({
+        durationInFrames: Math.max(
+          1,
+          Math.round((Number(props.durationSec) || 10) * REEL_FPS),
+        ),
+      })}
     />
 
     {/* Square 1:1 — Feed posts */}
