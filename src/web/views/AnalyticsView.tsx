@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
+// Shared with the engine on purpose: the widget must use the same threshold
+// applyLearnedFormat does, or it would claim the bias is live while the
+// generator is still ignoring it.
+import { summariseFormatPerformance } from '../../domain/formatInsight';
+import { MIN_FORMAT_SAMPLES } from '../../domain/learning';
 import type { ThemePage } from '../lib/types';
 
 type Post = {
@@ -265,6 +270,70 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
                     ));
                   })()
                 )}
+              </div>
+
+              {/* Format performance — the engine already biases toward the
+                  winning format (applyLearnedFormat); this shows what it
+                  learned and whether that bias is live yet. */}
+              <div className="analytics-card" style={{ gridColumn:'span 2' }}>
+                <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>Format Performance</div>
+                {(() => {
+                  const perf = summariseFormatPerformance(
+                    (learning?.formats ?? []).map(f => ({
+                      label: f.label, score: f.score, sampleSize: f.sample_size,
+                    }))
+                  );
+
+                  if (perf.status === 'none') return (
+                    <div style={{ color:'var(--text-muted)', fontSize:12, marginTop:8 }}>
+                      No format data yet — appears once posts collect 24h metrics.
+                    </div>
+                  );
+
+                  const maxScore = Math.max(...perf.rows.map(r => r.score), 0.001);
+                  return (
+                    <>
+                      <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:12 }}>
+                        {perf.status === 'active' && perf.leader ? (
+                          <>
+                            <strong style={{ color:'var(--green)' }}>
+                              {perf.leader.label} is winning
+                            </strong>
+                            {perf.leadMultiple && perf.leadMultiple >= 1.1 &&
+                              ` — ${perf.leadMultiple.toFixed(1)}× the next format`}
+                            {' · '}new topics now lean {perf.leader.label} unless the LLM or you
+                            {' '}pick otherwise.
+                          </>
+                        ) : (
+                          <>Gathering data — {perf.samplesNeeded} more post
+                            {perf.samplesNeeded === 1 ? '' : 's'} with metrics before this
+                            starts influencing format choice.</>
+                        )}
+                      </div>
+                      {perf.rows.map(r => (
+                        <div key={r.label} className="perf-row">
+                          <div style={{ width:90, fontSize:12, color:'var(--text-secondary)', flexShrink:0 }}>
+                            {r.label}
+                          </div>
+                          <div className="perf-bar">
+                            <div className="perf-fill" style={{
+                              width:`${Math.round((r.score/maxScore)*100)}%`,
+                              background: TYPE_COLOR[r.label] ?? 'var(--accent)',
+                              opacity: r.eligible ? 1 : 0.4,
+                            }}/>
+                          </div>
+                          <div style={{ width:48, textAlign:'right', fontSize:11, fontFamily:'var(--mono)' }}>
+                            {(r.score*100).toFixed(1)}%
+                          </div>
+                          <div style={{ width:64, textAlign:'right', fontSize:10, color:'var(--text-muted)' }}
+                            title={r.eligible ? 'Counted by the engine' : `Needs ${MIN_FORMAT_SAMPLES} posts to count`}>
+                            ×{r.sampleSize}{!r.eligible && ' (low)'}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Top posts */}

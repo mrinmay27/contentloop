@@ -1,7 +1,9 @@
 import { env } from "../config/env.js";
+import type { TopicDecision } from "../domain/types.js";
 import { configStore } from "../config/configStore.js";
 import { classifyNiche } from "../domain/niche-taxonomy.js";
 import { scoreTopic, applySourceQualityOverrides } from "../domain/scoring.js";
+import { applySourceDiversityCap, DEFAULT_MAX_PER_SOURCE } from "../domain/sourceDiversity.js";
 import { applyAutomationOverrides } from "../domain/automation.js";
 import { generateContent } from "../services/content-generator.js";
 import { ingestForNiche } from "../services/ingestion/index.js";
@@ -59,6 +61,16 @@ export async function ingest(): Promise<void> {
   }
 }
 
+/** Max topics one source may put in a single scored batch's selected queue.
+ *  Configurable via MAX_TOPICS_PER_SOURCE; 0 disables the cap entirely. */
+function resolveMaxPerSource(): number {
+  const raw = configStore.get('MAX_TOPICS_PER_SOURCE');
+  const parsed = Number(raw);
+  return raw !== undefined && raw !== '' && Number.isFinite(parsed)
+    ? parsed
+    : DEFAULT_MAX_PER_SOURCE;
+}
+
 export async function score(): Promise<void> {
   const { getLearnedSignals } = await import("../services/learningRepo.js");
   const { buildSemanticContext } = await import("../services/semanticScoring.js");
@@ -76,6 +88,13 @@ export async function score(): Promise<void> {
   const semanticByTopic = await buildSemanticContext(topics, nicheMap);
   const learnedCache = new Map<string, Awaited<ReturnType<typeof getLearnedSignals>>>();
 
+  // Score first, persist after the diversity pass — otherwise a topic would be
+  // written as selected and then immediately demoted in a second write.
+  const scored: Array<{
+    id: string; source: string | undefined; score: number;
+    decision: TopicDecision; breakdown: ReturnType<typeof scoreTopic>;
+  }> = [];
+
   for (const topic of topics) {
     const niche = nicheMap.get(topic.nicheId);
     if (!niche) continue;
@@ -88,7 +107,24 @@ export async function score(): Promise<void> {
       learnedCache.get(topic.nicheId),
       semanticByTopic.get(topic.id)
     );
-    await updateTopicScore(topic.id, breakdown.score, breakdown.decision, breakdown);
+    scored.push({
+      id: topic.id,
+      source: topic.sources?.[0],
+      score: breakdown.score,
+      decision: breakdown.decision,
+      breakdown,
+    });
+  }
+
+  // Task 2.9: stop one prolific feed filling the whole selected queue.
+  const capped = applySourceDiversityCap(scored, resolveMaxPerSource());
+  let demoted = 0;
+  for (const topic of capped) {
+    if (topic.decision !== topic.breakdown.decision) demoted++;
+    await updateTopicScore(topic.id, topic.score, topic.decision, topic.breakdown);
+  }
+  if (demoted > 0) {
+    console.log(`[score] source diversity: demoted ${demoted} topic(s) to backup`);
   }
 
   try {

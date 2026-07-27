@@ -28,6 +28,17 @@ const FORMAT_CONFIG: Record<SuggestedFormat, { label: string; emoji: string }> =
   reel:     { label: 'Reel',     emoji: '🎬' },
 };
 
+// Why this topic has the format it does. Shown on hover — 'learned' in
+// particular is invisible otherwise: the engine silently switches format once
+// a niche has a proven winner, and users deserve to know that happened.
+const CONFIDENCE_REASON: Record<string, string> = {
+  user:         'you picked this format',
+  llm:          'chosen by the AI from the topic itself',
+  rule:         'matched a title/source rule',
+  page_default: 'fell back to this page\u2019s default',
+  learned:      'this format performs best for this niche — click to override',
+};
+
 const CONFIDENCE_COLOR: Record<string, string> = {
   user:         'var(--green, #22c55e)',
   llm:          'var(--green, #22c55e)',
@@ -153,7 +164,7 @@ export const TopicCard: React.FC<Props> = ({
             {fmt && (
               <div style={{ position: 'relative' }}>
                 <button
-                  title={`Format: ${fmt} (${fmtConf ?? 'unknown'})`}
+                  title={`${FORMAT_CONFIG[fmt].label} — ${CONFIDENCE_REASON[fmtConf ?? 'page_default'] ?? 'format not decided yet'}`}
                   onClick={e => { e.stopPropagation(); setFormatPickerOpen(o => !o); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 3,

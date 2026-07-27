@@ -47,6 +47,7 @@ export type ConfigKey =
   | 'APPROVAL_REQUIRED' | 'POSTING_DRY_RUN'
   | 'MAX_POSTS_PER_PAGE_PER_DAY' | 'MIN_POST_GAP_HOURS' | 'DEFAULT_TIME_SLOTS'
   | 'DEFAULT_FORMAT'
+  | 'MAX_TOPICS_PER_SOURCE'
   // Tuning (Sprint U1 Task 6) — JSON blobs consumed by applyAutomationOverrides()
   // / applySourceQualityOverrides() at boot; empty string = use code defaults.
   | 'AUTOMATION_THRESHOLDS' | 'SOURCE_QUALITY_OVERRIDES';
@@ -127,6 +128,8 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
   DEFAULT_FORMAT:             { label:'Default content format',  group:'Pipeline', type:'select',
                                 options:['auto', 'post', 'carousel', 'reel'],
                                 placeholder:'auto' },
+  MAX_TOPICS_PER_SOURCE:      { label:'Max topics per source, per run', group:'Pipeline', type:'text',
+                                placeholder:'2  (0 = no limit)' },
   // ── Tuning (Sprint U1 Task 6) — rendered by AdvancedTuning.tsx, not the
   // generic ConfigRow grid (JSON blobs aren't user-friendly as raw text) ────
   AUTOMATION_THRESHOLDS:    { label:'Automation thresholds (JSON)',      group:'Advanced', type:'text',
@@ -172,6 +175,7 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
   MIN_POST_GAP_HOURS:        String(env.MIN_POST_GAP_HOURS),
   DEFAULT_TIME_SLOTS:        env.DEFAULT_TIME_SLOTS,
   DEFAULT_FORMAT:            'auto',
+  MAX_TOPICS_PER_SOURCE:     '2',
   AUTOMATION_THRESHOLDS:     '',
   SOURCE_QUALITY_OVERRIDES:  '',
 };
