@@ -13,6 +13,7 @@
 
 import fs from 'fs';
 import { resolveMediaDir } from "../config/paths.js";
+import { configStore } from "../config/configStore.js";
 import path from 'path';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
@@ -80,7 +81,9 @@ export async function searchVideos(
   aspect: VideoAspect = 'portrait',
   perPage = 15,
 ): Promise<StockVideo[]> {
-  const apiKey = process.env.PEXELS_API_KEY;
+  // Settings first, env as fallback — otherwise the Settings field would be
+  // another control that looks functional and isn't.
+  const apiKey = configStore.get('PEXELS_API_KEY') || process.env.PEXELS_API_KEY;
   if (!apiKey) {
     console.log('[stockFootage] PEXELS_API_KEY not set — skipping stock footage search');
     return [];
@@ -153,7 +156,9 @@ export async function searchImages(
   aspect: VideoAspect = 'portrait',
   perPage = 10,
 ): Promise<StockImage[]> {
-  const apiKey = process.env.PEXELS_API_KEY;
+  // Settings first, env as fallback — otherwise the Settings field would be
+  // another control that looks functional and isn't.
+  const apiKey = configStore.get('PEXELS_API_KEY') || process.env.PEXELS_API_KEY;
   if (!apiKey) {
     console.log('[stockFootage] PEXELS_API_KEY not set — skipping stock image search');
     return [];

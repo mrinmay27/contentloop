@@ -17,7 +17,9 @@ type Props = {
 };
 
 export const VideoPromptBridge: React.FC<Props> = ({ topic, niche, disabled = false }) => {
-  const [open, setOpen]         = useState(false);
+  // Expanded by default: the reel-script generator lists its tools inline, and
+  // hiding these behind a button made them look absent.
+  const [open, setOpen]         = useState(true);
   const [seconds, setSeconds]   = useState(8);
   const [scene, setScene]       = useState('');
   const [copied, setCopied]     = useState<string | null>(null);
@@ -40,7 +42,7 @@ export const VideoPromptBridge: React.FC<Props> = ({ topic, niche, disabled = fa
       <button className="btn btn-ghost btn-sm" disabled={disabled}
         style={{ fontSize: 11, marginBottom: 10 }}
         onClick={() => setOpen(true)}>
-        ✨ Generate a clip with AI instead
+        ✨ Generate a clip with AI
       </button>
     );
   }
@@ -51,7 +53,7 @@ export const VideoPromptBridge: React.FC<Props> = ({ topic, niche, disabled = fa
       padding: 12, marginBottom: 12, background: 'var(--bg-elevated)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>Generate with AI</span>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>Generate a video clip with AI</span>
         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
           uses your own subscription — no API cost
         </span>

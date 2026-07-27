@@ -49,6 +49,7 @@ export type ConfigKey =
   | 'DEFAULT_FORMAT'
   | 'MAX_TOPICS_PER_SOURCE'
   | 'MAX_UPLOAD_MB'
+  | 'PEXELS_API_KEY'
   // Tuning (Sprint U1 Task 6) — JSON blobs consumed by applyAutomationOverrides()
   // / applySourceQualityOverrides() at boot; empty string = use code defaults.
   | 'AUTOMATION_THRESHOLDS' | 'SOURCE_QUALITY_OVERRIDES';
@@ -86,6 +87,9 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
   // ── Exploding Topics ──────────────────────────────────────────────────────
   EXPLODING_TOPICS_API_KEY: { label:'API Key',         group:'Exploding Topics',  type:'secret',
                               placeholder:'et_…' },
+  // ── Stock footage (Pexels) — powers real video backgrounds behind reels ──────
+  PEXELS_API_KEY:     { label:'Pexels API Key',       group:'Stock Footage',     type:'secret',
+                        placeholder:'free at pexels.com/api — enables real video B-roll' },
   // ── Image generation — managed by ImageGenManager, not auto-rendered ──────────
   GOOGLE_AI_API_KEY:   { label:'Google AI API Key',    group:'Image Generation',  type:'secret', placeholder:'AIza…' },
   STABILITY_API_KEY:   { label:'Stability AI API Key', group:'Image Generation',  type:'secret', placeholder:'sk-…' },

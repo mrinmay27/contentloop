@@ -554,6 +554,20 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                 />
               ))}
 
+              {/* A slide background can be a video clip, not only a still — the
+                  renderer composites footage_urls[i] with OffthreadVideo. This
+                  is why the image generators above are not the only option. */}
+              {parseReelScript(reelScript).filter(s => s !== 'No script yet').map((slideText, i) => (
+                <VideoUploadPanel
+                  key={`v${i}`}
+                  contentId={draftId}
+                  slideIndex={i}
+                  label={`Slide ${i + 1} background — video (optional)`}
+                  topic={`${topic.title} — ${slideText}`}
+                  niche={page.niche}
+                />
+              ))}
+
               {/* Platform selector for Reel */}
               <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
                 <span style={{ fontSize:11, color:'var(--text-muted)', alignSelf:'center' }}>Publish to:</span>

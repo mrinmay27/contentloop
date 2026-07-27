@@ -542,8 +542,22 @@ app.post("/api/content/:id/video", async (req, res, next) => {
     return void res.status(415).json({ error: "Upload an MP4, MOV or WebM video." });
   }
 
-  const dir = path.join(MEDIA_DIR, req.params.id);
-  const absPath = path.join(dir, "source.mp4");
+  // ?slideIndex=N stores the clip as that slide's background instead of the
+  // whole reel. The render job already maps footage_urls[N] -> slide N and
+  // renders video entries with OffthreadVideo, so this completes the route
+  // rather than adding a parallel one.
+  const rawSlide = req.query.slideIndex;
+  const slideIndex = rawSlide === undefined ? null : Number(rawSlide);
+  if (slideIndex !== null && (!Number.isInteger(slideIndex) || slideIndex < 0)) {
+    return void res.status(400).json({ error: "slideIndex must be a non-negative integer." });
+  }
+
+  const dir = slideIndex === null
+    ? path.join(MEDIA_DIR, req.params.id)
+    : path.join(MEDIA_DIR, req.params.id, "footage");
+  const absPath = slideIndex === null
+    ? path.join(dir, "source.mp4")
+    : path.join(dir, `slide_${slideIndex}.mp4`);
 
   try {
     fsSync.mkdirSync(dir, { recursive: true });
@@ -585,13 +599,41 @@ app.post("/api/content/:id/video", async (req, res, next) => {
       return void res.status(400).json({ error: rejection });
     }
 
-    const publicUrl = `/media/${req.params.id}/source.mp4`;
-    const { rowCount } = await query(
-      `UPDATE content_items
-       SET video_url = $2, render_status = 'pending', updated_at = now()
-       WHERE id = $1`,
-      [req.params.id, publicUrl]
-    );
+    const publicUrl = slideIndex === null
+      ? `/media/${req.params.id}/source.mp4`
+      : `/media/${req.params.id}/footage/slide_${slideIndex}.mp4`;
+
+    let rowCount: number | null = 0;
+    if (slideIndex === null) {
+      ({ rowCount } = await query(
+        `UPDATE content_items
+         SET video_url = $2, render_status = 'pending', updated_at = now()
+         WHERE id = $1`,
+        [req.params.id, publicUrl]
+      ));
+    } else {
+      // Merge into footage_urls at the slide's index, padding gaps with null so
+      // slide N always maps to entry N.
+      const { rows } = await query<{ footage_urls: any }>(
+        `SELECT footage_urls FROM content_items WHERE id = $1`, [req.params.id]
+      );
+      if (!rows[0]) {
+        fsSync.rmSync(absPath, { force: true });
+        return void res.status(404).json({ error: "Content item not found" });
+      }
+      const footage: any[] = Array.isArray(rows[0].footage_urls) ? [...rows[0].footage_urls] : [];
+      while (footage.length <= slideIndex) footage.push(null);
+      footage[slideIndex] = {
+        localPath: absPath, publicUrl, type: "video",
+        width: probe.width, height: probe.height, durationSec: probe.durationSec,
+      };
+      ({ rowCount } = await query(
+        `UPDATE content_items
+         SET footage_urls = $2, render_status = 'pending', updated_at = now()
+         WHERE id = $1`,
+        [req.params.id, JSON.stringify(footage)]
+      ));
+    }
     if (!rowCount) {
       fsSync.rmSync(absPath, { force: true });
       return void res.status(404).json({ error: "Content item not found" });
@@ -602,7 +644,7 @@ app.post("/api/content/:id/video", async (req, res, next) => {
       asset: {
         kind: "video", url: publicUrl, absPath,
         durationSec: probe.durationSec, width: probe.width, height: probe.height,
-        bytes, origin: "user_upload",
+        bytes, origin: "user_upload", slideIndex,
       },
     });
   } catch (err: any) {

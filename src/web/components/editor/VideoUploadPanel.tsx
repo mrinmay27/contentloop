@@ -19,6 +19,10 @@ type Props = {
   /** Used to build the AI-generation prompt (Route 4a). */
   topic?: string;
   niche?: string;
+  /** When set, the clip becomes THIS slide's background rather than the whole
+   *  reel, and the panel renders compactly. */
+  slideIndex?: number;
+  label?: string;
 };
 
 type Asset = {
@@ -28,7 +32,7 @@ type Asset = {
 
 const fmtMb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche }) => {
+export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, slideIndex, label }) => {
   const [asset, setAsset]       = useState<Asset | null>(null);
   const [busy, setBusy]         = useState<'upload' | 'captions' | null>(null);
   const [error, setError]       = useState<string | null>(null);
@@ -43,7 +47,7 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche }) =
     if (!contentId) return;
     setError(null); setNote(null); setBusy('upload');
     try {
-      const { asset: a } = await api.uploadContentVideo(contentId, file);
+      const { asset: a } = await api.uploadContentVideo(contentId, file, slideIndex);
       setAsset(a);
     } catch (err) {
       // The server's messages are written to be read — show them verbatim
@@ -72,11 +76,13 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche }) =
 
   return (
     <div style={{ marginBottom: 18 }}>
-      <div className="editor-section-title">Use your own video</div>
+      <div className="editor-section-title">{label ?? 'Use your own video'}</div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 10px', lineHeight: 1.6 }}>
-        Upload footage you filmed and ContentLoop adds captions. Vertical (9:16),
-        up to 3 minutes. Generated somewhere else? Download the file first, then
-        choose it here.
+        {slideIndex === undefined
+          ? <>Upload footage you filmed and ContentLoop adds captions. Vertical (9:16),
+              up to 3 minutes. Generated somewhere else? Download the file first, then
+              choose it here.</>
+          : <>A video clip to play behind this slide instead of a still image.</>}
       </div>
 
       {/* Route 4a — generate elsewhere, come back through the same drop zone. */}
@@ -117,10 +123,12 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche }) =
               {` · ${fmtMb(asset.bytes)}`}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button className="btn btn-primary btn-sm" disabled={busy !== null}
-                onClick={generateCaptions}>
-                {busy === 'captions' ? 'Transcribing…' : 'Generate captions'}
-              </button>
+              {slideIndex === undefined && (
+                <button className="btn btn-primary btn-sm" disabled={busy !== null}
+                  onClick={generateCaptions}>
+                  {busy === 'captions' ? 'Transcribing…' : 'Generate captions'}
+                </button>
+              )}
               <button className="btn btn-ghost btn-sm" disabled={busy !== null}
                 onClick={() => { setAsset(null); setSrt(''); setNote(null); setError(null); }}>
                 Replace
@@ -137,7 +145,7 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche }) =
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>{note}</div>
       )}
 
-      {asset && (
+      {asset && slideIndex === undefined && (
         <div style={{ marginTop: 12 }}>
           <div className="editor-section-title" style={{ fontSize: 11 }}>Captions (SRT)</div>
           <textarea

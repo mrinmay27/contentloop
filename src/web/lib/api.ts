@@ -153,8 +153,9 @@ export const api = {
   // ── Image storage (file-based, replaces stuffing data URLs into JSONB) ────────
   /** Raw-body upload: the File is the body, so no multipart is needed.
    *  req() merges headers and passes body through untouched (verified). */
-  uploadContentVideo: (contentId: string, file: File) =>
-    req<{ ok: boolean; asset: any }>(`/content/${contentId}/video`, {
+  uploadContentVideo: (contentId: string, file: File, slideIndex?: number) =>
+    req<{ ok: boolean; asset: any }>(
+      `/content/${contentId}/video${slideIndex === undefined ? '' : `?slideIndex=${slideIndex}`}`, {
       method: 'POST',
       headers: { 'Content-Type': file.type || 'video/mp4' },
       body: file,
