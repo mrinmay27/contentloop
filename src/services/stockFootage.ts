@@ -12,11 +12,12 @@
  */
 
 import fs from 'fs';
+import { resolveMediaDir } from "../config/paths.js";
 import path from 'path';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 
-const MEDIA_DIR = path.resolve(process.cwd(), 'data/media');
+const MEDIA_DIR = resolveMediaDir();
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

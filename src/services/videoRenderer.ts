@@ -17,13 +17,14 @@
  */
 
 import { execFile } from 'child_process';
+import { resolveMediaDir } from "../config/paths.js";
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
-const MEDIA_DIR = path.resolve(process.cwd(), 'data/media');
+const MEDIA_DIR = resolveMediaDir();
 const BGM_DIR = path.resolve(process.cwd(), 'data/bgm');
 
 function ensureDir(dir: string) {

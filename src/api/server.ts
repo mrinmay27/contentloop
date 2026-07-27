@@ -1,4 +1,5 @@
 import cors from "cors";
+import { resolveMediaDir } from "../config/paths.js";
 import express from "express";
 import helmet from "helmet";
 import { z } from "zod";
@@ -99,7 +100,7 @@ app.use("/uploads", express.static(UPLOADS_DIR, {
 }));
 
 // Serve generated media: data/media/<contentId>/... → /media/<contentId>/...
-const MEDIA_DIR = path.resolve(process.cwd(), 'data/media');
+const MEDIA_DIR = resolveMediaDir();
 app.use("/media", express.static(MEDIA_DIR, {
   maxAge: '1h',
   fallthrough: true,

@@ -12,6 +12,7 @@
  */
 
 import { EdgeTTS, type Voice, type SynthesisOptions, type WordBoundary } from '@andresaya/edge-tts';
+import { resolveMediaDir } from "../config/paths.js";
 import fs from 'fs';
 import path from 'path';
 
@@ -104,7 +105,7 @@ export interface TTSOptions {
   volume?: string;
 }
 
-const MEDIA_DIR = path.resolve(process.cwd(), 'data/media');
+const MEDIA_DIR = resolveMediaDir();
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
