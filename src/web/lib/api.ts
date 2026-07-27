@@ -93,6 +93,13 @@ export const api = {
     req<{ ok: boolean; urls: string[] }>(`/pages/${pageId}/canva/export`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
+  /** Pull a finished Canva export back into a content item — closes the
+   *  round trip that previously ended at a download link. */
+  attachCanvaMedia: (contentId: string, body: Record<string, unknown>) =>
+    req<{ ok: boolean; kind: 'image' | 'video'; url: string }>(`/content/${contentId}/canva-media`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   canvaDisconnect:(pageId: string) => req<{ ok: boolean }>(`/pages/${pageId}/canva`, { method: 'DELETE' }),
   // OAuth redirect (not a fetch — navigates the browser)
   canvaConnectUrl:(pageId: string) => `/auth/canva?pageId=${pageId}`,

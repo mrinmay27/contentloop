@@ -776,6 +776,92 @@ app.post("/api/content/:id/stock-video", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Route 5 — bring a finished Canva export back in.
+//
+// Export already produced download links and stopped there, so the file had to
+// be saved by hand and re-uploaded. The server already holds the URL, so it
+// fetches it directly and stores it in exactly the slots the upload and stock
+// paths use — no special case in the renderer.
+app.post("/api/content/:id/canva-media", async (req, res, next) => {
+  try {
+    const { url, format, slideIndex } = req.body as {
+      url?: string; format?: string; slideIndex?: number | null;
+    };
+    if (!url || !/^https:\/\//.test(url)) {
+      return void res.status(400).json({ error: "Export the design first." });
+    }
+
+    const { kindForFormat, filenameFor } = await import("../domain/remoteAttach.js");
+    const kind = kindForFormat(format);
+    if (!kind) {
+      return void res.status(400).json({
+        error: "PDF exports can't be used as slide media. Export as MP4 or PNG instead.",
+      });
+    }
+
+    const slot = Number.isInteger(slideIndex) ? (slideIndex as number) : null;
+    const { rows } = await query<{ footage_urls: any; payload: any }>(
+      `SELECT footage_urls, payload FROM content_items WHERE id = $1`, [req.params.id]
+    );
+    if (!rows[0]) return void res.status(404).json({ error: "Content item not found" });
+
+    const dir = kind === "video" && slot === null
+      ? path.join(MEDIA_DIR, req.params.id)
+      : path.join(MEDIA_DIR, req.params.id, "footage");
+    fsSync.mkdirSync(dir, { recursive: true });
+
+    const filename = filenameFor(kind, slot);
+    const absPath = path.join(dir, filename);
+    const publicUrl = kind === "video" && slot === null
+      ? `/media/${req.params.id}/${filename}`
+      : `/media/${req.params.id}/footage/${filename}`;
+
+    const fetched = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+    if (!fetched.ok) {
+      return void res.status(502).json({ error: `Canva returned ${fetched.status} for that export.` });
+    }
+    fsSync.writeFileSync(absPath, Buffer.from(await fetched.arrayBuffer()));
+
+    if (kind === "video") {
+      const { probeVideo } = await import("../services/mediaProbe.js");
+      const probe = await probeVideo(absPath);
+      const entry = {
+        localPath: absPath, publicUrl, type: "video",
+        width: probe?.width ?? 1080, height: probe?.height ?? 1920,
+        durationSec: probe?.durationSec ?? null,
+        attribution: { provider: "canva" },
+      };
+      if (slot === null) {
+        await query(
+          `UPDATE content_items SET video_url = $2, render_status = 'pending', updated_at = now() WHERE id = $1`,
+          [req.params.id, publicUrl]
+        );
+      } else {
+        const footage: any[] = Array.isArray(rows[0].footage_urls) ? [...rows[0].footage_urls] : [];
+        while (footage.length <= slot) footage.push(null);
+        footage[slot] = entry;
+        await query(
+          `UPDATE content_items SET footage_urls = $2, render_status = 'pending', updated_at = now() WHERE id = $1`,
+          [req.params.id, JSON.stringify(footage)]
+        );
+      }
+    } else {
+      // Images live in payload.images, the same slot the generator writes.
+      const payload = rows[0].payload ?? {};
+      const images: any[] = Array.isArray(payload.images) ? [...payload.images] : [];
+      const idx = slot ?? 0;
+      while (images.length <= idx) images.push(null);
+      images[idx] = { slideIndex: idx, url: publicUrl, source: "canva" };
+      await query(
+        `UPDATE content_items SET payload = $2, updated_at = now() WHERE id = $1`,
+        [req.params.id, JSON.stringify({ ...payload, images })]
+      );
+    }
+
+    res.json({ ok: true, kind, url: publicUrl });
+  } catch (err) { next(err); }
+});
+
 // Content: upload an image for a content_item at a specific slide index.
 // payload.images is an array — index N is overwritten in place; gaps fill with null.
 app.post("/api/content/:id/images", async (req, res, next) => {

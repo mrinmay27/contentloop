@@ -915,6 +915,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
           {/* Canva — live integration */}
           <CanvaPanel
             pageId={page.id}
+            contentId={draftId}
             hook={hook}
             slides={slides.map(s => s.text)}
           />

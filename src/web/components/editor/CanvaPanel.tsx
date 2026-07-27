@@ -17,6 +17,8 @@ type Design   = { id: string; title: string; thumbnail?: { url: string }; urls?:
 
 type Props = {
   pageId:  string;
+  /** Needed to attach an export back into this content item. */
+  contentId?: string | null;
   /** The current hook text to push into the template */
   hook:    string;
   /** Slide texts for carousel autofill */
@@ -32,7 +34,7 @@ type Phase =
   | 'done'
   | 'error';
 
-export const CanvaPanel: React.FC<Props> = ({ pageId, hook, slides }) => {
+export const CanvaPanel: React.FC<Props> = ({ pageId, contentId, hook, slides }) => {
   const [phase,       setPhase]       = useState<Phase>('checking');
   const [templates,   setTemplates]   = useState<Template[]>([]);
   const [selectedTpl, setSelectedTpl] = useState<Template | null>(null);
@@ -41,6 +43,11 @@ export const CanvaPanel: React.FC<Props> = ({ pageId, hook, slides }) => {
   const [exportUrls,  setExportUrls]  = useState<string[]>([]);
   const [error,       setError]       = useState<string | null>(null);
   const [exporting,   setExporting]   = useState(false);
+  // Attaching an export back into the content item — the leg that was missing.
+  const [exportFormat, setExportFormat] = useState<'png'|'pdf'|'mp4'>('png');
+  const [attached,     setAttached]     = useState<string | null>(null);
+  const [attachErr,    setAttachErr]    = useState<string | null>(null);
+  const [attaching,    setAttaching]    = useState(false);
 
   // ─── Check connection on mount ────────────────────────────────────────
   useEffect(() => {
@@ -114,6 +121,7 @@ export const CanvaPanel: React.FC<Props> = ({ pageId, hook, slides }) => {
 
   // ─── Export ───────────────────────────────────────────────────────────
   const handleExport = async (format: 'png' | 'pdf' | 'mp4') => {
+    setExportFormat(format);
     if (!resultDesign) return;
     setExporting(true);
     try {
@@ -263,11 +271,43 @@ export const CanvaPanel: React.FC<Props> = ({ pageId, hook, slides }) => {
           {exportUrls.length > 0 && (
             <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
               {exportUrls.map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noreferrer"
-                  style={{ fontSize:11, color:'var(--accent)' }}>
-                  ↓ Download {i + 1}
-                </a>
+                <div key={i} style={{ display:'flex', gap:8, alignItems:'center' }}>
+                  <a href={url} target="_blank" rel="noreferrer"
+                    style={{ fontSize:11, color:'var(--accent)' }}>
+                    ↓ Download {i + 1}
+                  </a>
+                  {/* Closes the round trip: the server already has this URL,
+                      so there is no reason to make the user save and re-upload. */}
+                  <button className="btn btn-primary btn-sm" style={{ fontSize:10 }}
+                    disabled={!contentId || attaching || exportFormat === 'pdf'}
+                    title={exportFormat === 'pdf'
+                      ? 'PDF cannot be used as slide media — export MP4 or PNG'
+                      : 'Save this export into the current content'}
+                    onClick={async () => {
+                      if (!contentId) return;
+                      setAttaching(true); setAttachErr(null);
+                      try {
+                        const r = await api.attachCanvaMedia(contentId, {
+                          url, format: exportFormat, slideIndex: null,
+                        });
+                        setAttached(r.url);
+                      } catch (e) {
+                        const raw = e instanceof Error ? e.message : 'Could not attach';
+                        try { setAttachErr(JSON.parse(raw).error ?? raw); } catch { setAttachErr(raw); }
+                      } finally { setAttaching(false); }
+                    }}>
+                    {attaching ? 'Saving…' : 'Use in this content'}
+                  </button>
+                </div>
               ))}
+              {attached && (
+                <div style={{ fontSize:10, color:'var(--green)' }}>
+                  ✓ Saved into this content — it will be used when rendering.
+                </div>
+              )}
+              {attachErr && (
+                <div style={{ fontSize:10, color:'var(--red)' }}>{attachErr}</div>
+              )}
             </div>
           )}
           <button className="btn btn-ghost btn-sm"
