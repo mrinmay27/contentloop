@@ -150,10 +150,29 @@ type or paste a caption file instead. Never fabricate a transcript.
 - burn in captions using the existing subtitle styling
 - optional brand overlay (logo, accent) reusing `pages.brand`
 
-**No new dependency:** `@remotion/compositor-*` already ships `ffmpeg` **and**
-`ffprobe` binaries — confirmed present in `node_modules`. Use those, not a
-system ffmpeg, which cannot be assumed on a user's machine and would break the
-one-click bundle.
+**Tooling — corrected 2026-07-27 after measuring it.** `@remotion/compositor-*`
+does ship `ffmpeg` and `ffprobe`, but it is a **stripped build with 42 filters**.
+It has `scale`, `crop`, `libx264` and `aac` — but **not `subtitles`, `drawtext`,
+`overlay` or `pad`**. So the earlier claim that captions could be burned in with
+it was wrong.
+
+Split the work by tool:
+- **trim / crop / probe** → bundled ffmpeg + ffprobe (`scale`, `crop` present).
+- **caption burn-in and brand overlay** → **Remotion compositing**, not ffmpeg.
+  An uploaded clip renders as `<OffthreadVideo>` with caption components on
+  top — exactly the mechanism Phase A just built and verified. This is cleaner
+  than shelling out anyway, and reuses the existing subtitle styling.
+
+Two operational notes, both learned the hard way in Phase A:
+- The bundled binaries need `DYLD_LIBRARY_PATH` (macOS) / `LD_LIBRARY_PATH`
+  (Linux) pointed at the compositor directory, or they fail with
+  "Library not loaded: libavdevice.dylib".
+- Remotion rejects both absolute filesystem paths and `file://` URLs for
+  assets. Anything it renders must sit under the bundle's `publicDir` and be
+  referenced relative to it via `staticFile()`.
+
+System ffmpeg still must not be assumed — it is absent on most machines and
+would break the one-click bundle.
 
 Anything beyond this (multi-clip timeline, transitions, colour) is out of
 scope — that is a video editor, and Route 5 exists for people who want one.
