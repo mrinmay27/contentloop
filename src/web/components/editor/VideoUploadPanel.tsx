@@ -23,6 +23,8 @@ type Props = {
    *  reel, and the panel renders compactly. */
   slideIndex?: number;
   label?: string;
+  /** Passed through to the AI bridge. */
+  bridgeDefaultOpen?: boolean;
 };
 
 type Asset = {
@@ -32,7 +34,7 @@ type Asset = {
 
 const fmtMb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, slideIndex, label }) => {
+export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, slideIndex, label, bridgeDefaultOpen = true }) => {
   const [asset, setAsset]       = useState<Asset | null>(null);
   const [busy, setBusy]         = useState<'upload' | 'captions' | null>(null);
   const [error, setError]       = useState<string | null>(null);
@@ -87,7 +89,7 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, sli
 
       {/* Route 4a — generate elsewhere, come back through the same drop zone. */}
       {!asset && topic && (
-        <VideoPromptBridge topic={topic} niche={niche} disabled={disabled}/>
+        <VideoPromptBridge topic={topic} niche={niche} disabled={disabled} defaultOpen={bridgeDefaultOpen}/>
       )}
 
       {!asset ? (

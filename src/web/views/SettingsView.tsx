@@ -37,9 +37,11 @@ const GROUP_ICONS: Record<string, string> = {
   'Pipeline':          '⚙️',
   'Sources':           '📡',
   'Advanced':          '🎛️',
+  'Stock Footage':     '🎬',
 };
 
 const GROUP_DESC: Record<string, string> = {
+  'Stock Footage':     'Free Pexels key — real video B-roll behind your reels instead of still images.',
   'AI / LLM':         'LLM provider, model, and API key for content generation',
   'Reddit':           'Free Reddit API credentials — boosts rate limits beyond public JSON',
   'Product Hunt':     'Free Developer Token — unlocks higher rate limits on the Product Hunt GraphQL API',

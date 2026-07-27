@@ -71,6 +71,8 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
   // Which route this reel is being made by. Persisted so the render job knows
   // which renderer to use, and so reopening the editor lands where you left off.
   const [reelPath, setReelPath] = useState<ReelPath>('slideshow');
+  /** Slides whose background is a video clip rather than a still. */
+  const [slideVideo, setSlideVideo] = useState<Set<number>>(new Set());
 
   // Task 3.1: Pre-select format tab from topic.suggestedFormat
   const [previewTab, setPreviewTab] = useState<SuggestedFormat>(
@@ -569,39 +571,69 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                 rows={8} style={{ fontFamily:'var(--mono)', fontSize:11 }}
                 placeholder="Hook: [attention-grabbing opener]&#10;&#10;Body: [3 punchy points]&#10;&#10;CTA: [follow/save/comment ask]"
               />
-              {/* Per-slide background images — shown after script is written */}
-              {parseReelScript(reelScript).filter(s => s !== 'No script yet').map((slideText, i) => (
-                <ContentImageGenerator
-                  key={i}
-                  contentId={draftId}
-                  slideIndex={100 + i}
-                  label={`Slide ${i + 1} background`}
-                  defaultPrompt={buildContentImagePrompt({
-                    topic:       topic.title,
-                    slideText,
-                    brandAccent: brand.accent,
-                    brandFont:   brand.font,
-                    niche:       page.niche,
-                    aspectRatio: '9:16',
-                  })}
-                  initialUrl={reelSavedImages[i]}
-                  onSaved={handleReelSavedImage(i)}
-                />
-              ))}
+              {/* One background control per slide. Image and video were two
+                  stacked sections, which meant every slide rendered a full AI
+                  panel — the same clutter the path chooser removed, one level
+                  down. Same principle: pick one, show one. */}
+              {parseReelScript(reelScript).filter(s => s !== 'No script yet').map((slideText, i) => {
+                const useVideo = slideVideo.has(i);
+                return (
+                  <div key={i} style={{ marginBottom: 14 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                      <span style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)' }}>
+                        Slide {i + 1} background
+                      </span>
+                      <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
+                        {(['image','video'] as const).map(kind => (
+                          <button key={kind}
+                            onClick={() => setSlideVideo(prev => {
+                              const next = new Set(prev);
+                              if (kind === 'video') next.add(i); else next.delete(i);
+                              return next;
+                            })}
+                            style={{
+                              fontSize:10, padding:'2px 10px', borderRadius:'var(--radius-sm)',
+                              cursor:'pointer',
+                              border:`1px solid ${(kind === 'video') === useVideo ? 'var(--accent)' : 'var(--border)'}`,
+                              background:(kind === 'video') === useVideo ? 'var(--accent-dim)' : 'transparent',
+                              color:'var(--text-primary)',
+                            }}>
+                            {kind === 'image' ? '🖼 Image' : '🎬 Video'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-              {/* A slide background can be a video clip, not only a still — the
-                  renderer composites footage_urls[i] with OffthreadVideo. This
-                  is why the image generators above are not the only option. */}
-              {parseReelScript(reelScript).filter(s => s !== 'No script yet').map((slideText, i) => (
-                <VideoUploadPanel
-                  key={`v${i}`}
-                  contentId={draftId}
-                  slideIndex={i}
-                  label={`Slide ${i + 1} background — video (optional)`}
-                  topic={`${topic.title} — ${slideText}`}
-                  niche={page.niche}
-                />
-              ))}
+                    {useVideo ? (
+                      <VideoUploadPanel
+                        contentId={draftId}
+                        slideIndex={i}
+                        label=""
+                        topic={`${topic.title} — ${slideText}`}
+                        niche={page.niche}
+                        bridgeDefaultOpen={false}
+                      />
+                    ) : (
+                      <ContentImageGenerator
+                        contentId={draftId}
+                        slideIndex={100 + i}
+                        label=""
+                        defaultPrompt={buildContentImagePrompt({
+                          topic:       topic.title,
+                          slideText,
+                          brandAccent: brand.accent,
+                          brandFont:   brand.font,
+                          niche:       page.niche,
+                          aspectRatio: '9:16',
+                        })}
+                        initialUrl={reelSavedImages[i]}
+                        onSaved={handleReelSavedImage(i)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+
 
               </>
               )}

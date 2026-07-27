@@ -14,12 +14,16 @@ type Props = {
   niche?: string;
   /** Disabled until the draft exists, matching the uploader below. */
   disabled?: boolean;
+  /** Collapsed where the bridge is secondary (per-slide B-roll); expanded
+   *  where generating IS the chosen route. */
+  defaultOpen?: boolean;
 };
 
-export const VideoPromptBridge: React.FC<Props> = ({ topic, niche, disabled = false }) => {
-  // Expanded by default: the reel-script generator lists its tools inline, and
-  // hiding these behind a button made them look absent.
-  const [open, setOpen]         = useState(true);
+export const VideoPromptBridge: React.FC<Props> = ({ topic, niche, disabled = false, defaultOpen = true }) => {
+  // Expanded where this is the chosen route (the reel-script generator lists
+  // its tools inline, so hiding them made them look absent); collapsed where
+  // it is one option among many, or every slide would render a full panel.
+  const [open, setOpen]         = useState(defaultOpen);
   const [seconds, setSeconds]   = useState(8);
   const [scene, setScene]       = useState('');
   const [copied, setCopied]     = useState<string | null>(null);
