@@ -48,6 +48,7 @@ export type ConfigKey =
   | 'MAX_POSTS_PER_PAGE_PER_DAY' | 'MIN_POST_GAP_HOURS' | 'DEFAULT_TIME_SLOTS'
   | 'DEFAULT_FORMAT'
   | 'MAX_TOPICS_PER_SOURCE'
+  | 'MAX_UPLOAD_MB'
   // Tuning (Sprint U1 Task 6) — JSON blobs consumed by applyAutomationOverrides()
   // / applySourceQualityOverrides() at boot; empty string = use code defaults.
   | 'AUTOMATION_THRESHOLDS' | 'SOURCE_QUALITY_OVERRIDES';
@@ -130,6 +131,8 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
                                 placeholder:'auto' },
   MAX_TOPICS_PER_SOURCE:      { label:'Max topics per source, per run', group:'Pipeline', type:'text',
                                 placeholder:'2  (0 = no limit)' },
+  MAX_UPLOAD_MB:              { label:'Max video upload size (MB)', group:'Pipeline', type:'text',
+                                placeholder:'500' },
   // ── Tuning (Sprint U1 Task 6) — rendered by AdvancedTuning.tsx, not the
   // generic ConfigRow grid (JSON blobs aren't user-friendly as raw text) ────
   AUTOMATION_THRESHOLDS:    { label:'Automation thresholds (JSON)',      group:'Advanced', type:'text',
@@ -176,6 +179,7 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
   DEFAULT_TIME_SLOTS:        env.DEFAULT_TIME_SLOTS,
   DEFAULT_FORMAT:            'auto',
   MAX_TOPICS_PER_SOURCE:     '2',
+  MAX_UPLOAD_MB:             '500',
   AUTOMATION_THRESHOLDS:     '',
   SOURCE_QUALITY_OVERRIDES:  '',
 };

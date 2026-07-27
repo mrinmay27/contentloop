@@ -522,6 +522,102 @@ app.post("/api/content/draft", async (req, res, next) => {
   }
 });
 
+// Route 2 — bring your own footage.
+//
+// The browser POSTs the File as a RAW body (fetch(url, { body: file })), so no
+// multipart library is needed: we stream req straight to disk. express.json()
+// ignores this route because the content-type is video/*, leaving the stream
+// intact. The size guard aborts MID-stream rather than after a 500 MB file has
+// already landed — desktop mode runs on a laptop.
+//
+// The file must land inside MEDIA_DIR: Remotion refuses absolute and file://
+// asset paths and only serves from its publicDir, which is MEDIA_DIR.
+app.post("/api/content/:id/video", async (req, res, next) => {
+  const { isAcceptedVideoType, resolveMaxUploadBytes } = await import("../domain/uploadGuards.js");
+  const maxBytes = resolveMaxUploadBytes(configStore.get("MAX_UPLOAD_MB"));
+  const maxMb = Math.round(maxBytes / (1024 * 1024));
+
+  if (!isAcceptedVideoType(req.headers["content-type"])) {
+    return void res.status(415).json({ error: "Upload an MP4, MOV or WebM video." });
+  }
+
+  const dir = path.join(MEDIA_DIR, req.params.id);
+  const absPath = path.join(dir, "source.mp4");
+
+  try {
+    fsSync.mkdirSync(dir, { recursive: true });
+
+    let bytes = 0;
+    let tooLarge = false;
+    await new Promise<void>((resolve, reject) => {
+      const out = fsSync.createWriteStream(absPath);
+      req.on("data", (chunk: Buffer) => {
+        bytes += chunk.length;
+        if (bytes > maxBytes && !tooLarge) {
+          tooLarge = true;
+          // Stop writing, but do NOT destroy the request socket here: killing
+          // it prevents the 413 from ever reaching the browser, which then
+          // shows a generic network error instead of a message the user can
+          // act on. Drain and discard instead; the socket is closed after the
+          // response has been sent.
+          req.unpipe(out);
+          out.destroy();
+          req.resume();
+          reject(new Error("TOO_LARGE"));
+        }
+      });
+      req.on("error", reject);
+      out.on("error", (err) => { if (!tooLarge) reject(err); });
+      out.on("finish", resolve);
+      req.pipe(out);
+    });
+
+    const { probeVideo, describeRejection } = await import("../services/mediaProbe.js");
+    const probe = await probeVideo(absPath);
+    if (!probe) {
+      fsSync.rmSync(absPath, { force: true });
+      return void res.status(400).json({ error: "That file has no video track we can read." });
+    }
+    const rejection = describeRejection(probe);
+    if (rejection) {
+      fsSync.rmSync(absPath, { force: true });
+      return void res.status(400).json({ error: rejection });
+    }
+
+    const publicUrl = `/media/${req.params.id}/source.mp4`;
+    const { rowCount } = await query(
+      `UPDATE content_items
+       SET video_url = $2, render_status = 'pending', updated_at = now()
+       WHERE id = $1`,
+      [req.params.id, publicUrl]
+    );
+    if (!rowCount) {
+      fsSync.rmSync(absPath, { force: true });
+      return void res.status(404).json({ error: "Content item not found" });
+    }
+
+    res.json({
+      ok: true,
+      asset: {
+        kind: "video", url: publicUrl, absPath,
+        durationSec: probe.durationSec, width: probe.width, height: probe.height,
+        bytes, origin: "user_upload",
+      },
+    });
+  } catch (err: any) {
+    fsSync.rmSync(absPath, { force: true });
+    if (err?.message === "TOO_LARGE") {
+      res.status(413).json({
+        error: `That video is larger than ${maxMb} MB. Trim it or export at a lower bitrate.`,
+      });
+      // Only now stop the client wasting bandwidth on the rest of the file.
+      res.on("finish", () => req.destroy());
+      return;
+    }
+    next(err);
+  }
+});
+
 // Content: upload an image for a content_item at a specific slide index.
 // payload.images is an array — index N is overwritten in place; gaps fill with null.
 app.post("/api/content/:id/images", async (req, res, next) => {
