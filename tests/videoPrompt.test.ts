@@ -51,14 +51,20 @@ describe("VIDEO_TOOLS", () => {
     expect(new Set(VIDEO_TOOLS.map(t => t.id)).size).toBe(VIDEO_TOOLS.length);
   });
 
-  it("only claims prefill where it is actually known to work", () => {
-    // Gemini's ?q= is the pattern already proven by the image bridge. Anything
-    // unverified must default to copy+paste rather than promising auto-fill.
-    const gemini = VIDEO_TOOLS.find(t => t.id === "gemini")!;
-    expect(gemini.prefill).toBe(true);
-    for (const tool of VIDEO_TOOLS.filter(t => t.id !== "gemini" && t.id !== "chatgpt")) {
-      expect(tool.prefill).toBe(false);
-    }
+  it("leads with the Veo video page, model preselected", () => {
+    expect(VIDEO_TOOLS[0]!.id).toBe("veo");
+    expect(VIDEO_TOOLS[0]!.url).toContain("veo-3.1");
+  });
+
+  it("no longer offers ChatGPT/Sora", () => {
+    // Removed on the user's report that the Sora project was discontinued.
+    expect(VIDEO_TOOLS.some(t => /sora|chatgpt/i.test(t.id + t.label))).toBe(false);
+  });
+
+  it("only claims prefill where the ?q= pattern is actually proven", () => {
+    // Gemini's ?q= is the pattern the image bridge already relies on.
+    // Everything else copies and opens, which always works.
+    expect(VIDEO_TOOLS.filter(t => t.prefill).map(t => t.id)).toEqual(["gemini"]);
   });
 
   it("gives every tool an https url", () => {
@@ -75,5 +81,21 @@ describe("toolUrl", () => {
   it("returns the bare url for tools without prefill, not a broken query", () => {
     const canva = VIDEO_TOOLS.find(t => t.id === "canva")!;
     expect(toolUrl(canva, "make a video")).toBe(canva.url);
+  });
+
+  it("uses & when the url already has a query string", () => {
+    // The AI Studio link pins ?model=veo-3.1-…; appending a second "?" would
+    // produce a malformed URL and silently drop the model parameter.
+    const withQuery = { ...VIDEO_TOOLS[0]!, prefill: true };
+    const url = toolUrl(withQuery, "hello");
+    expect(url.match(/\?/g)).toHaveLength(1);
+    expect(url).toContain("model=veo-3.1");
+    expect(url).toContain("&q=hello");
+  });
+
+  it("produces a parseable URL in every case", () => {
+    for (const tool of VIDEO_TOOLS) {
+      expect(() => new URL(toolUrl(tool, "a prompt with spaces & symbols"))).not.toThrow();
+    }
   });
 });

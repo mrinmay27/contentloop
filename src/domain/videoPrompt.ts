@@ -44,17 +44,25 @@ export interface VideoTool {
 
 /**
  * Order is a suggestion; all are optional. `prefill` is claimed ONLY for the
- * pattern already proven by the image bridge (Gemini/ChatGPT `?q=`). For every
- * other tool the prompt goes to the clipboard and the creator pastes it —
- * which always works, and never promises behaviour we have not verified.
+ * `?q=` pattern already proven by the image bridge. Every other tool copies the
+ * prompt and opens — which always works, and never promises behaviour we have
+ * not verified.
+ *
+ * The AI Studio link goes straight to the Veo 3.1 video prompt page with the
+ * model preselected; whether it accepts a prompt parameter is unverified, so it
+ * is copy-and-paste.
+ *
+ * ChatGPT/Sora was removed on the user's report that the Sora project was
+ * discontinued.
  */
 export const VIDEO_TOOLS: VideoTool[] = [
-  { id: "gemini", label: "Gemini (Veo)", emoji: "🔵",
+  { id: "veo", label: "Google AI Studio (Veo 3.1)", emoji: "🔵",
+    url: "https://aistudio.google.com/prompts/new_video?model=veo-3.1-fast-generate-preview",
+    prefill: false,
+    note: "Opens AI Studio with Veo 3.1 selected — paste the prompt" },
+  { id: "gemini", label: "Gemini", emoji: "✨",
     url: "https://gemini.google.com/app", prefill: true,
     note: "Opens Gemini — paste the prompt into its input" },
-  { id: "chatgpt", label: "ChatGPT (Sora)", emoji: "🟢",
-    url: "https://chatgpt.com/", prefill: true,
-    note: "Opens ChatGPT with the prompt filled in" },
   { id: "canva", label: "Canva", emoji: "🟣",
     url: "https://www.canva.com/create/videos/", prefill: false,
     note: "Prompt copied — paste it into Canva" },
@@ -70,5 +78,10 @@ export const VIDEO_TOOLS: VideoTool[] = [
 ];
 
 export function toolUrl(tool: VideoTool, prompt: string): string {
-  return tool.prefill ? `${tool.url}?q=${encodeURIComponent(prompt)}` : tool.url;
+  if (!tool.prefill) return tool.url;
+  // Some tool URLs already carry a query string (the AI Studio link pins the
+  // Veo model), so the separator has to be chosen, not assumed — appending a
+  // second "?" would silently drop the existing parameters.
+  const sep = tool.url.includes("?") ? "&" : "?";
+  return `${tool.url}${sep}q=${encodeURIComponent(prompt)}`;
 }
