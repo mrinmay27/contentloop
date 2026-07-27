@@ -90,26 +90,39 @@ function SecretInput({ value, masked, onChange }: {
   const [editing, setEditing] = useState(false);
   const [local,   setLocal]   = useState('');
 
-  if (editing) return (
+  // An unset key is typeable immediately. Hiding the input behind "Change"
+  // only makes sense when there is an existing secret to protect — for an
+  // empty field it reads as a disabled box with no way in.
+  // Computed rather than seeded into state because `value` arrives async.
+  const isEmpty = !value;
+
+  if (editing || isEmpty) return (
     <div style={{ display:'flex', gap:6, alignItems:'center', flex:1 }}>
-      <input autoFocus type="text" value={local}
+      <input autoFocus={editing} type="text" value={local}
         onChange={e => setLocal(e.target.value)}
-        placeholder="Enter new value…" style={{ flex:1 }}/>
-      <button className="btn btn-primary btn-sm"
-        onClick={() => { onChange(local); setEditing(false); }}>
+        onKeyDown={e => {
+          if (e.key === 'Enter' && local.trim()) { onChange(local.trim()); setEditing(false); }
+          if (e.key === 'Escape' && !isEmpty) { setLocal(''); setEditing(false); }
+        }}
+        placeholder={isEmpty ? 'Paste your key here, then press Enter or ✓' : 'Enter new value…'}
+        style={{ flex:1 }}/>
+      <button className="btn btn-primary btn-sm" disabled={!local.trim()}
+        onClick={() => { onChange(local.trim()); setEditing(false); }}>
         <Icon name="check" size={11}/>
       </button>
-      <button className="btn btn-ghost btn-sm"
-        onClick={() => { setLocal(''); setEditing(false); }}>
-        <Icon name="x" size={11}/>
-      </button>
+      {!isEmpty && (
+        <button className="btn btn-ghost btn-sm"
+          onClick={() => { setLocal(''); setEditing(false); }}>
+          <Icon name="x" size={11}/>
+        </button>
+      )}
     </div>
   );
 
   return (
     <div style={{ display:'flex', gap:6, alignItems:'center', flex:1 }}>
       <input readOnly value={value} type={show ? 'text' : 'password'}
-        style={{ flex:1 }} placeholder="Not set"/>
+        style={{ flex:1 }}/>
       <button className="btn btn-ghost btn-sm" style={{ padding:'4px 8px' }}
         onClick={() => setShow(s => !s)}>{show ? '🙈' : '👁️'}</button>
       <button className="btn btn-surface btn-sm" style={{ padding:'4px 8px' }}
