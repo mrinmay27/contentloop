@@ -158,28 +158,76 @@ one-click bundle.
 Anything beyond this (multi-clip timeline, transitions, colour) is out of
 scope — that is a video editor, and Route 5 exists for people who want one.
 
-## Route 4 — AI-generated video
+## Route 4 — AI-generated video, two lanes
 
-A `VideoProvider` chain mirroring `getProviderChain()` for images: ordered by
-user preference, each gated on its key, first available wins.
+Confirmed with the user 2026-07-27: **Veo billing is not enabled**, so the API
+lane is not the default. The subscription bridge is.
 
-- **Google Veo** first: `veo-3.1-generate-preview` and
-  `veo-3.1-fast-generate-preview` are exposed on the user's existing Google AI
-  Studio key (verified live via the models endpoint). **Unverified: whether
-  that project has billing enabled.** Veo is not free-tier and is billed per
-  second. The provider must surface a billing error as "Veo needs billing
-  enabled on your Google Cloud project", not a raw 403.
-- Async by nature: Veo uses `predictLongRunning`, so the chain must poll an
-  operation and persist a job id. This differs from image generation, which
-  returns inline — the render job needs a "generating" state that survives a
-  restart. In desktop mode the app may be closed mid-generation; the poll must
-  resume at launch like the scheduler's catch-up pass.
-- Others (Runway, Luma, and Higgsfield if its public API supports it) are
-  config entries against the same interface. **I have not verified Higgsfield's
-  public API terms or availability** — it goes in only after its docs are read,
-  not on assumption.
-- Cost warning in the UI before generation. Unlike an image at fractions of a
-  cent, video is billed per second and a surprise bill is a betrayal of trust.
+### 4a — Subscription bridge *(primary; no API cost)*
+
+The app already does exactly this for images: `ManualGenerateBridge.tsx` builds
+an enriched prompt, copies it to the clipboard, deep-links the tool, and
+captures the result. Creators pay for ChatGPT Plus / Gemini Advanced / Canva
+Pro anyway, and those subscriptions include video generation. Using them costs
+nothing extra.
+
+Mirror that component's conventions rather than inventing a second one:
+- enriched prompt → clipboard **always** (the only 100% reliable step)
+- open the tool in a new tab
+- honest per-tool labelling, exactly as the image bridge already distinguishes
+  "ChatGPT auto-submits" from "Gemini doesn't auto-fill — paste with Cmd+V"
+
+**Prompt enrichment differs from images.** Video needs: 9:16 vertical, a target
+duration, motion described explicitly, and "no on-screen text, no watermark,
+no captions" — ContentLoop burns its own captions in Route 3, and generated
+text would collide with them.
+
+**The critical difference from images — the return path is a file, not a paste.**
+A browser can put an *image* on the clipboard; it cannot put a *video* there.
+So Route 4a cannot reuse the paste listener. The creator downloads the clip and
+brings it back via **drag-drop or file picker — i.e. Route 2's multipart
+upload**. The UI must say "download it, then drop it here", not imply Cmd+V
+works. Getting this wrong would produce exactly the kind of control that looks
+functional and isn't.
+
+This makes 4a nearly free once Route 2 exists: a prompt builder, deep links,
+and a drop zone pointed at an endpoint that already exists.
+
+**Tool list** (order = suggested, all user-editable):
+
+| Tool | Prefill support |
+|---|---|
+| Gemini (Veo) | `?q=` opens with prompt; needs manual paste — **verified pattern, already used for images** |
+| ChatGPT (Sora) | `?q=` auto-submits for text/images; **video behaviour unverified** |
+| Canva | open + paste — no documented prompt parameter |
+| Higgsfield | open + paste — no documented prompt parameter |
+| Runway / Luma | open + paste |
+
+I verified only that these domains resolve. **Whether any accepts a prefill
+parameter for video cannot be verified without a real browser session**, so
+every tool defaults to "copy + open + paste manually", which always works.
+Auto-fill is claimed only where it is actually known to work.
+
+### 4b — API providers *(BYOK, opt-in)*
+
+A `VideoProvider` chain mirroring `getProviderChain()`: ordered, each gated on
+its key, first available wins. Off by default; appears as `needs_key`.
+
+- **Google Veo** — `veo-3.1-generate-preview` / `-fast-` are exposed on the
+  user's existing Google AI Studio key (verified live), but **billing is not
+  enabled on that project**, so it will fail until the user turns it on. The
+  provider must surface that as "Veo needs billing enabled on your Google Cloud
+  project", never a raw 403.
+- Async by nature: Veo uses `predictLongRunning`, so the chain polls an
+  operation and persists a job id. Unlike image generation, which returns
+  inline, the render job needs a "generating" state that survives a restart —
+  in desktop mode the app may be closed mid-generation, so the poll must resume
+  at launch like the scheduler's catch-up pass.
+- Runway / Luma / Higgsfield are config entries against the same interface.
+  **Higgsfield's public API terms are unverified** — it goes in only after its
+  docs are read, not on assumption.
+- Cost warning before generation. Video is billed per second; a surprise bill
+  is a betrayal of trust.
 
 ## Route 5 — External editor round-trip
 
@@ -221,9 +269,12 @@ To be confirmed against their docs before any implementation.
 1. Spine contract + availability model   ← everything else depends on it
 2. Route 1 stock video                   ← free, small, proves the spine
 3. Route 2 upload  →  Route 3 captions/edits   ← the highest-value pair
-4. Route 4 AI video (Veo first)
-5. Route 5 Canva export — only if the API supports it
+4. Route 4a subscription bridge   ← nearly free once Route 2 lands
+5. Route 4b API providers (Veo, billing-gated) — opt-in
+6. Route 5 Canva export — only if the API supports it
 ```
 
-Routes 1–3 need no key beyond what the app already uses, and deliver the
-biggest quality jump. Route 4 is where BYOK breadth pays off.
+Routes 1–3 need no key beyond what the app already uses and deliver the
+biggest quality jump. Route 4a needs none either — it rides the subscriptions
+creators already pay for, and reuses Route 2's upload as its return path.
+Route 4b is where BYOK breadth pays off for those who want full automation.
