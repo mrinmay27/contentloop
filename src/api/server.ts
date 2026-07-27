@@ -65,7 +65,26 @@ function storeOAuthState(state: string, pageId: string, provider: string) {
 }
 
 const app = express();
-app.use(helmet());
+// helmet's default CSP is img-src 'self' data:, which silently broke every
+// remote thumbnail: Pexels stock-video previews and Canva template/design
+// thumbnails all rendered as broken images.
+//
+// Widened to https: for images only. The real protection — script-src 'self'
+// — is untouched, and there is no dangerouslySetInnerHTML anywhere in the web
+// bundle, so LLM output and topic titles cannot inject markup to abuse it.
+// Specific hosts would be tighter, but Canva's CDN hostnames are neither
+// documented nor stable, and a broken allowlist fails as a broken image with
+// no error a user could act on.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "img-src": ["'self'", "data:", "blob:", "https:"],
+      // Remote video thumbnails/previews come from the same providers.
+      "media-src": ["'self'", "data:", "blob:", "https:"],
+    },
+  },
+}));
 app.use(cors());
 // Bumped to 25mb so we can accept image data URLs — a 1080×1920 PNG is ~3MB base64,
 // and a carousel batch can include several of them in one request.
