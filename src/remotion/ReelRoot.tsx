@@ -7,7 +7,10 @@ import {
   REEL_FPS,
   ASPECT_CONFIGS,
   type VideoAspect,
-} from './ReelComposition.js';
+} from './ReelComposition';   // extensionless: Remotion bundles this from
+                              // source with webpack, which does not resolve
+                              // .js -> .tsx. moduleResolution is "Bundler",
+                              // so tsc accepts it too.
 
 // Default props for the studio / preview
 const DEFAULT_SLIDES = [

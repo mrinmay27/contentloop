@@ -7,6 +7,7 @@ import {
   Easing,
   Img,
   OffthreadVideo,
+  staticFile,
 } from 'remotion';
 
 // ── Aspect ratio presets ──────────────────────────────────────────────────────
@@ -244,6 +245,12 @@ function SlideContent({
 
 // ── Background layers ────────────────────────────────────────────────────────
 
+/** Assets served from the bundle's publicDir arrive as relative paths and must
+ *  go through staticFile(); http(s)/data sources are passed straight through. */
+function resolveSrc(src: string): string {
+  return /^(https?|data):/.test(src) ? src : staticFile(src);
+}
+
 function Background({
   accent, frame, totalFrames, media, frameInSlide,
 }: {
@@ -273,7 +280,7 @@ function Background({
           <AbsoluteFill style={{ overflow: 'hidden' }}>
             {media.kind === 'video' ? (
               <OffthreadVideo
-                src={media.url}
+                src={resolveSrc(media.url)}
                 muted
                 style={{
                   width: '100%', height: '100%',
@@ -284,7 +291,7 @@ function Background({
               />
             ) : (
               <Img
-                src={media.url}
+                src={resolveSrc(media.url)}
                 style={{
                   width: '100%', height: '100%',
                   objectFit: 'cover',

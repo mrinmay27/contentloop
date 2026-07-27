@@ -204,6 +204,11 @@ async function renderRemotionComposition(options: RenderOptions): Promise<string
     console.log('[render] Bundling Remotion project...');
     const bundleLocation = await bundle({
       entryPoint: path.resolve(process.cwd(), 'src/remotion/ReelRoot.tsx'),
+      // Serve data/media as the bundle's public dir. Remotion refuses bare
+      // absolute paths (resolved against its dev server) AND file:// URLs, so
+      // local footage has to be referenced relative to a public dir. This is
+      // why background media never rendered.
+      publicDir: MEDIA_DIR,
       onProgress: (p: number) => {
         if (p % 25 === 0) console.log(`[render] Bundle progress: ${p}%`);
       },
@@ -215,6 +220,9 @@ async function renderRemotionComposition(options: RenderOptions): Promise<string
       : options.aspect === 'square' ? 'ReelSquare'
       : 'Reel';
 
+    const renderableImages = (options.backgroundImages ?? []).map(toRenderableSrc);
+    const renderableMedia = options.backgroundMedia?.map(m => ({ ...m, url: toRenderableSrc(m.url) }));
+
     const composition = await selectComposition({
       serveUrl: bundleLocation,
       id: compositionId,
@@ -224,8 +232,8 @@ async function renderRemotionComposition(options: RenderOptions): Promise<string
         accent: options.accent,
         font: 'DM Sans',
         target: options.target === 'both' ? 'instagram' : options.target,
-        backgroundImages: options.backgroundImages ?? [],
-        backgroundMedia: options.backgroundMedia,
+        backgroundImages: renderableImages,
+        backgroundMedia: renderableMedia,
         aspect: options.aspect ?? 'portrait',
         transition: options.transition ?? 'fade',
       },
@@ -243,8 +251,8 @@ async function renderRemotionComposition(options: RenderOptions): Promise<string
         accent: options.accent,
         font: 'DM Sans',
         target: options.target === 'both' ? 'instagram' : options.target,
-        backgroundImages: options.backgroundImages ?? [],
-        backgroundMedia: options.backgroundMedia,
+        backgroundImages: renderableImages,
+        backgroundMedia: renderableMedia,
         aspect: options.aspect ?? 'portrait',
         transition: options.transition ?? 'fade',
       },
@@ -400,6 +408,26 @@ async function muxAudio(
  *   1. Render Remotion composition → silent MP4
  *   2. Mux TTS audio + BGM → final MP4
  */
+
+/** Make a local asset path referenceable by Remotion.
+ *
+ *  Remotion rejects both bare absolute paths (it resolves them against its own
+ *  dev server and 404s) and file:// URLs ("Can only download URLs starting
+ *  with http:// or https://"). Local assets must live under the bundle's
+ *  publicDir and be referenced relative to it — Remotion then serves them over
+ *  http itself. MEDIA_DIR is registered as publicDir above.
+ *
+ *  Absolute paths inside MEDIA_DIR become relative; anything already a URL is
+ *  left alone; anything else is returned unchanged so the caller can see it. */
+function toRenderableSrc(src: string): string {
+  if (/^(https?|data):/.test(src)) return src;
+  const abs = src.startsWith('file://') ? src.slice('file://'.length) : src;
+  if (abs.startsWith(MEDIA_DIR)) {
+    return path.relative(MEDIA_DIR, abs).split(path.sep).join('/');
+  }
+  return src;
+}
+
 export async function renderVideo(options: RenderOptions): Promise<RenderResult> {
   const outputDir = path.join(MEDIA_DIR, options.contentId);
   ensureDir(outputDir);
