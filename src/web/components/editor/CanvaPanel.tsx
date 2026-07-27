@@ -48,6 +48,9 @@ export const CanvaPanel: React.FC<Props> = ({ pageId, contentId, hook, slides })
   const [attached,     setAttached]     = useState<string | null>(null);
   const [attachErr,    setAttachErr]    = useState<string | null>(null);
   const [attaching,    setAttaching]    = useState(false);
+  // Where an export lands: the whole reel, or one slide's background. The
+  // endpoint has always accepted a slide index; only the UI assumed 'whole'.
+  const [attachTarget, setAttachTarget] = useState<'whole' | number>('whole');
 
   // ─── Check connection on mount ────────────────────────────────────────
   useEffect(() => {
@@ -278,6 +281,16 @@ export const CanvaPanel: React.FC<Props> = ({ pageId, contentId, hook, slides })
                   </a>
                   {/* Closes the round trip: the server already has this URL,
                       so there is no reason to make the user save and re-upload. */}
+                  <select value={String(attachTarget)}
+                    onChange={e => setAttachTarget(
+                      e.target.value === 'whole' ? 'whole' : Number(e.target.value))}
+                    disabled={!contentId || attaching}
+                    style={{ fontSize:10, padding:'2px 4px' }}>
+                    <option value="whole">Whole reel</option>
+                    {slides.map((_, i) => (
+                      <option key={i} value={i}>Slide {i + 1} background</option>
+                    ))}
+                  </select>
                   <button className="btn btn-primary btn-sm" style={{ fontSize:10 }}
                     disabled={!contentId || attaching || exportFormat === 'pdf'}
                     title={exportFormat === 'pdf'
@@ -288,7 +301,8 @@ export const CanvaPanel: React.FC<Props> = ({ pageId, contentId, hook, slides })
                       setAttaching(true); setAttachErr(null);
                       try {
                         const r = await api.attachCanvaMedia(contentId, {
-                          url, format: exportFormat, slideIndex: null,
+                          url, format: exportFormat,
+                          slideIndex: attachTarget === 'whole' ? null : attachTarget,
                         });
                         setAttached(r.url);
                       } catch (e) {
@@ -302,7 +316,7 @@ export const CanvaPanel: React.FC<Props> = ({ pageId, contentId, hook, slides })
               ))}
               {attached && (
                 <div style={{ fontSize:10, color:'var(--green)' }}>
-                  ✓ Saved into this content — it will be used when rendering.
+                  ✓ Saved to {attachTarget === 'whole' ? 'the whole reel' : `slide ${(attachTarget as number) + 1}`} — it will be used when rendering.
                 </div>
               )}
               {attachErr && (

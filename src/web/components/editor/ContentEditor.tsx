@@ -606,6 +606,17 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                       </div>
                     </div>
 
+                    {/* Canva is a whole-design flow, so it lives in the panel on
+                        the right rather than as a fourth button here — but this
+                        is where people look for it, so say where it is. */}
+                    {i === 0 && (
+                      <div style={{ fontSize:10, color:'var(--text-muted)', marginBottom:6 }}>
+                        Want a branded Canva template instead? Use the{' '}
+                        <strong>Canva</strong> panel on the right — its export can be
+                        sent to any slide or the whole reel.
+                      </div>
+                    )}
+
                     {bg === 'stock' ? (
                       <StockFootagePicker
                         contentId={draftId}
