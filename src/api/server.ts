@@ -618,6 +618,43 @@ app.post("/api/content/:id/video", async (req, res, next) => {
   }
 });
 
+// Route 3 — captions for an uploaded video. Returns srt:null (not an error)
+// when no Groq key is configured, so the UI can fall back to manual captions
+// instead of pretending it produced a transcript.
+app.post("/api/content/:id/transcribe", async (req, res, next) => {
+  try {
+    const { rows } = await query<{ video_url: string | null }>(
+      `SELECT video_url FROM content_items WHERE id = $1`, [req.params.id]
+    );
+    if (!rows[0]) return void res.status(404).json({ error: "Content item not found" });
+    if (!rows[0].video_url) {
+      return void res.status(400).json({ error: "Upload a video first." });
+    }
+
+    const absPath = path.join(MEDIA_DIR, req.params.id, "source.mp4");
+    if (!fsSync.existsSync(absPath)) {
+      return void res.status(400).json({ error: "The uploaded video file is missing — upload it again." });
+    }
+
+    const { transcribeVideo, segmentsToSrt } = await import("../services/transcribe.js");
+    const segments = await transcribeVideo(absPath);
+    if (segments === null) {
+      return void res.json({
+        ok: true, srt: null,
+        note: "No Groq key configured — add one in Settings, or type captions yourself.",
+      });
+    }
+
+    const srt = segmentsToSrt(segments);
+    fsSync.writeFileSync(path.join(MEDIA_DIR, req.params.id, "captions.srt"), srt, "utf-8");
+    await query(
+      `UPDATE content_items SET subtitle_url = $2, updated_at = now() WHERE id = $1`,
+      [req.params.id, `/media/${req.params.id}/captions.srt`]
+    );
+    res.json({ ok: true, srt, segments: segments.length });
+  } catch (err) { next(err); }
+});
+
 // Content: upload an image for a content_item at a specific slide index.
 // payload.images is an array — index N is overwritten in place; gaps fill with null.
 app.post("/api/content/:id/images", async (req, res, next) => {
