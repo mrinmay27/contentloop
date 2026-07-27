@@ -9,6 +9,7 @@ import { ReelComposition, reelDurationFrames, REEL_FPS, REEL_WIDTH, REEL_HEIGHT 
 import { parseReelScript } from '../../../remotion/parseReelScript';
 import { ReelScriptGenerator } from './ReelScriptGenerator';
 import { VideoUploadPanel } from './VideoUploadPanel';
+import { REEL_PATHS, resolveReelPath, type ReelPath } from '../../../domain/reelPath';
 import { PublishPanel } from './PublishPanel';
 
 // Build an image prompt that incorporates brand context. The user can override per-image.
@@ -67,6 +68,9 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
   const [hook, setHook]       = useState(topic.title);
   const [caption, setCaption] = useState(`Deep dive into: ${topic.title}\n\n👇 Save this for later`);
   const [cta, setCta]         = useState('Follow for daily breakdowns →');
+  // Which route this reel is being made by. Persisted so the render job knows
+  // which renderer to use, and so reopening the editor lands where you left off.
+  const [reelPath, setReelPath] = useState<ReelPath>('slideshow');
 
   // Task 3.1: Pre-select format tab from topic.suggestedFormat
   const [previewTab, setPreviewTab] = useState<SuggestedFormat>(
@@ -135,6 +139,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
         if (p.hook)    setHook(p.hook);
         if (p.caption) setCaption(p.caption);
         if (p.cta)     setCta(p.cta);
+        setReelPath(resolveReelPath(p));
         if (Array.isArray(p.slides) && p.slides.length > 0) setSlides(p.slides);
         if (p.reelScript) setReelScript(p.reelScript);
         if (p.reelTarget) setReelTarget(p.reelTarget as any);
@@ -232,7 +237,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
       // Auto-save current content first, then flip status to approved
       const contentPayload: Record<string, unknown> = { hook, caption };
       if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; }
-      if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; }
+      if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; contentPayload.reelPath = reelPath; }
       await api.patchContent(draftId, contentPayload);
       await api.approveContent(draftId);
       setApproveStatus('done');
@@ -251,7 +256,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
       // Persist hook + caption + format-specific fields
       const contentPayload: Record<string, unknown> = { hook, caption };
       if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; }
-      if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; }
+      if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; contentPayload.reelPath = reelPath; }
       await api.patchContent(draftId, contentPayload);
 
       // Persist format override if the user changed it
@@ -509,17 +514,47 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
           {/* Reel Script — only visible on Reel tab */}
           {previewTab === 'reel' && (
             <div>
-              {/* Route 2/3 — your own footage. Sits above the generated-reel
-                  flow because it is a distinct path, not a step within it. */}
-              <VideoUploadPanel contentId={draftId} topic={topic.title} niche={page.niche}/>
-
-              <div style={{ display:'flex', alignItems:'center', gap:10, margin:'4px 0 14px' }}>
-                <div style={{ flex:1, height:1, background:'var(--border)' }}/>
-                <span style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase',
-                  letterSpacing:'0.06em', fontWeight:600 }}>Or generate a reel</span>
-                <div style={{ flex:1, height:1, background:'var(--border)' }}/>
+              {/* Path chooser. All three routes stay visible as choices — the
+                  point is to show ONE route's controls at a time, not to hide
+                  that the others exist. Switching never deletes anything. */}
+              <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
+                {REEL_PATHS.map(p => {
+                  const active = reelPath === p.id;
+                  return (
+                    <button key={p.id}
+                      onClick={() => { setReelPath(p.id); setIsDirty(true); }}
+                      title={p.blurb}
+                      style={{
+                        flex:'1 1 180px', textAlign:'left', cursor:'pointer',
+                        padding:'10px 12px', borderRadius:'var(--radius-sm)',
+                        border:`1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                        background: active ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+                        color:'var(--text-primary)',
+                      }}>
+                      <div style={{ fontSize:12, fontWeight:600, marginBottom:2 }}>
+                        {p.emoji} {p.label}
+                      </div>
+                      <div style={{ fontSize:10, color:'var(--text-muted)', lineHeight:1.45 }}>
+                        {p.blurb}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
+              {/* Upload and AI share the same destination — a single clip with
+                  captions — so they share the panel; only the AI prompt bridge
+                  differs. */}
+              {(reelPath === 'upload' || reelPath === 'ai') && (
+                <VideoUploadPanel
+                  contentId={draftId}
+                  topic={reelPath === 'ai' ? topic.title : undefined}
+                  niche={page.niche}
+                />
+              )}
+
+              {reelPath === 'slideshow' && (
+              <>
               <div className="editor-section-title">Reel Script</div>
 
               <ReelScriptGenerator
@@ -567,6 +602,9 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                   niche={page.niche}
                 />
               ))}
+
+              </>
+              )}
 
               {/* Platform selector for Reel */}
               <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>

@@ -59,7 +59,7 @@ const PREMIUM_GROUPS = new Set(['Twitter / X', 'Exploding Topics']);
 // Navigation sections — defines order and visual grouping in the left panel
 const NAV_SECTIONS: { label: string; groups: string[] }[] = [
   { label: 'System',               groups: ['AI / LLM', 'Branding', 'Sources', 'Pipeline', 'Advanced'] },
-  { label: 'Generation',           groups: ['Image Generation'] },
+  { label: 'Generation',           groups: ['Image Generation', 'Stock Footage'] },
   { label: 'Ingestion — Free',     groups: ['Reddit', 'Product Hunt'] },
   { label: 'Ingestion — Premium',  groups: ['Twitter / X', 'Exploding Topics'] },
   { label: 'Publishing',           groups: ['Instagram', 'YouTube', 'Canva'] },

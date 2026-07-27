@@ -1,3 +1,4 @@
+import fsSync from "node:fs";
 import { env } from "../config/env.js";
 import type { TopicDecision } from "../domain/types.js";
 import { configStore } from "../config/configStore.js";
@@ -11,7 +12,8 @@ import { runQualityGate } from "../services/qa.js";
 import { nextAvailableSlot } from "../services/scheduler.js";
 import { synthesizeReelAudio, saveSubtitles, resolveVoice } from "../services/tts.js";
 import { sourceReelBackgrounds } from "../services/stockFootage.js";
-import { renderVideo } from "../services/videoRenderer.js";
+import { renderVideo, renderCaptionedVideo } from "../services/videoRenderer.js";
+import { resolveReelPath, rendererFor } from "../domain/reelPath.js";
 import { parseReelScript } from "../remotion/parseReelScript.js";
 import {
   createContentItems,
@@ -238,9 +240,37 @@ export async function render(): Promise<void> {
 
   for (const reel of reels) {
     try {
-      await updateContentVideo(reel.id, null, 'rendering');
-
       const payload = reel.payload;
+
+      // Which route made this reel decides which renderer runs. Without this
+      // an uploaded clip was eligible to be re-rendered as a slideshow, which
+      // would overwrite the creator's own footage.
+      const path = resolveReelPath({ reelPath: payload?.reelPath, videoUrl: reel.video_url });
+      if (rendererFor(path) === 'captioned') {
+        const sourcePath = `${process.cwd()}/data/media/${reel.id}/source.mp4`;
+        if (!fsSync.existsSync(sourcePath)) {
+          console.log(`[render] ${reel.id}: ${path} path but no uploaded video yet — skipping`);
+          continue;
+        }
+        await updateContentVideo(reel.id, null, 'rendering');
+        // Probe the real length — passing 0 would fall back to a 10s default
+        // and truncate or pad the creator's footage.
+        const { probeVideo } = await import("../services/mediaProbe.js");
+        const probe = await probeVideo(sourcePath);
+        const srtPath = `${process.cwd()}/data/media/${reel.id}/captions.srt`;
+        const captioned = await renderCaptionedVideo({
+          contentId: reel.id,
+          sourcePath,
+          srt: fsSync.existsSync(srtPath) ? fsSync.readFileSync(srtPath, 'utf-8') : '',
+          accent: (typeof reel.brand === 'string' ? JSON.parse(reel.brand) : reel.brand ?? {})?.colors?.[0] ?? '#F5A623',
+          durationSec: probe?.durationSec ?? 10,
+        });
+        await updateContentVideo(reel.id, captioned.publicUrl, 'done');
+        console.log(`[render] ✓ Captioned video for ${reel.id}: ${captioned.durationSec.toFixed(1)}s`);
+        continue;
+      }
+
+      await updateContentVideo(reel.id, null, 'rendering');
       const scriptText = `${payload?.reel?.hook ?? ''}. ${payload?.reel?.script ?? ''}. ${payload?.reel?.cta ?? ''}`;
       const slides = parseReelScript(scriptText);
 
