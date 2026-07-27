@@ -55,6 +55,8 @@ export interface RenderOptions {
   target: 'instagram' | 'youtube_shorts' | 'both';
   /** Local paths to background images (one per slide, optional) */
   backgroundImages?: string[];
+  /** Preferred over backgroundImages — carries the kind so video renders as video. */
+  backgroundMedia?: Array<{ url: string; kind: 'image' | 'video' }>;
   /** Path to TTS audio file (optional — will be muxed in) */
   audioPath?: string;
   /** Background music: 'random', 'none', or a filename in data/bgm/ */
@@ -223,6 +225,7 @@ async function renderRemotionComposition(options: RenderOptions): Promise<string
         font: 'DM Sans',
         target: options.target === 'both' ? 'instagram' : options.target,
         backgroundImages: options.backgroundImages ?? [],
+        backgroundMedia: options.backgroundMedia,
         aspect: options.aspect ?? 'portrait',
         transition: options.transition ?? 'fade',
       },
@@ -241,6 +244,7 @@ async function renderRemotionComposition(options: RenderOptions): Promise<string
         font: 'DM Sans',
         target: options.target === 'both' ? 'instagram' : options.target,
         backgroundImages: options.backgroundImages ?? [],
+        backgroundMedia: options.backgroundMedia,
         aspect: options.aspect ?? 'portrait',
         transition: options.transition ?? 'fade',
       },

@@ -244,10 +244,18 @@ export async function render(): Promise<void> {
       const scriptText = `${payload?.reel?.hook ?? ''}. ${payload?.reel?.script ?? ''}. ${payload?.reel?.cta ?? ''}`;
       const slides = parseReelScript(scriptText);
 
-      // Resolve background images from footage_urls
-      const footageUrls: string[] = (reel.footage_urls ?? [])
-        .map((f: any) => f.localPath)
-        .filter(Boolean);
+      // Resolve background media from footage_urls, keeping the kind so video
+      // renders as video instead of being treated as a still. This mapping
+      // previously dropped f.type, which is why kind never reached Remotion.
+      // NOTE: localPath (absolute), not publicUrl — Remotion renders
+      // server-side from the filesystem, not over HTTP.
+      const backgroundMedia: Array<{ url: string; kind: 'image' | 'video' }> =
+        (reel.footage_urls ?? [])
+          .filter((f: any) => f.localPath)
+          .map((f: any) => ({
+            url: f.localPath,
+            kind: f.type === 'video' ? 'video' as const : 'image' as const,
+          }));
 
       // Resolve brand from page
       const brand = typeof reel.brand === 'string' ? JSON.parse(reel.brand) : (reel.brand ?? {});
@@ -273,7 +281,7 @@ export async function render(): Promise<void> {
         handle: reel.handle ?? '@page',
         accent,
         target: reel.platform === 'youtube_shorts' ? 'youtube_shorts' : 'instagram',
-        backgroundImages: footageUrls,
+        backgroundMedia,
         audioPath,
         bgm: env.BGM_MODE,
         bgmVolume: env.BGM_VOLUME,

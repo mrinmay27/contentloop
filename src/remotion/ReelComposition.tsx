@@ -6,6 +6,7 @@ import {
   useVideoConfig,
   Easing,
   Img,
+  OffthreadVideo,
 } from 'remotion';
 
 // ── Aspect ratio presets ──────────────────────────────────────────────────────
@@ -32,6 +33,9 @@ export interface ReelProps {
   font:             string;
   target:           'instagram' | 'youtube_shorts' | 'both';
   backgroundImages?: string[];   // one URL per slide (may be shorter than slides array)
+  /** Preferred over backgroundImages — carries the kind so video renders as
+   *  video. backgroundImages is kept so existing callers keep working. */
+  backgroundMedia?: Array<{ url: string; kind: 'image' | 'video' }>;
   aspect?:          VideoAspect;
   transition?:      TransitionType;
 }
@@ -241,10 +245,10 @@ function SlideContent({
 // ── Background layers ────────────────────────────────────────────────────────
 
 function Background({
-  accent, frame, totalFrames, imageUrl, frameInSlide,
+  accent, frame, totalFrames, media, frameInSlide,
 }: {
   accent: string; frame: number; totalFrames: number;
-  imageUrl?: string; frameInSlide: number;
+  media?: { url: string; kind: 'image' | 'video' }; frameInSlide: number;
 }) {
   const { r, g, b } = hexToRgb(accent.startsWith('#') ? accent : '#F5A623');
   const orbY = interpolate(frame, [0, totalFrames], [55, 45]);
@@ -252,7 +256,7 @@ function Background({
   const pulse = 1 + 0.04 * Math.sin((frame / REEL_FPS) * Math.PI);
 
   // Slow Ken Burns zoom on the image
-  const imgScale = imageUrl
+  const imgScale = media
     ? interpolate(frameInSlide, [0, FRAMES_PER_SLIDE], [1.0, 1.06], { extrapolateRight: 'clamp' })
     : 1;
 
@@ -260,19 +264,35 @@ function Background({
     <>
       <AbsoluteFill style={{ background: `rgb(8,6,4)` }} />
 
-      {imageUrl ? (
+      {media ? (
         <>
-          {/* Full-bleed background image with Ken Burns zoom */}
+          {/* Full-bleed background with Ken Burns zoom. Video plays muted:
+              the reel's own TTS track is the audio. OffthreadVideo has no
+              loop prop — a clip shorter than its slide holds its last frame,
+              which is what we want anyway (a black gap would be worse). */}
           <AbsoluteFill style={{ overflow: 'hidden' }}>
-            <Img
-              src={imageUrl}
-              style={{
-                width: '100%', height: '100%',
-                objectFit: 'cover',
-                transform: `scale(${imgScale})`,
-                transformOrigin: 'center center',
-              }}
-            />
+            {media.kind === 'video' ? (
+              <OffthreadVideo
+                src={media.url}
+                muted
+                style={{
+                  width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  transform: `scale(${imgScale})`,
+                  transformOrigin: 'center center',
+                }}
+              />
+            ) : (
+              <Img
+                src={media.url}
+                style={{
+                  width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  transform: `scale(${imgScale})`,
+                  transformOrigin: 'center center',
+                }}
+              />
+            )}
           </AbsoluteFill>
           {/* Heavy dark gradient overlay — bottom to top, keeps text legible */}
           <AbsoluteFill style={{
@@ -326,9 +346,12 @@ function Background({
 // ── Main composition ─────────────────────────────────────────────────────────
 
 export const ReelComposition: React.FC<ReelProps> = ({
-  slides, handle, accent, target, backgroundImages = [],
+  slides, handle, accent, target, backgroundImages = [], backgroundMedia,
   aspect = 'portrait', transition = 'fade',
 }) => {
+  // backgroundMedia wins; fall back to treating backgroundImages as stills so
+  // any caller that hasn't been updated keeps rendering exactly as before.
+  const media = backgroundMedia ?? backgroundImages.map(url => ({ url, kind: 'image' as const }));
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
 
@@ -368,7 +391,7 @@ export const ReelComposition: React.FC<ReelProps> = ({
       }}>
         <Background
           accent={accent} frame={frame} totalFrames={durationInFrames}
-          imageUrl={backgroundImages[slideIndex] || undefined}
+          media={media[slideIndex]}
           frameInSlide={frameInSlide}
         />
       </div>
@@ -448,7 +471,7 @@ export const ReelComposition: React.FC<ReelProps> = ({
           frame={frameInSlide}
           accent={accent}
           isLast={isLastSlide}
-          hasImage={!!backgroundImages[slideIndex]}
+          hasImage={!!media[slideIndex]}
           aspect={aspect}
         />
       </div>
