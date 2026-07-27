@@ -35,6 +35,7 @@ import { fetchRedditTrends }           from "./reddit.js";
 import { fetchRssTrends }              from "./rss.js";
 import { fetchSubstackTrends }         from "./substack.js";
 import { fetchYouTubeTrends }          from "./youtube-trends.js";
+import { fetchPinterestTrends }        from "./pinterest-trends.js";
 
 
 export async function ingestForNiche(niche: Niche, pageId?: string): Promise<RawTrend[]> {
@@ -122,6 +123,9 @@ export async function ingestForNiche(niche: Niche, pageId?: string): Promise<Raw
     isEnabled("product_hunt")       ? fetchProductHuntTrends(category, niche.keywords)                  : Promise.resolve([]),
     isEnabled("finance_newsletter") ? fetchFinanceNewsletterTrends(category, niche.keywords, cachedMap?.financeFeeds) : Promise.resolve([]),
     isEnabled("youtube_trends")     ? fetchYouTubeTrends(category as any, niche.keywords)               : Promise.resolve([]),
+    // Task 2.5.3 — visual-trend signal. Self-gating: returns [] for niche
+    // categories that aren't visual, and [] rather than fabricating on failure.
+    isEnabled("pinterest_trends")   ? fetchPinterestTrends(category, niche.keywords)                    : Promise.resolve([]),
   ]);
 
   const all = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));

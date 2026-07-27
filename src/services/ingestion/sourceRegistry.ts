@@ -46,4 +46,6 @@ export const SOURCE_REGISTRY: SourceMeta[] = [
     configFields: [{ mapField: "financeFeeds", label: "Feeds (empty = defaults)", kind: "feeds" }] },
   { id: "youtube_trends", label: "YouTube Trends", description: "Trending videos.",
     configFields: [], needsKey: { env: "YOUTUBE_API_KEY", label: "YouTube Data API key" } },
+  { id: "pinterest_trends", label: "Pinterest Trends", description: "What's trending visually — food, travel, fashion, home, wellness niches only.",
+    configFields: [] },
 ];

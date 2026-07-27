@@ -25,6 +25,9 @@ const SOURCE_QUALITY_MULTIPLIER: Record<string, number> = {
   rss:                0.95,
   google_news:        0.85,
   twitter:            0.90,
+  // Legacy: no adapter produces these any more (the google-trends and twitter
+  // ingesters fabricated placeholder topics on failure and were removed).
+  // Kept so pre-existing rows still score rather than falling to a default.
   google_trends:      0.80,
 };
 

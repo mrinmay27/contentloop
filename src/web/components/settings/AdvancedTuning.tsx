@@ -31,8 +31,8 @@ const THRESHOLD_FIELDS: { key: ThresholdKey; label: string; def: number; step: n
   { key: 'trendVelocityFloor',        label: 'Trend: velocity floor',        def: 0.8, step: 0.05 },
 ];
 
-// Registry ids (see sourceRegistry.ts) + google_trends/twitter, which are
-// dispatched by ingestForNiche but aren't registry-driven config sources.
+// Registry ids — see sourceRegistry.ts. Kept in sync by hand: a slider here
+// for a source that never ingests would tune nothing.
 // Mirrors src/domain/scoring.ts SOURCE_QUALITY_MULTIPLIER defaults.
 const SOURCE_ROWS: { id: string; label: string; def: number }[] = [
   { id: 'hacker_news',         label: 'Hacker News',         def: 1.30 },
@@ -43,14 +43,13 @@ const SOURCE_ROWS: { id: string; label: string; def: number }[] = [
   { id: 'product_hunt',        label: 'Product Hunt',        def: 1.18 },
   { id: 'finance_newsletter',  label: 'Finance Newsletters', def: 1.15 },
   { id: 'youtube_trends',      label: 'YouTube Trends',      def: 1.15 },
+  { id: 'pinterest_trends',    label: 'Pinterest Trends',    def: 1.10 },
   { id: 'medium',              label: 'Medium',              def: 1.10 },
   { id: 'devto',               label: 'Dev.to',              def: 1.05 },
   { id: 'crypto_news',         label: 'Crypto News',         def: 1.00 },
   { id: 'reddit',              label: 'Reddit',              def: 1.00 },
   { id: 'rss',                 label: 'Custom RSS',          def: 0.95 },
   { id: 'google_news',         label: 'Google News',         def: 0.85 },
-  { id: 'twitter',             label: 'Twitter / X',         def: 0.90 },
-  { id: 'google_trends',       label: 'Google Trends',       def: 0.80 },
 ];
 
 function safeParse(raw: string): Record<string, number> {
