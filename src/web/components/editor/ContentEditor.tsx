@@ -11,6 +11,10 @@ import { ReelScriptGenerator } from './ReelScriptGenerator';
 import { VideoUploadPanel } from './VideoUploadPanel';
 import { StockFootagePicker } from './StockFootagePicker';
 import { REEL_PATHS, resolveReelPath, type ReelPath } from '../../../domain/reelPath';
+import {
+  carouselToEditorSlides, resolveSlideCount,
+  MIN_SLIDES, MAX_SLIDES,
+} from '../../../domain/slideCount';
 import { PublishPanel } from './PublishPanel';
 
 // Build an image prompt that incorporates brand context. The user can override per-image.
@@ -72,6 +76,9 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
   // Which route this reel is being made by. Persisted so the render job knows
   // which renderer to use, and so reopening the editor lands where you left off.
   const [reelPath, setReelPath] = useState<ReelPath>('slideshow');
+  /** Target slide count for regeneration. Page default unless overridden here. */
+  const [slideCount, setSlideCount] = useState<number>(() =>
+    resolveSlideCount({ pageDefault: (page as any).slideCount }));
   /** Per-slide background source. Stock is the Pexels picker; video is the
    *  creator's own or an AI clip; image is a generated still. */
   const [slideBg, setSlideBg] = useState<Record<number, 'image' | 'stock' | 'video'>>({});
@@ -144,7 +151,16 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
         if (p.caption) setCaption(p.caption);
         if (p.cta)     setCta(p.cta);
         setReelPath(resolveReelPath(p));
-        if (Array.isArray(p.slides) && p.slides.length > 0) setSlides(p.slides);
+        // Saved edits win; otherwise show what was actually generated. The
+        // generator writes payload.carousel, which the editor previously
+        // ignored, so every carousel opened on placeholder text.
+        if (Array.isArray(p.slides) && p.slides.length > 0) {
+          setSlides(p.slides);
+        } else {
+          const generated = carouselToEditorSlides(p.carousel);
+          if (generated.length > 0) setSlides(generated);
+        }
+        if (Number.isInteger(p.slideCount)) setSlideCount(p.slideCount);
         if (p.reelScript) setReelScript(p.reelScript);
         if (p.reelTarget) setReelTarget(p.reelTarget as any);
 
@@ -240,7 +256,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
     try {
       // Auto-save current content first, then flip status to approved
       const contentPayload: Record<string, unknown> = { hook, caption };
-      if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; }
+      if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; contentPayload.slideCount = slideCount; }
       if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; contentPayload.reelPath = reelPath; }
       await api.patchContent(draftId, contentPayload);
       await api.approveContent(draftId);
@@ -259,7 +275,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
     try {
       // Persist hook + caption + format-specific fields
       const contentPayload: Record<string, unknown> = { hook, caption };
-      if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; }
+      if (previewTab === 'carousel') { contentPayload.slides = slides; contentPayload.cta = cta; contentPayload.slideCount = slideCount; }
       if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; contentPayload.reelPath = reelPath; }
       await api.patchContent(draftId, contentPayload);
 
@@ -470,10 +486,27 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
               <div>
                 <div className="editor-section-title"
                   style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span>Carousel Slides</span>
-                  <button className="btn btn-sm btn-surface" onClick={addSlide}>
-                    <Icon name="plus" size={10}/> Add
-                  </button>
+                  <span>Carousel Slides <span style={{ fontWeight:400, color:'var(--text-muted)' }}>
+                    · {slides.length}</span></span>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    {/* Target count for regeneration. The slides above can be
+                        added and removed freely — this is what the LLM is
+                        asked for next time, which was previously hardcoded. */}
+                    <label style={{ fontSize:10, color:'var(--text-muted)', display:'flex',
+                      alignItems:'center', gap:4 }}
+                      title={`How many slides to ask the AI for (${MIN_SLIDES}–${MAX_SLIDES})`}>
+                      Generate
+                      <input type="number" min={MIN_SLIDES} max={MAX_SLIDES} value={slideCount}
+                        onChange={e => {
+                          setSlideCount(resolveSlideCount({ contentOverride: Number(e.target.value) }));
+                          setIsDirty(true);
+                        }}
+                        style={{ width:48, fontSize:10, padding:'2px 4px' }}/>
+                    </label>
+                    <button className="btn btn-sm btn-surface" onClick={addSlide}>
+                      <Icon name="plus" size={10}/> Add
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
                   {slides.map((slide, i) => (
@@ -559,7 +592,19 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
 
               {reelPath === 'slideshow' && (
               <>
-              <div className="editor-section-title">Reel Script</div>
+              <div className="editor-section-title"
+                style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span>Reel Script</span>
+                {/* The slide count is derived from the script, not fixed — one
+                    slide per blank-line-separated block. That rule was
+                    invisible, so it read as a hardcoded 3. */}
+                <span style={{ fontWeight:400, fontSize:10, color:'var(--text-muted)' }}>
+                  {(() => {
+                    const n = parseReelScript(reelScript).filter(x => x !== 'No script yet').length;
+                    return `${n} slide${n === 1 ? '' : 's'} · ~${n * 3}s — blank line starts a new slide`;
+                  })()}
+                </span>
+              </div>
 
               <ReelScriptGenerator
                 topic={topic.title}

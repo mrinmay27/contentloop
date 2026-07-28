@@ -63,6 +63,9 @@ export interface Page {
     /** Caption voice picked in the create-page wizard. Optional: pages created
      *  before this existed simply generate with the default tone. */
     tone?: CaptionTone;
+    /** Preferred carousel length for this page. Optional — unset falls back
+     *  to DEFAULT_SLIDES. */
+    slideCount?: number;
   };
 }
 

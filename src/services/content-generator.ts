@@ -2,6 +2,7 @@ import { llmClient, llmConfig } from "../config/llm.js";
 import { sanitizeLlmFormat, suggestFormatByRules } from "../domain/format-rules.js";
 import { scoreHook } from "../domain/scoring.js";
 import { tonePromptFor } from "../domain/tone.js";
+import { resolveSlideCount, isAcceptableCarousel } from "../domain/slideCount.js";
 import type { FormatConfidence, GeneratedContent, Niche, Page, SuggestedFormat, Topic } from "../domain/types.js";
 
 const MAX_RETRIES = 3;
@@ -54,7 +55,12 @@ export async function generateContent(
   niche: Niche,
   pages: Page[]
 ): Promise<GenerateResult> {
-  const prompt = buildPrompt(topic, niche, pages);
+  // Page preference, falling back to the default. Per-content overrides are
+  // applied in the editor, which regenerates against the saved count.
+  const slideCount = resolveSlideCount({
+    pageDefault: pages.find((page) => page.brand?.slideCount)?.brand?.slideCount,
+  });
+  const prompt = buildPrompt(topic, niche, pages, slideCount);
   const raw = await callLLM(prompt);
 
   if (!raw) {
@@ -73,7 +79,7 @@ export async function generateContent(
 
   try {
     const parsed = JSON.parse(raw);
-    const content = normalizeGeneratedContent(parsed, topic, niche, pages);
+    const content = normalizeGeneratedContent(parsed, topic, niche, pages, slideCount);
 
     // --- Format decision ---
     const llmRawFormat = parsed.suggested_format as SuggestedFormat | undefined;
@@ -112,7 +118,7 @@ export async function generateContent(
   }
 }
 
-function buildPrompt(topic: Topic, niche: Niche, pages: Page[]): string {
+function buildPrompt(topic: Topic, niche: Niche, pages: Page[], slideCount: number): string {
   return JSON.stringify({
     task: "Generate content for theme pages",
     topic: topic.title,
@@ -122,7 +128,8 @@ function buildPrompt(topic: Topic, niche: Niche, pages: Page[]): string {
     platforms: [...new Set(pages.map((page) => page.platform))],
     requirements: {
       reelScripts: "exactly 2 scripts, 30-45 seconds each, with hook/script/cta",
-      carousel: "exactly 8 slides: hook, slides 2-6 value, slide 7 summary, slide 8 CTA",
+      // Count comes from the page's preference rather than being hardcoded.
+      carousel: `exactly ${slideCount} slides: slide 1 hook, middle slides deliver value, second-to-last summarises, last is the CTA`,
       captions: "platform-specific for instagram and youtube_shorts",
       hashtags: "exactly 10 relevant hashtags",
       // Per-page voice, chosen in the create-page wizard and stored in
@@ -146,7 +153,7 @@ function buildPrompt(topic: Topic, niche: Niche, pages: Page[]): string {
   });
 }
 
-function normalizeGeneratedContent(input: any, topic: Topic, niche: Niche, pages: Page[]): GeneratedContent {
+function normalizeGeneratedContent(input: any, topic: Topic, niche: Niche, pages: Page[], slideCount: number): GeneratedContent {
   const fallback = fallbackContent(topic, niche, pages);
   const reelScripts = Array.isArray(input.reelScripts) ? input.reelScripts.slice(0, 2) : fallback.reelScripts;
   const scoredScripts = reelScripts.map((script: any, index: number) => {
@@ -164,7 +171,9 @@ function normalizeGeneratedContent(input: any, topic: Topic, niche: Niche, pages
 
   return {
     reelScripts: scoredScripts,
-    carousel: Array.isArray(input.carousel) && input.carousel.length === 8 ? input.carousel : fallback.carousel,
+    // Was `length === 8`, which discarded an otherwise good carousel and
+    // silently substituted generic fallback slides.
+    carousel: isAcceptableCarousel(input.carousel) ? input.carousel : fallback.carousel,
     captions: {
       instagram: String(input.captions?.instagram ?? fallback.captions.instagram),
       youtube_shorts: String(input.captions?.youtube_shorts ?? fallback.captions.youtube_shorts)

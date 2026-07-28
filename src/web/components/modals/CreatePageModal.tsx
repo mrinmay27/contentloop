@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 // bundles cleanly. Local copies are the convention for server config shapes
 // that would drag in server-only imports — this one wouldn't.
 import { CAPTION_TONES, DEFAULT_TONE } from '../../../domain/tone';
+import { DEFAULT_SLIDES, MIN_SLIDES, MAX_SLIDES, resolveSlideCount } from '../../../domain/slideCount';
 import type { CaptionTone } from '../../../domain/tone';
 import { NICHE_PRESETS } from '../../../domain/nichePresets';
 import { suggestPageNames } from '../../../domain/pageNames';
@@ -41,6 +42,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
   const [selectedName, setSelectedName]   = useState<string|null>(null);
   const [primaryColor, setPrimaryColor]   = useState('#F5A623');
   const [captionTone, setCaptionTone]     = useState<CaptionTone>(DEFAULT_TONE);
+  const [slideCount, setSlideCount]       = useState<number>(DEFAULT_SLIDES);
   const [logoDataUrl, setLogoDataUrl]     = useState<string|null>(null);
   const [logoName, setLogoName]           = useState('');
   const [logoError, setLogoError]         = useState<string|null>(null);
@@ -143,7 +145,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
       const { page } = await api.createPage({
         nicheId: niche.id,
         name: selectedName!,
-        brand: { accent: primaryColor, tone: captionTone },
+        brand: { accent: primaryColor, tone: captionTone, slideCount },
       });
 
       // Logo needs the page id, so it can only be uploaded after creation.
@@ -400,6 +402,18 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
                 </div>
                 <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:8 }}>
                   Sets the voice ContentLoop writes captions and scripts in. You can change it later.
+                </div>
+              </div>
+              <div>
+                <div className="section-label" style={{ marginBottom:8 }}>Carousel Length</div>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <input type="number" min={MIN_SLIDES} max={MAX_SLIDES} value={slideCount}
+                    onChange={e => setSlideCount(resolveSlideCount({ contentOverride: Number(e.target.value) }))}
+                    style={{ width:80 }}/>
+                  <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                    slides per carousel ({MIN_SLIDES}–{MAX_SLIDES}). Instagram allows 10;
+                    you can override this on any individual post.
+                  </span>
                 </div>
               </div>
             </div>
