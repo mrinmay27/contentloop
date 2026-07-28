@@ -15,6 +15,7 @@ type Props = {
   busy: string | null;
   onOpenEditor: (t: Topic) => void;
   onRunJob: (job: string) => void;
+  onAddTopic: () => void;
 };
 
 const TABS = [
@@ -298,7 +299,7 @@ function FilterDropdown({
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOpenEditor, onRunJob }) => {
+export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOpenEditor, onRunJob , onAddTopic}) => {
   const [pipelineStep, setPipelineStep]     = useState('review');
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [localTopics, setLocalTopics]       = useState<Topic[]>(topics);
@@ -473,10 +474,22 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
               )}
             </div>
 
-            <button className="btn btn-primary btn-sm" disabled={!!busy}
-              onClick={() => onRunJob('ingest')}>
-              <Icon name="send" size={12}/> Run Pipeline
+            {/* Adding a topic by hand belongs here, not only on Pipeline and
+                Inbox — Topics is where you look for your topics. It is also
+                the ONLY way in for a manual page, whose Pipeline nav is
+                hidden. */}
+            <button className="btn btn-surface btn-sm" onClick={onAddTopic}>
+              <Icon name="plus" size={12}/> Add Topic
             </button>
+
+            {/* Running the pipeline does nothing for a manual page, so offering
+                it would be a button that silently no-ops. */}
+            {page.discovery !== 'manual' && (
+              <button className="btn btn-primary btn-sm" disabled={!!busy}
+                onClick={() => onRunJob('ingest')}>
+                <Icon name="send" size={12}/> Run Pipeline
+              </button>
+            )}
           </div>
         </div>
 

@@ -86,7 +86,11 @@ async function listDrafts(): Promise<InboxDraft[]> {
      FROM content_items c
      JOIN pages p ON p.id = c.page_id
      JOIN topics t ON t.id = c.topic_id
-     WHERE c.status = 'qa_passed'
+     -- 'draft' as well as 'qa_passed': qa_passed is set by the generate job,
+     -- which never runs for a manual page, so a hand-added topic would never
+     -- reach the one screen meant to show what needs you. A draft someone
+     -- opened and has not approved genuinely needs them in both modes.
+     WHERE c.status IN ('qa_passed', 'draft')
      ORDER BY c.created_at ASC
      LIMIT 25`
   );

@@ -249,7 +249,8 @@ function App() {
               )}
               {activeNav==='dashboard' && (
                 <DashboardView page={currentPage} topics={topics} stats={stats}
-                  busy={busy} onOpenEditor={openEditor} onRunJob={runJob}/>
+                  busy={busy} onOpenEditor={openEditor} onRunJob={runJob}
+                  onAddTopic={() => setShowAddTopic(true)}/>
               )}
               {activeNav==='pipeline' && (
                 <PipelineView topics={topics} stats={stats} busy={busy} page={currentPage}
