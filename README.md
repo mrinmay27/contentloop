@@ -7,13 +7,14 @@
 
 <p align="center">
   <em>Discover → score → draft → publish → <strong>learn</strong> → repeat.</em><br>
-  A self-hosted content engine for theme pages that gets smarter from your own results.
+  A self-hosted content engine for theme pages that gets smarter from your own results.<br>
+  <em>Or skip discovery entirely and use it as a video editor, scheduler and publisher.</em>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-brightgreen">
-  <img alt="tests" src="https://img.shields.io/badge/tests-159%20passing-brightgreen">
+  <img alt="tests" src="https://img.shields.io/badge/tests-349%20passing-brightgreen">
 </p>
 
 ContentLoop is a self-hosted content-operations tool for running "theme page" social
@@ -24,6 +25,11 @@ deterministic fallback if you don't have one), and learns from what actually
 performs — but nothing goes out the door without you approving it first.
 
 **Pipeline:** ingest → score → generate → QA → **you approve** → publish → learn
+
+**Or don't use the pipeline at all.** Set a page to *manual* and ContentLoop
+stops looking for topics — you add them yourself and use it purely as an
+editor, scheduler and publisher. Per page, so one page can be manual while
+another stays automatic. Everything downstream is identical either way.
 
 ## Get started (no terminal needed)
 
@@ -60,14 +66,44 @@ later launches take seconds.
 Nothing to install — no Docker, no Node.js, no database. ContentLoop bundles
 its own Postgres and runs entirely on your machine.
 
-AI features (writing captions, matching sources to your niche) need a free API
-key from Groq or Google AI Studio, which you paste into **Settings** after the
-app opens. Without a key everything still runs — discovery, scoring, scheduling
-and previews all work, with simpler generated text.
+AI features (writing captions and scripts, matching sources to your niche) need
+a free API key from Groq or Google AI Studio, which you paste into **Settings**
+after the app opens. Without a key everything still runs — discovery, scoring,
+scheduling, video and publishing all work, with simpler generated text. In
+manual mode you can run with no key at all.
 
 > **Tested on:** macOS (Apple Silicon). The Windows and Linux launchers are
 > built and installed by CI on those platforms, but have not been hand-tested
 > — please open an issue if something breaks.
+
+---
+
+## Making video
+
+Four ways to put video in a reel, all landing in the same place and rendered
+the same way:
+
+| Route | What it is | Needs |
+|---|---|---|
+| **Stock video** | Real Pexels footage behind your captions, searchable and pickable per slide, with photographer attribution | Free Pexels key |
+| **Your own footage** | Upload what you filmed; captions are transcribed with Whisper and burned in | Groq key for auto-captions, or type them |
+| **AI-generated** | Build a prompt, generate in Google AI Studio (Veo), Canva, Higgsfield, Runway or Luma on a subscription you already pay for, then drop the file back in | Your own subscription — no API cost |
+| **Canva** | Autofill a branded template, export, and use it as the whole reel or one slide's background | Canva account |
+
+Posts and carousels work the same way, with generated or pasted images and a
+configurable slide count.
+
+---
+
+## Publishing
+
+| Platform | Status |
+|---|---|
+| Instagram | Working — verified end to end |
+| YouTube Shorts | Built, but the upload itself is **not yet verified** — see the release notes |
+| LinkedIn, X, Reddit, Facebook | Not implemented |
+
+Nothing publishes without you approving it first, in either mode.
 
 ---
 
