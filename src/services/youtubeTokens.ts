@@ -86,3 +86,61 @@ export async function adoptLegacyToken(): Promise<void> {
     console.warn(`[youtube] could not adopt legacy token: ${err?.message}`);
   }
 }
+
+/**
+ * Return a usable access token, refreshing first if it is expired or close to
+ * it.
+ *
+ * Google access tokens last about an hour. The refresh token has been captured
+ * since OAuth was written and never used, which means a post scheduled for
+ * 21:00 on a channel connected at 09:00 has always failed.
+ */
+export async function ensureFreshToken(pageId: string): Promise<string> {
+  const row = await getToken(pageId);
+  if (!row) {
+    throw new Error("YouTube isn't connected for this page. Connect it in Settings.");
+  }
+  if (!needsRefresh(row.expiresAt)) return row.accessToken;
+
+  if (!row.refreshToken) {
+    throw new Error("YouTube access expired and cannot be renewed. Reconnect YouTube in Settings.");
+  }
+
+  const clientId = configStore.get("YOUTUBE_CLIENT_ID" as any) || process.env.YOUTUBE_CLIENT_ID || "";
+  const clientSecret = configStore.get("YOUTUBE_CLIENT_SECRET" as any) || process.env.YOUTUBE_CLIENT_SECRET || "";
+  if (!clientId || !clientSecret) {
+    throw new Error("YouTube client credentials are missing. Add them in Settings → YouTube.");
+  }
+
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: row.refreshToken,
+      grant_type: "refresh_token",
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  const body = await res.text();
+  if (!res.ok) {
+    // invalid_grant means the user revoked access. Name the fix rather than
+    // showing Google's payload — the publisher puts this text in front of them.
+    if (body.includes("invalid_grant")) {
+      throw new Error("YouTube access was revoked. Reconnect YouTube in Settings.");
+    }
+    throw new Error(`Could not refresh YouTube access (${res.status}).`);
+  }
+
+  const token = JSON.parse(body);
+  await saveToken(pageId, {
+    accessToken: token.access_token,
+    // Google omits refresh_token here; saveToken keeps the stored one.
+    refreshToken: token.refresh_token ?? null,
+    expiresAt: token.expires_in ? new Date(Date.now() + token.expires_in * 1000) : null,
+  });
+  console.log(`[youtube] refreshed access token for page ${pageId}`);
+  return token.access_token;
+}
