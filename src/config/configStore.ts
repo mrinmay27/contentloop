@@ -49,6 +49,7 @@ export type ConfigKey =
   | 'DEFAULT_FORMAT'
   | 'MAX_TOPICS_PER_SOURCE'
   | 'MAX_UPLOAD_MB'
+  | 'YOUTUBE_PRIVACY'
   | 'PEXELS_API_KEY'
   // Tuning (Sprint U1 Task 6) — JSON blobs consumed by applyAutomationOverrides()
   // / applySourceQualityOverrides() at boot; empty string = use code defaults.
@@ -110,6 +111,11 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
   // ── YouTube ───────────────────────────────────────────────────────────────
   YOUTUBE_API_KEY:       { label:'Data API Key',     group:'YouTube', type:'secret',
                            placeholder:'AIza…' },
+  // Defaults to private on purpose: a first upload going straight to a real
+  // audience is not a safe default — the user opts in.
+  YOUTUBE_PRIVACY:       { label:'Upload visibility', group:'YouTube', type:'select',
+                           options:['private','unlisted','public'],
+                           placeholder:'private' },
   YOUTUBE_CHANNEL_ID:    { label:'Channel ID',        group:'YouTube', type:'text',
                            placeholder:'UCxxxxxxxxxxxxxxxxxxxxxxxx' },
   YOUTUBE_CLIENT_ID:     { label:'OAuth Client ID',   group:'YouTube', type:'text',
@@ -184,6 +190,7 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
   DEFAULT_FORMAT:            'auto',
   MAX_TOPICS_PER_SOURCE:     '2',
   MAX_UPLOAD_MB:             '500',
+  YOUTUBE_PRIVACY:           'private',
   AUTOMATION_THRESHOLDS:     '',
   SOURCE_QUALITY_OVERRIDES:  '',
 };

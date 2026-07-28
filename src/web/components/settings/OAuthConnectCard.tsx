@@ -40,7 +40,7 @@ const PROVIDER_META: Record<OAuthProvider, {
     emoji:         '▶️',
     color:         '#FF0000',
     tagline:       'Upload Shorts and long-form videos to your YouTube channel',
-    cost:          'Free — YouTube Data API gives 10,000 units/day at no cost',
+    cost:          'Free — but the daily quota allows about 6 uploads per day',
     authPath:      '/auth/youtube',
     statusPath:    '/api/pages/:id/youtube/status',
     disconnectPath:'/api/pages/:id/youtube',

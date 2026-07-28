@@ -77,6 +77,23 @@ async function publishToInstagram(input: PublishJobInput): Promise<void> {
   await markPublished(input.jobId, postId, `https://www.instagram.com/p/${postId}/`);
 }
 
+async function publishToYouTube(input: PublishJobInput, dryRun: boolean): Promise<void> {
+  // The most likely failure by far, and it deserves a real sentence rather
+  // than an API error the user cannot act on.
+  if (!input.videoUrl) {
+    throw new Error("This reel has no rendered video yet — run the render job first.");
+  }
+  const { uploadShort } = await import("../youtube.js");
+  const result = await uploadShort({
+    pageId: input.pageId,
+    videoUrl: input.videoUrl,
+    hook: input.hook,
+    description: input.formattedCaption,
+    dryRun,
+  });
+  await markPublished(input.jobId, result.videoId, result.url);
+}
+
 async function publishStub(platform: string, input: PublishJobInput): Promise<void> {
   // Stub: marks as published with a fake ID so the UI shows success in dry-run/dev
   const fakeId = `stub-${platform}-${Date.now()}`;
@@ -89,6 +106,14 @@ export async function dispatchPublishJob(input: PublishJobInput, dryRun: boolean
   await markPublishing(input.jobId, dryRun);
   try {
     if (dryRun) {
+      // YouTube validates in dry-run rather than faking success: it checks the
+      // token refreshes, the file exists, and the clip is Shorts-eligible, so a
+      // passing dry run means a real run would work. A dry run that skips
+      // validation tells the user nothing.
+      if (input.platform === 'youtube_shorts') {
+        await publishToYouTube(input, true);
+        return;
+      }
       await publishStub(input.platform, input);
       return;
     }
@@ -98,10 +123,24 @@ export async function dispatchPublishJob(input: PublishJobInput, dryRun: boolean
       case 'twitter':   throw new Error('Twitter/X publishing — connect via Settings first');
       case 'reddit':    throw new Error('Reddit publishing — connect via Settings first');
       case 'facebook':  throw new Error('Facebook publishing — connect via Settings first');
-      case 'youtube_shorts': throw new Error('YouTube Shorts live publishing not implemented — dry-run only');
+      case 'youtube_shorts': return await publishToYouTube(input, dryRun);
       default:          throw new Error(`Unknown platform: ${input.platform}`);
     }
   } catch (err: any) {
+    // Quota exhaustion is not a real failure — the job should retry tomorrow
+    // rather than being treated as broken. Google's accounting is
+    // authoritative, so we react to its error instead of mirroring a counter
+    // locally, which would drift.
+    if (err?.name === 'QuotaExceededError') {
+      await query(
+        `UPDATE publish_jobs SET status='scheduled', error=$2,
+           scheduled_at = now() + interval '24 hours', updated_at=now()
+         WHERE id=$1`,
+        [input.jobId, err.message]
+      );
+      console.warn(`[publish] ${input.jobId}: ${err.message}`);
+      return;
+    }
     await markFailed(input.jobId, err?.message ?? 'Unknown error');
   }
 }
