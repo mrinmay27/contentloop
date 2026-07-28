@@ -1883,6 +1883,11 @@ app.post("/api/content/:id/publish", async (req, res, next) => {
           platform:         platform as any,
           formattedCaption,
           imageUrls:        images,
+          // ci is SELECT c.*, so video_url is already loaded — it just was
+          // never passed on. This is a THIRD publish path, built inline rather
+          // than through buildPublishJobInput, so grepping for that helper
+          // would have missed it. The compiler caught it.
+          videoUrl:         ci.video_url ?? null,
           hook,
         };
         dispatchPublishJob(jobInput, env.POSTING_DRY_RUN).catch(() => {});
@@ -1918,7 +1923,8 @@ app.patch("/api/publish-jobs/:id", async (req, res, next) => {
     }
     if (body.action === 'publish-now') {
       const { rows } = await query<any>(
-        `SELECT pj.id, pj.content_item_id, pj.page_id, pj.platform, pj.formatted_caption, pj.status, c.payload
+        `SELECT pj.id, pj.content_item_id, pj.page_id, pj.platform, pj.formatted_caption, pj.status,
+                c.payload, c.video_url
          FROM publish_jobs pj
          JOIN content_items c ON c.id = pj.content_item_id
          WHERE pj.id = $1`,

@@ -9,6 +9,8 @@ export interface PublishJobInput {
   platform:         PublishPlatform;
   formattedCaption: string;
   imageUrls:        string[];   // first image used for single-image posts
+  /** Rendered MP4 for video platforms. Null until the render job has run. */
+  videoUrl:         string | null;
   hook:             string;     // used as Reddit title
 }
 
@@ -108,7 +110,7 @@ export async function dispatchPublishJob(input: PublishJobInput, dryRun: boolean
 export function buildPublishJobInput(job: {
   id: string; content_item_id: string; page_id: string;
   platform: string; formatted_caption: string | null;
-  payload: any;
+  payload: any; video_url?: string | null;
 }): PublishJobInput {
   const payload = job.payload ?? {};
   const images: string[] = (payload.images ?? [])
@@ -121,6 +123,7 @@ export function buildPublishJobInput(job: {
     platform: job.platform as PublishPlatform,
     formattedCaption: job.formatted_caption ?? "",
     imageUrls: images,
+    videoUrl: job.video_url ?? null,
     hook: payload.hook ?? "",
   };
 }
@@ -151,15 +154,21 @@ export async function publishDueJobs(dryRun: boolean): Promise<number> {
   );
   if (claimed.length === 0) return 0;
 
+  // video_url too — without it the publisher cannot reach the rendered MP4.
   const { rows: payloadRows } = await query<any>(
-    `SELECT id, payload FROM content_items WHERE id = ANY($1::uuid[])`,
+    `SELECT id, payload, video_url FROM content_items WHERE id = ANY($1::uuid[])`,
     [claimed.map((j: any) => j.content_item_id)]
   );
-  const payloads = new Map(payloadRows.map((r: any) => [r.id, r.payload]));
+  const contentById = new Map(payloadRows.map((r: any) => [r.id, r]));
 
   for (const job of claimed) {
+    const content = contentById.get(job.content_item_id);
     await dispatchPublishJob(
-      buildPublishJobInput({ ...job, payload: payloads.get(job.content_item_id) }),
+      buildPublishJobInput({
+        ...job,
+        payload: content?.payload,
+        video_url: content?.video_url ?? null,
+      }),
       dryRun
     );
   }
