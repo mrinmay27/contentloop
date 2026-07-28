@@ -94,8 +94,22 @@ carousel length, pre-filled from that first-run answer. This is what makes the
 user's case work: pick manual at first run, then create a second page and set
 it to automatic, and discovery runs for that page's niche only.
 
-Changeable afterwards from **Settings → Pipeline**, per page. The control must
-state what changes, not merely its name.
+**3. Changeable at any time** from **Settings → Sources**, which is already
+per-page (it has a page selector and reads `pages.brand` through
+`getBranding`/`patchBranding` — the exact record `discovery` lives in, so no
+new plumbing). It is also the panel about *where topics come from*, which puts
+the switch directly above the thing it governs:
+
+> **Topic discovery** ( ) Automatic  (•) Manual
+> Manual means ContentLoop won't look for topics for this page — you add them
+> with **+**. The sources below stay saved and resume if you switch back.
+
+When set to manual, the source list below renders visibly inactive rather than
+hidden, so it is obvious the settings are retained rather than lost. Switching
+back resumes on the next run with no restart, because the value is read from
+`pages.brand` on each run.
+
+The control must state what changes, not merely its name.
 
 ## Honest empty states
 
