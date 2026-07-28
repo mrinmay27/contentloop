@@ -1566,28 +1566,34 @@ app.get("/auth/youtube/callback", async (req, res, next) => {
     if (!tokenRes.ok) throw new Error(`Google token exchange failed: ${await tokenRes.text()}`);
     const token: any = await tokenRes.json();
 
-    // Store token in config (simple approach — could move to DB like instagram)
-    configStore.set({
-      YOUTUBE_ACCESS_TOKEN:  token.access_token,
-      YOUTUBE_REFRESH_TOKEN: token.refresh_token ?? '',
-      YOUTUBE_PAGE_ID:       entry.pageId,
-    } as any);
+    // Per page, like instagram and canva. A single global slot meant a second
+    // page silently overwrote the first page's channel.
+    const { saveToken } = await import("../services/youtubeTokens.js");
+    await saveToken(entry.pageId, {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token ?? null,
+      expiresAt: token.expires_in ? new Date(Date.now() + token.expires_in * 1000) : null,
+      scope: token.scope ?? null,
+    });
     res.redirect(`/?youtube=connected&pageId=${entry.pageId}`);
   } catch (error) { next(error); }
 });
 
-// YouTube status (simple: check if we have an access token)
-app.get("/api/pages/:id/youtube/status", (req, res) => {
-  const token   = configStore.get('YOUTUBE_ACCESS_TOKEN' as any);
-  const pageId  = configStore.get('YOUTUBE_PAGE_ID' as any);
-  const connected = !!(token && pageId === req.params.id);
-  res.json({ connected });
+// YouTube status — per page, so two pages report independently.
+app.get("/api/pages/:id/youtube/status", async (req, res, next) => {
+  try {
+    const { getToken } = await import("../services/youtubeTokens.js");
+    res.json({ connected: !!(await getToken(req.params.id)) });
+  } catch (err) { next(err); }
 });
 
-// YouTube disconnect
-app.delete("/api/pages/:id/youtube", (req, res) => {
-  configStore.set({ YOUTUBE_ACCESS_TOKEN: '', YOUTUBE_REFRESH_TOKEN: '', YOUTUBE_PAGE_ID: '' } as any);
-  res.json({ ok: true });
+// YouTube disconnect — this page only, never every page at once.
+app.delete("/api/pages/:id/youtube", async (req, res, next) => {
+  try {
+    const { deleteToken } = await import("../services/youtubeTokens.js");
+    await deleteToken(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // ─── Canva design endpoints ──────────────────────────────────────────────────
@@ -2028,6 +2034,14 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _nextFunc
 // usually no API_TOKEN — binding all interfaces would expose the API (and the
 // config routes that hold LLM keys) to the whole LAN. Server mode keeps
 // 0.0.0.0 because Docker/reverse-proxy owns that boundary.
+// Move any pre-existing global YouTube token into the per-page table. Runs
+// after migrations (desktop imports this module only once they have applied)
+// and must never stop boot — an install that had YouTube connected should not
+// be silently disconnected, but a failure here is not fatal either.
+import("../services/youtubeTokens.js")
+  .then(({ adoptLegacyToken }) => adoptLegacyToken())
+  .catch((err) => console.warn(`[youtube] token adoption skipped: ${err?.message}`));
+
 app.listen(env.PORT, isDesktop() ? "127.0.0.1" : "0.0.0.0", () => {
   console.log(`API listening on http://localhost:${env.PORT}`);
 });
