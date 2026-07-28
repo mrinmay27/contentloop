@@ -195,7 +195,13 @@ export async function media(): Promise<void> {
       // 1. Synthesize TTS audio from the reel script
       const nicheCategory = reel.niche_name?.toLowerCase() ?? 'default';
       const voice = resolveVoice(undefined, nicheCategory, env.TTS_VOICE);
+      // Two different needs from the same content: TTS wants flowing prose,
+      // the slide split wants structure. Joining with ". " served the first
+      // and broke the second — parseReelScript saw no boundaries and returned
+      // a single slide holding the whole script.
       const scriptText = `${payload.reel.hook}. ${payload.reel.script}. ${payload.reel.cta}`;
+      const slideScript = [payload.reel.hook, payload.reel.script, payload.reel.cta]
+        .filter(Boolean).join('\n\n');
 
       const ttsResult = await synthesizeReelAudio(reel.id, scriptText, nicheCategory, {
         voice,
@@ -218,7 +224,7 @@ export async function media(): Promise<void> {
 
       // 2. Source stock footage backgrounds (if Pexels key available)
       const keywords = reel.keywords ?? [];
-      const slides = parseReelScript(scriptText);
+      const slides = parseReelScript(slideScript);
       const footage = await sourceReelBackgrounds(reel.id, keywords, slides.length);
 
       if (footage.length > 0) {
@@ -271,8 +277,11 @@ export async function render(): Promise<void> {
       }
 
       await updateContentVideo(reel.id, null, 'rendering');
-      const scriptText = `${payload?.reel?.hook ?? ''}. ${payload?.reel?.script ?? ''}. ${payload?.reel?.cta ?? ''}`;
-      const slides = parseReelScript(scriptText);
+      // Blank-line separated so each section becomes its own slide; joining
+      // with ". " collapsed every generated reel into one slide.
+      const slideScript = [payload?.reel?.hook, payload?.reel?.script, payload?.reel?.cta]
+        .filter(Boolean).join('\n\n');
+      const slides = parseReelScript(slideScript);
 
       // Resolve background media from footage_urls, keeping the kind so video
       // renders as video instead of being treated as a still. This mapping

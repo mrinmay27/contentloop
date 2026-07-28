@@ -601,7 +601,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
                 <span style={{ fontWeight:400, fontSize:10, color:'var(--text-muted)' }}>
                   {(() => {
                     const n = parseReelScript(reelScript).filter(x => x !== 'No script yet').length;
-                    return `${n} slide${n === 1 ? '' : 's'} · ~${n * 3}s — blank line starts a new slide`;
+                    return `${n} slide${n === 1 ? '' : 's'} · ~${n * 3}s — a blank line or Hook:/Body:/CTA: starts a new slide`;
                   })()}
                 </span>
               </div>
