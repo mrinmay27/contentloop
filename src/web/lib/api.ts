@@ -7,7 +7,17 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const token = localStorage.getItem('contentloop_token') ?? localStorage.getItem('tpce_token');
   const headers: Record<string, string> = { ...(opts?.headers as Record<string, string> | undefined) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`/api${path}`, { ...opts, headers });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { ...opts, headers });
+  } catch {
+    // fetch() rejects with a bare TypeError('Failed to fetch') when the
+    // request never reached the server — app closed, machine asleep, restarted
+    // mid-request. Surfacing that verbatim tells a user nothing and looks like
+    // a bug in whatever they were doing, so every caller gets a sentence they
+    // can act on instead.
+    throw new Error("Can't reach ContentLoop — check the app is still running, then try again.");
+  }
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
