@@ -37,50 +37,65 @@ into manual.
 ran, LLM calls would burn quietly in the background for content nobody sees —
 worse than the current behaviour, not better.
 
-## The switch
+## The switch — per page, not global
 
-A single config key, `TOPIC_DISCOVERY`, values `auto` (default) or `manual`.
+**Revised 2026-07-28 after the user asked the obvious question:** if the mode
+is global and I choose manual, what happens when I later add a page I *do*
+want automated?
 
-**Global, not per page.** Ingestion loops niches, and a niche can back several
-pages, so a per-page flag has no clean meaning at the point the job runs.
-Global matches the target user — one creator, self-hosting, one or two pages.
-A per-page override can come later if multi-page users ask; guessing at it now
-would add branching to every job for a case nobody has reported.
+The first draft punted on per-page, reasoning it would add branching to every
+job. Reading the code shows that was wrong:
+
+- `ingest()` already loops niches and already calls `listPages(niche.id)`.
+  Skipping a niche whose pages all want manual is a two-line change at a
+  boundary that exists.
+- `score()` selects `WHERE state = 'IDEA'`. Manual topics are created as
+  CONTENT_READY and skip scoring entirely, and a manual niche ingests nothing —
+  so there are no IDEA topics from it. **`score` needs no gate.**
+- `generate()` works from selected topics, of which a manual niche has none.
+  **`generate` needs no gate either.**
+
+So per-page is *simpler* than the global switch I first specced, not harder:
+**one gate, in `ingest`, instead of three.**
+
+`pages.brand.discovery` — `'auto'` (default) or `'manual'` — stored alongside
+`tone` and `slideCount`, which already live there. No migration.
+
+A niche is ingested when **any** page under it wants discovery. A niche backing
+both an automated and a manual page still ingests; the manual page simply is
+not where those topics are worked. That is the correct reading of "any page
+wants this", and it avoids one page silently starving another.
 
 ### Where the gate goes
 
-**Inside the job bodies in `jobs.ts`, not in the schedulers.** Two runners
-invoke jobs — `inProcessRunner` (desktop) and the BullMQ `Worker`
-(server) — and both call `JOBS[name]()`. Gating at the job body means one
-change covers both, with no way for one path to be missed. Gating in the
-runners would need two edits kept in sync forever.
+Inside `ingest()` in `jobs.ts`, not in the schedulers. Two runners invoke jobs
+(`inProcessRunner` for desktop, the BullMQ `Worker` for server) and both call
+`JOBS[name]()`, so gating at the job body covers both with no chance of one
+path drifting from the other.
 
-Gated: `ingest`, `score`, `generate`.
-Not gated: `media`, `render`, `schedule`, `post`, `analyze` — those serve
-content the user created by hand and must keep working.
-
-Each gated job returns early with one clear log line
-(`[ingest] skipped — topic discovery is set to manual`), so a puzzled user
-grepping logs finds the reason rather than silence.
+The skip logs one clear line per niche
+(`[ingest] skipping "AI Tools" — all its pages are set to manual`), so a
+puzzled user grepping logs finds the reason rather than silence.
 
 ## Being asked, not defaulted
 
-The question appears **once, on the welcome screen** — the first-run state
-introduced when the empty-install dead end was fixed:
+Asked **twice, at the two moments it means something**:
+
+**1. First run**, on the welcome screen — this sets the default for pages
+created afterwards:
 
 > **Where do your topics come from?**
 > **○ Find them for me** *(recommended)* — ContentLoop watches your sources,
 >   scores what's worth writing about, and drafts it. You approve.
-> **○ I'll add them myself** — just the editor, scheduler and publisher. Add
->   topics with the + button whenever you have an idea.
+> **○ I'll add them myself** — just the editor, scheduler and publisher.
 
-Placed on the welcome screen rather than in the create-page wizard, because it
-is an app-level mode, not a property of a page. Putting it in the wizard would
-imply per-page behaviour the implementation does not have.
+**2. Per page**, in the create-page wizard's Branding step beside tone and
+carousel length, pre-filled from that first-run answer. This is what makes the
+user's case work: pick manual at first run, then create a second page and set
+it to automatic, and discovery runs for that page's niche only.
 
-Always reversible, from **Settings → Pipeline → Topic discovery**, so a manual
-user can graduate once they trust the automated path. The setting must state
-what changes, not just its name.
+Changeable afterwards from **Settings → Pipeline**, per page. The control must
+state what changes, not merely its name.
 
 ## Honest empty states
 
@@ -105,11 +120,23 @@ scheduling, publishing, and — importantly — **the learning loop**. It feeds 
 published performance, not on ingestion, so a manual creator still accumulates
 format and keyword learning. The differentiator survives the switch.
 
-They also need **no API key at all** unless they want AI-written captions.
+**AI stays fully available, and this distinction matters.** Manual mode turns
+off *unattended discovery*, not AI assistance. Everything on-demand keeps
+working and stays visible:
+
+- "Generate via connected LLM" for scripts and captions in the editor
+- The subscription bridges (ChatGPT/Gemini for text, Veo/Canva/Runway for video)
+- Whisper transcription for uploaded footage
+- Settings → AI / LLM, unchanged and reachable
+
+A manual creator can run with **no key at all**, or add one purely to write
+captions for topics they chose themselves. Hiding AI settings in manual mode
+would be a misreading of what the mode is for.
 
 ## Non-goals
 
-- Per-page discovery settings (revisit only if multi-page users ask).
+- A global kill switch separate from the per-page setting. Per page is
+  sufficient and there is no case for both.
 - Removing or hiding the "+ Add" flow in auto mode — both coexist today and
   should continue to.
 - Deleting already-ingested topics when switching to manual. Switching changes
@@ -119,26 +146,29 @@ They also need **no API key at all** unless they want AI-written captions.
 
 ## Testing
 
-- **Pure/unit (vitest):** the mode resolver (`resolveDiscoveryMode`) including
-  an unknown stored value falling back to `auto` rather than silently
-  disabling the pipeline, and `shouldRunJob(job, mode)` covering which jobs are
-  gated.
-- **Live, this machine:** with `TOPIC_DISCOVERY=manual`, launch a fresh
-  instance and confirm the catch-up pass logs the skip for ingest/score/
-  generate, that no topics appear, that `post`/`schedule` still run, and that a
-  manually added topic still reaches the editor and can be scheduled.
-- Flipping back to `auto` must resume discovery on the next run with no
-  restart required (configStore already writes through without one).
+- **Pure/unit (vitest):** `resolveDiscoveryMode(brand)` — unknown or missing
+  values fall back to `auto`, never silently disabling the pipeline — and
+  `shouldIngestNiche(pages)`, covering: no pages, all manual, all auto, and the
+  mixed case where one automated page keeps the niche ingesting.
+- **Live, this machine:** create two pages on different niches, one manual and
+  one automatic, then run `ingest` and confirm it skips the manual niche by
+  name, ingests the automatic one, and that `post`/`schedule` still run for
+  both. Then add a topic by hand to the manual page and confirm it reaches the
+  editor and can be scheduled and published.
+- Flipping a page back to automatic must resume discovery on the next run with
+  no restart — the setting lives in `pages.brand`, which is read per run.
 
 ## Order
 
 ```
-1. resolveDiscoveryMode + shouldRunJob (pure, tested)
-2. Gate the three job bodies + config key
-3. Welcome-screen question + Settings toggle
-4. Honest empty states; hide Pipeline nav in manual mode
-5. Live verification both ways
+1. resolveDiscoveryMode + shouldIngestNiche (pure, tested)
+2. Gate ingest() only — score/generate need no change
+3. First-run question + per-page control in the wizard + Settings
+4. Honest empty states; hide Pipeline nav for a manual page
+5. Live verification: manual page ingests nothing, automatic page still does,
+   and a mixed niche keeps working
 ```
 
-Steps 1–2 are the substance: without them the switch is cosmetic. Steps 3–4
-are what stop it being another capability nobody can find.
+Steps 1–2 are the substance. Steps 3–4 are what stop it being another
+capability nobody can find. Step 5's mixed case is the one most likely to
+break and the one the user actually asked about.
