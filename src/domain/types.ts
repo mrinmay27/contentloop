@@ -1,4 +1,5 @@
 import type { CaptionTone } from "./tone.js";
+import type { DiscoveryMode } from "./discovery.js";
 
 export type QueueState =
   | "IDEA"
@@ -66,6 +67,9 @@ export interface Page {
     /** Preferred carousel length for this page. Optional — unset falls back
      *  to DEFAULT_SLIDES. */
     slideCount?: number;
+    /** 'manual' stops ContentLoop looking for topics for this page. Unset
+     *  means automatic — see domain/discovery.ts. */
+    discovery?: DiscoveryMode;
   };
 }
 

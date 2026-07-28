@@ -51,10 +51,21 @@ try {
 } catch (err) { console.warn(`[config] invalid tuning overrides ignored: ${err}`); }
 
 export async function ingest(): Promise<void> {
+  const { shouldIngestNiche } = await import("../domain/discovery.js");
   const niches = await listNiches();
   for (const niche of niches) {
     // Pass first page ID so tag-generator cache is consulted (Task 2.0)
     const pages = await listPages(niche.id);
+
+    // Skip only when EVERY page under this niche is set to manual. Logged by
+    // name so someone wondering why nothing arrived finds the reason rather
+    // than silence. score/generate need no equivalent gate: a manual niche
+    // produces no IDEA topics, so they already do nothing for it.
+    if (!shouldIngestNiche(pages)) {
+      console.log(`[ingest] skipping "${niche.name}" — all its pages are set to manual`);
+      continue;
+    }
+
     const pageId = pages[0]?.id;
     const trends = await ingestForNiche(niche, pageId);
     for (const trend of trends) {
