@@ -36,6 +36,7 @@ function mapApiPage(p: any): ThemePage {
     accent:   brand.accent ?? '#F59E0B',
     posts:    0,
     followers: '—',
+    discovery: brand.discovery === 'manual' ? 'manual' : 'auto',
   };
 }
 
@@ -150,6 +151,13 @@ function App() {
   };
 
   const currentPage = pages.find(p => p.id===activePage) ?? pages[0];
+  const pipelineHidden = currentPage?.discovery === 'manual';
+
+  // Switching to a manual page while sitting on Pipeline would leave the user
+  // on a view that is no longer reachable from the nav.
+  useEffect(() => {
+    if (pipelineHidden && activeNav === 'pipeline') setActiveNav('inbox');
+  }, [pipelineHidden, activeNav]);
 
   const startupView = resolveStartupView({ status: startupStatus, pageCount: pages.length });
 
@@ -218,6 +226,7 @@ function App() {
 
       <div id="app-shell" style={{ display:'flex', flex:1, overflow:'hidden' }}>
         <Sidebar
+          pipelineVisible={!pipelineHidden}
           activeNav={activeNav} setActiveNav={nav => { closeEditor(); setActiveNav(nav); }}
           activePage={activePage} setActivePage={setActivePage}
           pages={pages} onNewPage={() => setShowCreate(true)}

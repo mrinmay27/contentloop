@@ -11,6 +11,8 @@ export type ThemePage = {
   accent: string;
   posts: number;
   followers: string;
+  /** 'manual' means ContentLoop doesn't look for topics for this page. */
+  discovery?: 'auto' | 'manual';
 };
 
 export type SuggestedFormat = 'post' | 'carousel' | 'reel';

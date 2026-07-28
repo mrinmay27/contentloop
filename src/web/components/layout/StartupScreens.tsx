@@ -51,7 +51,20 @@ export const ErrorScreen: React.FC<{ message: string | null; onRetry: () => void
  * First-run state: the API answered, there are simply no theme pages yet.
  * This is every new user's first screen, so it has exactly one action.
  */
-export const WelcomeScreen: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
+/** Remembered as the default for the next page created. A UI preference, not
+ *  server state — the authoritative value lives on each page's brand record. */
+export const DISCOVERY_DEFAULT_KEY = 'contentloop_discovery_default';
+
+export const WelcomeScreen: React.FC<{ onCreate: () => void }> = ({ onCreate }) => {
+  const [mode, setMode] = React.useState<'auto' | 'manual'>(
+    () => (localStorage.getItem(DISCOVERY_DEFAULT_KEY) === 'manual' ? 'manual' : 'auto')
+  );
+  const choose = (next: 'auto' | 'manual') => {
+    setMode(next);
+    localStorage.setItem(DISCOVERY_DEFAULT_KEY, next);
+  };
+
+  return (
   <div style={shell}>
     <img src="/mark.png" alt="" width={56} height={56}/>
     <div style={{ fontSize: 21, fontWeight: 700, marginTop: 2 }}>Welcome to ContentLoop</div>
@@ -63,9 +76,39 @@ export const WelcomeScreen: React.FC<{ onCreate: () => void }> = ({ onCreate }) 
     <button className="btn btn-primary" onClick={onCreate} style={{ marginTop: 6 }}>
       Create your first theme page
     </button>
-    <div style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.75, marginTop: 10, maxWidth: 420, lineHeight: 1.6 }}>
+    <div style={{ marginTop: 22, maxWidth: 520, width: '100%' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+        Where do your topics come from?
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {([
+          ['auto', 'Find them for me', 'ContentLoop watches your sources, scores what’s worth writing about, and drafts it. You approve.'],
+          ['manual', 'I’ll add them myself', 'Just the editor, scheduler and publisher. Add topics with + whenever you have an idea.'],
+        ] as const).map(([id, label, blurb]) => (
+          <button key={id} onClick={() => choose(id)}
+            style={{
+              flex: 1, textAlign: 'left', cursor: 'pointer', padding: '10px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: `1px solid ${mode === id ? 'var(--accent)' : 'var(--border)'}`,
+              background: mode === id ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+            }}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>
+              {label}{id === 'auto' && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> · recommended</span>}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.45 }}>{blurb}</div>
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>
+        You can change this per page at any time in Settings → Sources.
+      </div>
+    </div>
+
+    <div style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.75, marginTop: 16, maxWidth: 420, lineHeight: 1.6 }}>
       Everything runs on your computer. You can add AI keys later in Settings —
       ContentLoop works without them.
     </div>
   </div>
-);
+  );
+};

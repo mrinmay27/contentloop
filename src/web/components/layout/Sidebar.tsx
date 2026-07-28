@@ -13,6 +13,9 @@ type SidebarProps = {
   onNewPage: () => void;
   theme: 'light' | 'dark';
   setTheme: (t: 'light' | 'dark') => void;
+  /** Hidden for a manual page — those stages never run, and a Run button that
+   *  silently does nothing is worse than no button. */
+  pipelineVisible?: boolean;
 };
 
 const NAV_ITEMS: { key: NavKey; icon: any; label: string; kbd: string }[] = [
@@ -25,7 +28,8 @@ const NAV_ITEMS: { key: NavKey; icon: any; label: string; kbd: string }[] = [
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  activeNav, setActiveNav, activePage, setActivePage, pages, onNewPage, theme, setTheme
+  activeNav, setActiveNav, activePage, setActivePage, pages, onNewPage, theme, setTheme,
+  pipelineVisible = true,
 }) => (
   <div className="sidebar">
     <div className="sidebar-logo">
@@ -37,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </div>
 
     <nav className="sidebar-nav">
-      {NAV_ITEMS.map(item => (
+      {NAV_ITEMS.filter(item => item.key !== 'pipeline' || pipelineVisible).map(item => (
         <div
           key={item.key}
           className={`nav-item ${activeNav === item.key ? 'active' : ''}`}

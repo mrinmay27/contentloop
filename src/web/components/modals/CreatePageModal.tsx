@@ -43,6 +43,11 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
   const [primaryColor, setPrimaryColor]   = useState('#F5A623');
   const [captionTone, setCaptionTone]     = useState<CaptionTone>(DEFAULT_TONE);
   const [slideCount, setSlideCount]       = useState<number>(DEFAULT_SLIDES);
+  // Seeded from the first-run answer, but set per page — that is what lets a
+  // manual-by-default user create one automated page.
+  const [discovery, setDiscovery]         = useState<'auto'|'manual'>(
+    () => (localStorage.getItem('contentloop_discovery_default') === 'manual' ? 'manual' : 'auto')
+  );
   const [logoDataUrl, setLogoDataUrl]     = useState<string|null>(null);
   const [logoName, setLogoName]           = useState('');
   const [logoError, setLogoError]         = useState<string|null>(null);
@@ -145,7 +150,7 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
       const { page } = await api.createPage({
         nicheId: niche.id,
         name: selectedName!,
-        brand: { accent: primaryColor, tone: captionTone, slideCount },
+        brand: { accent: primaryColor, tone: captionTone, slideCount, discovery },
       });
 
       // Logo needs the page id, so it can only be uploaded after creation.
@@ -402,6 +407,22 @@ export const CreatePageModal: React.FC<Props> = ({ onClose, onCreate, onNotice }
                 </div>
                 <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:8 }}>
                   Sets the voice ContentLoop writes captions and scripts in. You can change it later.
+                </div>
+              </div>
+              <div>
+                <div className="section-label" style={{ marginBottom:8 }}>Topic Discovery</div>
+                <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+                  {(['auto','manual'] as const).map(mode => (
+                    <button key={mode} type="button" onClick={() => setDiscovery(mode)}
+                      className={`btn btn-sm ${discovery===mode?'btn-primary':'btn-ghost'}`}>
+                      {mode === 'auto' ? 'Find topics for me' : 'I’ll add them myself'}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize:11, color:'var(--text-muted)' }}>
+                  {discovery === 'manual'
+                    ? 'ContentLoop won’t look for topics for this page. Everything else — editor, scheduling, publishing, AI on demand — works the same.'
+                    : 'ContentLoop watches this niche’s sources and brings you topics to approve.'}
                 </div>
               </div>
               <div>

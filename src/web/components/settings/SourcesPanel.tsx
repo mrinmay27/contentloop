@@ -99,6 +99,22 @@ export const SourcesPanel: React.FC = () => {
     api.regenerateSources(pageId).then((d) => { setMap(d.map); setDirty(false); }).finally(() => setBusy(null));
   };
 
+  // Topic discovery for this page. Lives in pages.brand alongside tone and
+  // slideCount, which is why this panel can own it with no new plumbing.
+  const [discovery, setDiscovery] = useState<'auto' | 'manual'>('auto');
+
+  useEffect(() => {
+    if (!pageId) return;
+    api.getBranding(pageId)
+      .then(({ brand }) => setDiscovery(brand?.discovery === 'manual' ? 'manual' : 'auto'))
+      .catch(() => {});
+  }, [pageId]);
+
+  const saveDiscovery = (mode: 'auto' | 'manual') => {
+    setDiscovery(mode);
+    api.patchBranding(pageId, { discovery: mode }).catch(() => {});
+  };
+
   const handlePageChange = (nextId: string) => {
     // Controlled <select> — not calling setPageId leaves its displayed
     // value at the current pageId, so declining the confirm auto-reverts
@@ -154,6 +170,38 @@ export const SourcesPanel: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {PageSelector}
+
+      {/* The switch sits directly above what it governs. */}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Topic discovery</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          {(['auto', 'manual'] as const).map((mode) => (
+            <button key={mode} onClick={() => saveDiscovery(mode)}
+              style={{
+                fontSize: 11, padding: '4px 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                border: `1px solid ${discovery === mode ? 'var(--accent)' : 'var(--border)'}`,
+                background: discovery === mode ? 'var(--accent-dim)' : 'transparent',
+                color: 'var(--text-primary)',
+              }}>
+              {mode === 'auto' ? 'Automatic' : 'Manual'}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+          {discovery === 'manual'
+            ? <>ContentLoop won’t look for topics for this page — you add them with <b>+</b>.
+                The sources below stay saved and resume if you switch back.</>
+            : <>ContentLoop watches these sources and brings you topics to approve.</>}
+        </div>
+      </div>
+
+      {/* Inactive rather than hidden when manual, so it is obvious the
+          configuration is retained rather than discarded. */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 12,
+        opacity: discovery === 'manual' ? 0.45 : 1,
+        pointerEvents: discovery === 'manual' ? 'none' : 'auto',
+      }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           Sources for <b>{page?.name}</b> — toggle, tune, or add your own.
@@ -216,6 +264,7 @@ export const SourcesPanel: React.FC = () => {
           ))}
         </div>
       ))}
+      </div>
     </div>
   );
 };

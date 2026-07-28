@@ -664,7 +664,11 @@ export const DashboardView: React.FC<Props> = ({ page, topics, stats, busy, onOp
                             cursor:'pointer', fontSize:12, fontWeight:600 }}>
                           Clear filters to see all topics
                         </button>
-                      : 'Topics will appear here after pipeline processing'
+                      // A manual page has no pipeline, so promising one would
+                      // leave the user waiting for something that never comes.
+                      : page.discovery === 'manual'
+                        ? 'You haven’t added any topics yet — use + Add Topic to start one.'
+                        : 'Topics will appear here after pipeline processing'
                     }
                   </div>
                 </div>
