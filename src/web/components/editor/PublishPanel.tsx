@@ -24,7 +24,12 @@ function formatScheduledAt(iso: string): string {
 
 export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) => {
   const [platforms, setPlatforms] = useState<Record<string, PublishPlatformInfo>>({});
-  const [selected,  setSelected]  = useState<Set<string>>(new Set(['instagram']));
+  // Starts empty and fills in from what is actually connected. It used to
+  // default to 'instagram' unconditionally, so a page with only YouTube
+  // connected still opened reading "Publish Now (1 platform)" — that one being
+  // a platform the user could not tick, untick, or publish to.
+  const [selected,  setSelected]  = useState<Set<string>>(new Set());
+  const [open,      setOpen]      = useState(false);
   const [jobs,      setJobs]      = useState<PublishJob[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [scheduleMode, setScheduleMode] = useState(false);
@@ -35,7 +40,11 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
   // Load connected platforms
   useEffect(() => {
     api.getPublishPlatforms(pageId)
-      .then(({ platforms: p }) => setPlatforms(p))
+      .then(({ platforms: p }) => {
+        setPlatforms(p);
+        setSelected(prev => prev.size ? prev
+          : new Set(Object.entries(p).filter(([, i]) => i.connected).map(([k]) => k)));
+      })
       .catch(() => {});
   }, [pageId]);
 
@@ -58,6 +67,13 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
     loadJobs();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [loadJobs]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const toggle = (platform: string) => {
     setSelected(prev => {
@@ -94,31 +110,74 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
   const anySelected = selected.size > 0;
   const hasJobs = jobs.length > 0;
 
+  const latest = jobs[0];
+  const connectedCount = platformList.filter(([, i]) => i.connected).length;
+
   return (
-    <div style={{
-      marginTop: 16,
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-sm)',
-      background: 'var(--bg-elevated)',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '10px 14px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
-          🚀 Publish
-        </span>
-        {!approved && (
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-            Approve content first
-          </span>
-        )}
+    <div style={{ marginTop: 16 }}>
+      {/* Trigger. The panel used to sit open in the right rail, where it grew
+          with every platform added and pushed its own Publish button off the
+          bottom of the scroll. Everything now lives in a dialog, so the rail
+          holds one control at a fixed height and nothing can hide below it. */}
+      <button
+        className="btn btn-primary"
+        style={{ width: '100%', fontSize: 13, padding: '10px 12px' }}
+        disabled={!approved}
+        onClick={() => setOpen(true)}
+        title={approved ? 'Choose platforms and publish' : 'Approve the content first'}
+      >
+        🚀 Publish{connectedCount > 0 ? '' : ' — nothing connected'}
+      </button>
+
+      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 6, textAlign: 'center' }}>
+        {!approved
+          ? 'Approve the content to enable publishing'
+          : latest
+            ? `Last: ${(platforms[latest.platform]?.label ?? latest.platform)} — ${(STATUS_BADGE[latest.status] ?? STATUS_BADGE.failed).label}`
+            : connectedCount > 0
+              ? `${connectedCount} platform${connectedCount > 1 ? 's' : ''} connected`
+              : 'Connect a platform in Settings first'}
       </div>
 
-      <div style={{ padding: '12px 14px' }}>
+      {!open ? null : (
+      <div
+        role="dialog" aria-modal="true" aria-label="Publish"
+        onClick={() => setOpen(false)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}
+      >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: 'min(440px, 100%)', maxHeight: '85vh',
+          display: 'flex', flexDirection: 'column',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          background: 'var(--bg-elevated)',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+          overflow: 'hidden',
+        }}
+      >
+      {/* Header */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+          🚀 Publish
+        </span>
+        <button onClick={() => setOpen(false)} aria-label="Close"
+          style={{ background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+      </div>
+
+      {/* Body scrolls; the action below never does. */}
+      <div style={{ padding: '12px 16px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
         {/* Platform selector */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
@@ -193,30 +252,6 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
           </div>
         )}
 
-        {/* Publish button.
-            Sticks to the bottom of the scrolling rail: the platform list grows
-            with every provider, and this — the one action the whole panel
-            exists for — was landing below the fold with nothing to suggest
-            there was anything under it. */}
-        <div style={{
-          position: 'sticky', bottom: 0, zIndex: 2,
-          background: 'var(--bg-elevated)',
-          paddingTop: 8, marginTop: 4,
-        }}>
-        <button
-          className="btn btn-primary btn-sm"
-          style={{ width: '100%', fontSize: 12 }}
-          disabled={!approved || !anySelected || publishing || (scheduleMode && !scheduledAt)}
-          onClick={handlePublish}
-        >
-          {publishing
-            ? '⏳ Publishing…'
-            : scheduleMode && scheduledAt
-              ? `🗓 Schedule (${[...selected].length} platform${selected.size > 1 ? 's' : ''})`
-              : `🚀 Publish Now (${[...selected].length} platform${selected.size > 1 ? 's' : ''})`
-          }
-        </button>
-        </div>
 
         {/* Jobs history */}
         {hasJobs && (
@@ -266,6 +301,29 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
           </div>
         )}
       </div>
+
+      {/* Action, outside the scroll area so it is always on screen. */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+        <button
+          className="btn btn-primary"
+          style={{ width: '100%', fontSize: 12.5 }}
+          disabled={!approved || !anySelected || publishing || (scheduleMode && !scheduledAt)}
+          onClick={handlePublish}
+        >
+          {publishing
+            ? '⏳ Publishing…'
+            : !anySelected
+              ? 'Pick a platform'
+              : scheduleMode && scheduledAt
+                ? `🗓 Schedule (${[...selected].length} platform${selected.size > 1 ? 's' : ''})`
+                : `🚀 Publish Now (${[...selected].length} platform${selected.size > 1 ? 's' : ''})`
+          }
+        </button>
+      </div>
+
+      </div>
+      </div>
+      )}
     </div>
   );
 };
