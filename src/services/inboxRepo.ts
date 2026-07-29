@@ -223,7 +223,8 @@ async function listActivity(limit = 30): Promise<InboxActivityItem[]> {
 async function getDigest(): Promise<InboxPayload["digest"]> {
   const r = await query(
     `SELECT
-       (SELECT count(*)::int FROM publish_jobs WHERE published_at > now() - interval '24 hours') AS posted,
+       (SELECT count(*)::int FROM publish_jobs
+          WHERE published_at > now() - interval '24 hours' AND dry_run IS NOT TRUE) AS posted,
        (SELECT count(*)::int FROM automation_events WHERE created_at > now() - interval '24 hours') AS automation,
        (SELECT count(*)::int FROM topics WHERE decision IS NOT NULL AND created_at > now() - interval '24 hours') AS scored`
   );

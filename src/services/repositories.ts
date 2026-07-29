@@ -349,7 +349,11 @@ export async function dashboardStats(nicheId?: string, pageId?: string): Promise
           FROM publish_jobs WHERE status = 'scheduled' AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'posted', count(*)::int
-          FROM publish_jobs WHERE status = 'published' AND ($2::uuid IS NULL OR page_id = $2)
+          -- dry_run excluded: a dry run sends nothing, so counting it as a
+          -- post inflated this card above the Approved one and made the funnel
+          -- read Approved 1 → Posted 2.
+          FROM publish_jobs WHERE status = 'published' AND dry_run IS NOT TRUE
+            AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'topics_today', count(*)::int
           FROM topics WHERE created_at >= current_date AND ($1::uuid IS NULL OR niche_id = $1)
@@ -364,7 +368,8 @@ export async function dashboardStats(nicheId?: string, pageId?: string): Promise
           FROM content_items WHERE status = 'approved' AND updated_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'posted_today', count(*)::int
-          FROM publish_jobs WHERE status = 'published' AND published_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
+          FROM publish_jobs WHERE status = 'published' AND dry_run IS NOT TRUE
+            AND published_at >= current_date AND ($2::uuid IS NULL OR page_id = $2)
       `,
       [nicheId ?? null, pageId ?? null]
     ),
