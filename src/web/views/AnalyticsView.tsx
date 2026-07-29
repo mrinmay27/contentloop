@@ -31,7 +31,7 @@ type AnalyticsData = {
 type LearningData = {
   keywords: Array<{ label: string; score: number; sample_size: number }>;
   formats: Array<{ label: string; score: number; sample_size: number }>;
-  mode: 'real' | 'simulated';
+  mode: 'real' | 'simulated' | 'none';
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -259,7 +259,12 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
               <div className="analytics-card">
                 <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>Learning Signals</div>
                 <div style={{ fontSize:10, color:'var(--text-muted)', marginBottom:12 }}>
-                  {learning?.mode === 'real' ? 'From real Instagram data' : 'From simulated data'}
+                  {/* 'none' exists because the old two-state version reported
+                      'From simulated data' for a niche with no metrics at all,
+                      describing numbers that were never recorded. */}
+                  {learning?.mode === 'real'      ? 'From real Instagram data'
+                   : learning?.mode === 'simulated' ? 'From simulated data'
+                   : 'No performance data yet — nothing has been measured'}
                 </div>
                 {!learning || learning.keywords.length === 0 ? (
                   <div style={{ color:'var(--text-muted)', fontSize:12 }}>

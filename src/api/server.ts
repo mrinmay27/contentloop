@@ -1026,10 +1026,22 @@ app.get("/api/pages/:id/learning", async (req, res, next) => {
        WHERE t.niche_id = $1 AND pm.source = 'instagram' LIMIT 1`,
       [nicheId]
     );
+    // "simulated" used to be the catch-all for "no real Instagram metrics",
+    // so a niche with no metrics whatsoever reported that its learning came
+    // from simulated data — describing numbers that do not exist. Three
+    // states, not two.
+    const anyMetrics = await query(
+      `SELECT 1 FROM performance_metrics pm
+       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
+       JOIN content_items c ON c.id = pj.content_item_id
+       JOIN topics t ON t.id = c.topic_id
+       WHERE t.niche_id = $1 LIMIT 1`,
+      [nicheId]
+    );
     res.json({
       keywords: signals.rows.filter((r: any) => r.signal_type === "keyword").slice(0, 10),
       formats: signals.rows.filter((r: any) => r.signal_type === "format"),
-      mode: real.rows.length > 0 ? "real" : "simulated",
+      mode: real.rows.length > 0 ? "real" : anyMetrics.rows.length > 0 ? "simulated" : "none",
     });
   } catch (err) { next(err); }
 });
@@ -1732,12 +1744,26 @@ app.delete("/api/pages/:id/youtube", async (req, res, next) => {
 
 // ─── Canva design endpoints ──────────────────────────────────────────────────
 
+/** "Canva not connected for this page" is an expected state, not a server
+ *  fault. Letting it reach the default handler returned 500, which the UI
+ *  presents as something having gone wrong rather than something not yet set
+ *  up — and buries the one instruction that helps. */
+function canvaError(error: unknown, res: express.Response): boolean {
+  const msg = error instanceof Error ? error.message : '';
+  if (msg.includes('not connected')) {
+    res.status(409).json({ error: 'Canva is not connected for this page. Connect it in Settings → Canva.' });
+    return true;
+  }
+  return false;
+}
+
 // List user's designs
 app.get("/api/pages/:id/canva/designs", async (req, res, next) => {
   try {
     const designs = await canva.listDesigns(req.params.id);
     res.json({ designs });
   } catch (error) {
+    if (canvaError(error, res)) return;
     next(error);
   }
 });
@@ -1748,6 +1774,7 @@ app.get("/api/pages/:id/canva/templates", async (req, res, next) => {
     const templates = await canva.listBrandTemplates(req.params.id);
     res.json({ templates });
   } catch (error) {
+    if (canvaError(error, res)) return;
     next(error);
   }
 });
@@ -1758,6 +1785,7 @@ app.get("/api/pages/:id/canva/templates/:templateId/dataset", async (req, res, n
     const fields = await canva.getTemplateDataset(req.params.id, req.params.templateId);
     res.json({ fields });
   } catch (error) {
+    if (canvaError(error, res)) return;
     next(error);
   }
 });
