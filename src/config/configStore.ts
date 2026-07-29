@@ -63,6 +63,10 @@ export type ConfigMeta = {
   options?:    string[];
   placeholder?: string;
   required?:   boolean;
+  /** One line explaining what this is for and whether it is needed. Shown
+   *  under the label — without it a user faces a form of unexplained fields
+   *  and cannot tell which ones matter. */
+  hint?:       string;
 };
 
 export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
@@ -90,7 +94,8 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
                               placeholder:'et_…' },
   // ── Stock footage (Pexels) — powers real video backgrounds behind reels ──────
   PEXELS_API_KEY:     { label:'Pexels API Key',       group:'Stock Footage',     type:'secret',
-                        placeholder:'free at pexels.com/api — enables real video B-roll' },
+                        placeholder:'paste your key',
+                        hint:'Free at pexels.com/api. Enables real stock video behind your reels instead of still images.' },
   // ── Image generation — managed by ImageGenManager, not auto-rendered ──────────
   GOOGLE_AI_API_KEY:   { label:'Google AI API Key',    group:'Image Generation',  type:'secret', placeholder:'AIza…' },
   STABILITY_API_KEY:   { label:'Stability AI API Key', group:'Image Generation',  type:'secret', placeholder:'sk-…' },
@@ -110,15 +115,21 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
                             placeholder:'Leave empty if using OAuth Connect above' },
   // ── YouTube ───────────────────────────────────────────────────────────────
   YOUTUBE_API_KEY:       { label:'Data API Key',     group:'YouTube', type:'secret',
-                           placeholder:'AIza…' },
+                           placeholder:'AIza…',
+                           hint:'Optional, and NOT needed to publish. Only used to pull YouTube trending videos in as topic ideas.' },
   // Defaults to private on purpose: a first upload going straight to a real
   // audience is not a safe default — the user opts in.
   YOUTUBE_PRIVACY:       { label:'Upload visibility', group:'YouTube', type:'select',
                            options:['private','unlisted','public'],
-                           placeholder:'private' },
+                           placeholder:'private',
+                           hint:'How uploads land on your channel. Starts private so a first upload never goes straight to an audience.' },
   YOUTUBE_CLIENT_ID:     { label:'OAuth Client ID',   group:'YouTube', type:'text',
-                           placeholder:'xxxxxx.apps.googleusercontent.com' },
-  YOUTUBE_CLIENT_SECRET: { label:'OAuth Client Secret', group:'YouTube', type:'secret' },
+                           required:true,
+                           placeholder:'xxxxxx.apps.googleusercontent.com',
+                           hint:'Required to publish. From Google Cloud → Credentials → your OAuth client.' },
+  YOUTUBE_CLIENT_SECRET: { label:'OAuth Client Secret', group:'YouTube', type:'secret',
+                           required:true,
+                           hint:'Required to publish. Shown next to the Client ID in Google Cloud.' },
   // Deliberately NOT listed in the YouTube group: since v0.3.0 these live per
   // page in the youtube_tokens table, written by Connect. The keys remain only
   // so adoptLegacyToken() can migrate an install that predates that. Offering
@@ -141,9 +152,11 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
                                 options:['auto', 'post', 'carousel', 'reel'],
                                 placeholder:'auto' },
   MAX_TOPICS_PER_SOURCE:      { label:'Max topics per source, per run', group:'Pipeline', type:'text',
-                                placeholder:'2  (0 = no limit)' },
+                                placeholder:'2  (0 = no limit)',
+                                hint:'Stops one busy feed filling your whole queue. 0 turns the limit off.' },
   MAX_UPLOAD_MB:              { label:'Max video upload size (MB)', group:'Pipeline', type:'text',
-                                placeholder:'500' },
+                                placeholder:'500',
+                                hint:'Rejects bigger uploads before they finish transferring.' },
   // ── Tuning (Sprint U1 Task 6) — rendered by AdvancedTuning.tsx, not the
   // generic ConfigRow grid (JSON blobs aren't user-friendly as raw text) ────
   AUTOMATION_THRESHOLDS:    { label:'Automation thresholds (JSON)',      group:'Advanced', type:'text',

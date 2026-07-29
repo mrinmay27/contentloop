@@ -17,6 +17,7 @@ type FieldMeta = {
   options?:     string[];
   placeholder?: string;
   required?:    boolean;
+  hint?:        string;
 };
 
 type FieldValue  = { value: string; masked: boolean };
@@ -152,6 +153,12 @@ function ConfigRow({ fieldKey, meta, current, onChange }: {
         <div style={{ fontSize:10, color:'var(--text-muted)', fontFamily:'var(--mono)', marginTop:2 }}>
           {fieldKey}
         </div>
+        {meta.hint && (
+          <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:4, lineHeight:1.45,
+            maxWidth:220 }}>
+            {meta.hint}
+          </div>
+        )}
       </div>
 
       {/* Input */}
