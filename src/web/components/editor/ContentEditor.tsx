@@ -260,9 +260,17 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
       if (previewTab === 'reel')     { contentPayload.reelScript = reelScript; contentPayload.reelTarget = reelTarget; contentPayload.reelPath = reelPath; }
       await api.patchContent(draftId, contentPayload);
       await api.approveContent(draftId);
+      // The patch above just persisted everything, so the buffer matches the
+      // server. Without clearing this the badge reads "Edited" and the Publish
+      // panel stays locked behind !isDirty forever — approved on the server,
+      // unpublishable in the UI.
+      setIsDirty(false);
       setApproveStatus('done');
-      showToast('✓ Approved — content queued for scheduling');
-      setTimeout(() => onBack(), 1200);
+      // Deliberately stays put. Approving is what unlocks the Publish panel
+      // below, so navigating away 1.2s later ejected the user at the exact
+      // moment publishing became possible — leaving no route to it from the
+      // editor at all.
+      showToast('✓ Approved — you can publish or schedule it below');
     } catch {
       setApproveStatus('idle');
       showToast('Approval failed — try again');
@@ -287,6 +295,7 @@ export const ContentEditor: React.FC<Props> = ({ topic, page, sourceNav, onBack 
         });
       }
 
+      setIsDirty(false);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2500);
     } catch {
