@@ -2047,6 +2047,18 @@ app.post("/api/content/:id/publish", async (req, res, next) => {
       }
     }
 
+    // Scheduling is a state change too. Without this a topic queued for
+    // Friday sat in Selected looking unhandled, and the Scheduled tab — which
+    // reads topics.state — stayed empty however many jobs were queued.
+    if (scheduledAt && jobs.length) {
+      await query(
+        `UPDATE topics SET state='SCHEDULED'
+         WHERE id = (SELECT topic_id FROM content_items WHERE id = $1)
+           AND state <> 'POSTED'`,
+        [req.params.id]
+      );
+    }
+
     res.json({ ok: true, jobs });
   } catch (err) { next(err); }
 });

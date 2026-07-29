@@ -28,6 +28,35 @@ async function markPublished(jobId: string, externalId: string, externalUrl?: st
      WHERE id=$1`,
     [jobId, externalId, externalUrl ?? null]
   );
+  await advanceTopicState(jobId, 'POSTED');
+}
+
+/**
+ * Move the topic to the queue state its publish job implies.
+ *
+ * QueueState has declared SCHEDULED, POSTED and ANALYZED since the beginning
+ * and nothing ever wrote any of them — topics stopped at QA_PASSED. The
+ * dashboard's Scheduled and Posted tabs read that state, so they could never
+ * fill, and anything published stayed in Selected/Review looking like it still
+ * needed work. Meanwhile the POSTED stat card counts publish_jobs directly, so
+ * the same screen showed 'Posted 2' beside an empty Posted tab.
+ *
+ * Deliberately skips dry runs: nothing was sent, so nothing was posted.
+ */
+async function advanceTopicState(jobId: string, state: 'SCHEDULED' | 'POSTED'): Promise<void> {
+  await query(
+    `UPDATE topics t
+     SET state = $2
+     FROM publish_jobs pj
+     JOIN content_items c ON c.id = pj.content_item_id
+     WHERE pj.id = $1
+       AND t.id = c.topic_id
+       AND pj.dry_run IS NOT TRUE
+       -- Never walk a topic backwards: a second platform scheduled after the
+       -- first has already gone out must not un-post it.
+       AND NOT (t.state = 'POSTED' AND $2 = 'SCHEDULED')`,
+    [jobId, state]
+  );
 }
 
 async function markFailed(jobId: string, error: string) {
