@@ -1936,14 +1936,20 @@ app.get("/api/pages/:id/publish-platforms", async (req, res, next) => {
     const { getToken } = await import("../services/youtubeTokens.js");
     const ytConnected = !!(await getToken(req.params.id));
 
+    // `unavailable` marks a platform the publisher cannot actually post to.
+    // Facebook reported itself connected whenever Instagram was, so it could
+    // be ticked and published to — and the dispatcher then threw 'connect via
+    // Settings first' about a setting that does not exist. Twitter did the
+    // same for anyone who had set a bearer token. Saying 'Not connected'
+    // would be its own lie: there is nothing to connect to yet.
     res.json({
       platforms: {
         instagram: { connected: igConnected, label: 'Instagram', icon: '📸' },
         youtube_shorts: { connected: ytConnected, label: 'YouTube Shorts', icon: '▶️' },
-        facebook:  { connected: igConnected, label: 'Facebook',  icon: '👍' },
-        linkedin:  { connected: false, label: 'LinkedIn',   icon: '💼' },
-        twitter:   { connected: !!(configStore.get('TWITTER_BEARER_TOKEN')), label: 'Twitter / X', icon: '𝕏' },
-        reddit:    { connected: !!(configStore.get('REDDIT_CLIENT_ID') && configStore.get('REDDIT_CLIENT_SECRET')), label: 'Reddit', icon: '🤖' },
+        facebook:  { connected: false, unavailable: true, label: 'Facebook',    icon: '👍' },
+        linkedin:  { connected: false, unavailable: true, label: 'LinkedIn',    icon: '💼' },
+        twitter:   { connected: false, unavailable: true, label: 'Twitter / X', icon: '𝕏' },
+        reddit:    { connected: false, unavailable: true, label: 'Reddit',      icon: '🤖' },
       }
     });
   } catch (err) { next(err); }

@@ -90,6 +90,8 @@ export type PublishJob = {
 
 export type PublishPlatformInfo = {
   connected: boolean;
+  /** Publishing to this platform is not built yet — not merely disconnected. */
+  unavailable?: boolean;
   label:     string;
   icon:      string;
 };

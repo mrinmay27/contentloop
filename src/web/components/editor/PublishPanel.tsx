@@ -245,7 +245,9 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
                     {info.label}
                   </span>
                   {!isConnected && (
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Not connected</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                      {info.unavailable ? 'Not built yet' : 'Not connected'}
+                    </span>
                   )}
                 </label>
               );

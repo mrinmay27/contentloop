@@ -82,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     <div style={{ padding: '8px', borderTop: '1px solid var(--border)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>v1.0.0</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>v{__APP_VERSION__}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <AlertsBell />
           <button

@@ -14,7 +14,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-brightgreen">
-  <img alt="tests" src="https://img.shields.io/badge/tests-349%20passing-brightgreen">
+  <img alt="tests" src="https://img.shields.io/badge/tests-372%20passing-brightgreen">
 </p>
 
 ContentLoop is a self-hosted content-operations tool for running "theme page" social
@@ -100,10 +100,17 @@ configurable slide count.
 | Platform | Status |
 |---|---|
 | Instagram | Working — verified end to end |
-| YouTube Shorts | Built, but the upload itself is **not yet verified** — see the release notes |
+| YouTube Shorts | Working — verified end to end on a live channel |
 | LinkedIn, X, Reddit, Facebook | Not implemented |
 
-Nothing publishes without you approving it first, in either mode.
+Nothing publishes without you approving it first, in either mode. Uploads
+default to **private** on YouTube, so a first post never lands in front of an
+audience by accident.
+
+**Performance data comes back from Instagram only.** YouTube posts show 0
+views because nothing reads them back yet — that is missing data, not a flop,
+and ContentLoop leaves it out of the learning loop rather than counting it as
+one. A YouTube Analytics provider is the next thing planned here.
 
 ---
 
