@@ -91,6 +91,16 @@ async function listDrafts(): Promise<InboxDraft[]> {
      -- reach the one screen meant to show what needs you. A draft someone
      -- opened and has not approved genuinely needs them in both modes.
      WHERE c.status IN ('qa_passed', 'draft')
+       -- The editor keeps a separate content_item per format, so opening a
+       -- topic as a Post leaves a post draft behind next to the reel you
+       -- actually approved. Without this the Inbox went on asking you to
+       -- approve a topic you had already approved and published, offering an
+       -- Approve button for a second copy of the same idea.
+       AND NOT EXISTS (
+         SELECT 1 FROM content_items sibling
+         WHERE sibling.topic_id = c.topic_id
+           AND sibling.status = 'approved'
+       )
      ORDER BY c.created_at ASC
      LIMIT 25`
   );
