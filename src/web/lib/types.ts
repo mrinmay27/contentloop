@@ -84,6 +84,8 @@ export type PublishJob = {
   error:            string | null;
   created_at:       string;
   updated_at:       string;
+  /** True when nothing was actually sent — validation only. */
+  dry_run?: boolean;
 };
 
 export type PublishPlatformInfo = {

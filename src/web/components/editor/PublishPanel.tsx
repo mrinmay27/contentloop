@@ -35,6 +35,9 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
   const [scheduleMode, setScheduleMode] = useState(false);
   const [scheduledAt, setScheduledAt]   = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** Jobs from the most recent click, so the dialog can confirm what it did
+   *  instead of leaving the user staring at an unchanged form. */
+  const [justPublished, setJustPublished] = useState<PublishJob[] | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load connected platforms
@@ -92,6 +95,7 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
       };
       if (scheduleMode && scheduledAt) body.scheduledAt = new Date(scheduledAt).toISOString();
       const { jobs: newJobs } = await api.publishContent(contentId, body);
+      setJustPublished(newJobs);
       setJobs(prev => {
         const existingIds = new Set(prev.map(j => j.id));
         return [...newJobs.filter(j => !existingIds.has(j.id)), ...prev];
@@ -123,7 +127,7 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
         className="btn btn-primary"
         style={{ width: '100%', fontSize: 13, padding: '10px 12px' }}
         disabled={!approved}
-        onClick={() => setOpen(true)}
+        onClick={() => { setJustPublished(null); setError(null); setOpen(true); }}
         title={approved ? 'Choose platforms and publish' : 'Approve the content first'}
       >
         🚀 Publish{connectedCount > 0 ? '' : ' — nothing connected'}
@@ -133,7 +137,7 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
         {!approved
           ? 'Approve the content to enable publishing'
           : latest
-            ? `Last: ${(platforms[latest.platform]?.label ?? latest.platform)} — ${(STATUS_BADGE[latest.status] ?? STATUS_BADGE.failed).label}`
+            ? `Last: ${(platforms[latest.platform]?.label ?? latest.platform)} — ${latest.dry_run ? 'dry run' : (STATUS_BADGE[latest.status] ?? STATUS_BADGE.failed).label}`
             : connectedCount > 0
               ? `${connectedCount} platform${connectedCount > 1 ? 's' : ''} connected`
               : 'Connect a platform in Settings first'}
@@ -178,6 +182,34 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
 
       {/* Body scrolls; the action below never does. */}
       <div style={{ padding: '12px 16px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+        {justPublished && justPublished.length > 0 && (
+          <div style={{
+            marginBottom: 12, padding: '10px 12px', fontSize: 12, lineHeight: 1.6,
+            border: '1px solid var(--green, #22c55e)',
+            background: 'color-mix(in srgb, var(--green, #22c55e) 10%, transparent)',
+            borderRadius: 'var(--radius-sm)',
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>
+              {scheduleMode ? '🗓 Scheduled' : '✓ Sent'}
+            </div>
+            {justPublished.map(j => (
+              <div key={j.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>{platforms[j.platform]?.label ?? j.platform}</span>
+                {j.dry_run
+                  ? <span style={{ color: 'var(--text-muted)' }}>— dry run, nothing was sent</span>
+                  : j.external_url
+                    ? <a href={j.external_url} target="_blank" rel="noopener noreferrer"
+                        style={{ color: 'var(--accent)' }}>View on the platform ↗</a>
+                    : <span style={{ color: 'var(--text-muted)' }}>— uploading…</span>}
+              </div>
+            ))}
+            <div style={{ color: 'var(--text-muted)', marginTop: 6, fontSize: 11 }}>
+              {scheduleMode
+                ? 'It goes out at the time you picked, even if the app is closed — it catches up on next launch.'
+                : 'Status updates here as it finishes. Uploads land as private unless you changed that in Settings.'}
+            </div>
+          </div>
+        )}
         {/* Platform selector */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
@@ -275,8 +307,12 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
                     <span style={{ fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
                       {info?.label ?? job.platform}
                     </span>
-                    <span style={{ fontWeight: 700, color: badge.color }}>{badge.label}</span>
-                    {job.external_url && (
+                    <span style={{ fontWeight: 700, color: job.dry_run ? 'var(--text-muted)' : badge.color }}>
+                      {job.dry_run ? 'Dry run' : badge.label}
+                    </span>
+                    {/* The dry-run URL is a placeholder that 404s, so it must
+                        not be offered as a link. */}
+                    {job.external_url && !job.dry_run && (
                       <a href={job.external_url} target="_blank" rel="noopener noreferrer"
                         style={{ fontSize: 10, color: 'var(--accent)', textDecoration: 'none' }}>
                         View ↗
@@ -307,10 +343,12 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
         <button
           className="btn btn-primary"
           style={{ width: '100%', fontSize: 12.5 }}
-          disabled={!approved || !anySelected || publishing || (scheduleMode && !scheduledAt)}
-          onClick={handlePublish}
+          disabled={!justPublished && (!approved || !anySelected || publishing || (scheduleMode && !scheduledAt))}
+          onClick={justPublished ? () => setOpen(false) : handlePublish}
         >
-          {publishing
+          {justPublished
+            ? 'Done'
+            : publishing
             ? '⏳ Publishing…'
             : !anySelected
               ? 'Pick a platform'

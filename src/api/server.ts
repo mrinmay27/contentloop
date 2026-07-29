@@ -1953,7 +1953,8 @@ app.get("/api/pages/:id/publish-platforms", async (req, res, next) => {
 app.get("/api/content/:id/publish-jobs", async (req, res, next) => {
   try {
     const { rows } = await query(
-      `SELECT id, platform, status, scheduled_at, published_at, external_post_id, external_url, error, created_at, updated_at
+      `SELECT id, platform, status, scheduled_at, published_at, external_post_id, external_url, error,
+              dry_run, created_at, updated_at
        FROM publish_jobs WHERE content_item_id = $1 ORDER BY created_at DESC`,
       [req.params.id]
     );
