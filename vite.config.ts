@@ -7,6 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api":     "http://localhost:4000",
+      "/auth":    "http://localhost:4000",
       "/queues":  "http://localhost:4000",
       "/uploads": "http://localhost:4000"
     }

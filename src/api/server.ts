@@ -1504,7 +1504,8 @@ app.get("/api/media/options", (_req, res) => {
 // pageId is passed as a query param so we know which page to attach the token to.
 app.get("/auth/canva", (req, res, next) => {
   try {
-    const pageId = z.string().uuid().parse(req.query.pageId);
+    const pageId = parsePageIdParam(req.query.pageId);
+    if (!pageId) return void res.status(400).send('Open Settings and pick a page first, then click Connect.');
     const { verifier, challenge } = canva.generatePkce();
     const state = crypto.randomUUID();
     // Use the unified oauthStateStore for Canva too
@@ -1560,7 +1561,8 @@ app.get("/api/pages/:id/canva/status", async (req, res, next) => {
 // Step 1: Redirect user to Meta Login
 app.get("/auth/instagram", (req, res, next) => {
   try {
-    const pageId   = z.string().uuid().parse(req.query.pageId);
+    const pageId   = parsePageIdParam(req.query.pageId);
+    if (!pageId) return void res.status(400).send('Open Settings and pick a page first, then click Connect.');
     const clientId = configStore.get('INSTAGRAM_APP_ID') || process.env['INSTAGRAM_APP_ID'] || '';
     const redirect = configStore.get('INSTAGRAM_REDIRECT_URI') || process.env['INSTAGRAM_REDIRECT_URI'] || `http://localhost:${env.PORT}/auth/instagram/callback`;
     if (!clientId) return void res.status(400).json({ error: 'INSTAGRAM_APP_ID not configured. Go to Settings → Instagram and fill in your Meta App ID.' });
@@ -1608,6 +1610,13 @@ app.delete("/api/pages/:id/instagram", async (req, res, next) => {
 
 // ─── YouTube OAuth (Google OAuth 2.0) ────────────────────────────────────────────────
 
+// A browser lands on these routes directly, so a schema failure here surfaces
+// as a raw 500 stack in the address bar rather than anything a user can act on.
+function parsePageIdParam(raw: unknown): string | null {
+  const parsed = z.string().uuid().safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
 const GOOGLE_AUTH_URL  = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const YT_SCOPES = [
@@ -1618,7 +1627,8 @@ const YT_SCOPES = [
 // Step 1: Redirect to Google
 app.get("/auth/youtube", (req, res, next) => {
   try {
-    const pageId   = z.string().uuid().parse(req.query.pageId);
+    const pageId   = parsePageIdParam(req.query.pageId);
+    if (!pageId) return void res.status(400).send('Open Settings and pick a page first, then click Connect.');
     const clientId = configStore.get('YOUTUBE_CLIENT_ID') || env.YOUTUBE_CLIENT_ID || '';
     const redirect = `http://localhost:${env.PORT}/auth/youtube/callback`;
     if (!clientId) return void res.status(400).json({ error: 'YOUTUBE_CLIENT_ID not configured. Go to Settings → YouTube.' });

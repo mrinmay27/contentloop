@@ -59,6 +59,11 @@ const PROVIDER_META: Record<OAuthProvider, {
 
 type Status = { connected: boolean; username?: string | null };
 
+// Every URL below is same-origin and relative on purpose. The port is not
+// fixed — desktop mode defaults to 4173, the launcher picks a free port, and
+// PORT overrides both — so an absolute http://localhost:4000 sent "Connect"
+// to a server that isn't there.
+
 type Props = {
   provider:        OAuthProvider;
   pageId:          string | null;
@@ -76,7 +81,7 @@ export const OAuthConnectCard: React.FC<Props> = ({ provider, pageId, onStatusCh
 
   useEffect(() => {
     if (!statusUrl) return;
-    fetch(`http://localhost:4000${statusUrl}`)
+    fetch(statusUrl)
       .then(r => r.json())
       .then((data: Status) => setStatus(data))
       .catch(() => setStatus({ connected: false }));
@@ -84,14 +89,14 @@ export const OAuthConnectCard: React.FC<Props> = ({ provider, pageId, onStatusCh
 
   const handleConnect = () => {
     if (!connectUrl) return;
-    window.location.href = `http://localhost:4000${connectUrl}`;
+    window.location.href = connectUrl;
   };
 
   const handleDisconnect = async () => {
     if (!disconnectUrl || disconnecting) return;
     setDisconnecting(true);
     try {
-      await fetch(`http://localhost:4000${disconnectUrl}`, { method: 'DELETE' });
+      await fetch(disconnectUrl, { method: 'DELETE' });
       setStatus({ connected: false });
       onStatusChange?.(false);
     } finally {

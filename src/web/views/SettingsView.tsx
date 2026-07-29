@@ -60,6 +60,15 @@ const GROUP_DESC: Record<string, string> = {
 const PREMIUM_GROUPS = new Set(['Twitter / X', 'Exploding Topics']);
 
 // Navigation sections — defines order and visual grouping in the left panel
+// The redirect URI a provider is told to whitelist has to match, byte for
+// byte, the one the server sends — and the server builds its from PORT, which
+// is 4173 in desktop mode and whatever the launcher grabbed if that was taken.
+// Hardcoding 4000 in this guide guaranteed a redirect_uri_mismatch for every
+// user not running the Docker default. The page the user is reading is served
+// by that same server, so its own origin is the answer.
+const callbackUrl = (provider: string) =>
+  `${typeof window === 'undefined' ? 'http://localhost:4000' : window.location.origin}/auth/${provider}/callback`;
+
 const NAV_SECTIONS: { label: string; groups: string[] }[] = [
   { label: 'System',               groups: ['AI / LLM', 'Branding', 'Sources', 'Pipeline', 'Advanced'] },
   { label: 'Generation',           groups: ['Image Generation', 'Stock Footage'] },
@@ -603,7 +612,7 @@ const SETUP_GUIDES: Record<string, GuideStep[]> = {
     },
     {
       title: 'Set the Redirect URI',
-      body:  'In your app\'s Instagram → Basic Display settings, add this as a Valid OAuth Redirect URI: http://localhost:4000/auth/instagram/callback',
+      body:  `In your app's Instagram → Basic Display settings, add this as a Valid OAuth Redirect URI: ${callbackUrl('instagram')}`,
     },
     {
       title: 'Copy App ID + App Secret',
@@ -630,7 +639,7 @@ const SETUP_GUIDES: Record<string, GuideStep[]> = {
     },
     {
       title: 'Add Redirect URI',
-      body:  'In your OAuth Client settings add: http://localhost:4000/auth/youtube/callback as an Authorized Redirect URI.',
+      body:  `In your OAuth Client settings add this exact URL as an Authorized Redirect URI: ${callbackUrl('youtube')}`,
     },
     {
       title: 'Copy Client ID + Client Secret',
@@ -657,7 +666,7 @@ const SETUP_GUIDES: Record<string, GuideStep[]> = {
     },
     {
       title: 'Set Redirect URI',
-      body:  'In your integration settings add: http://localhost:4000/auth/canva/callback as an Allowed Redirect URI.',
+      body:  `In your integration settings add: ${callbackUrl('canva')} as an Allowed Redirect URI.`,
     },
     {
       title: 'Copy Client ID + Client Secret',
