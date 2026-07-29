@@ -171,7 +171,7 @@ export const api = {
   /** Raw-body upload: the File is the body, so no multipart is needed.
    *  req() merges headers and passes body through untouched (verified). */
   uploadContentVideo: (contentId: string, file: File, slideIndex?: number) =>
-    req<{ ok: boolean; asset: any }>(
+    req<{ ok: boolean; asset: any; warning?: string | null }>(
       `/content/${contentId}/video${slideIndex === undefined ? '' : `?slideIndex=${slideIndex}`}`, {
       method: 'POST',
       headers: { 'Content-Type': file.type || 'video/mp4' },
@@ -185,6 +185,13 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  /** Trim and/or crop uploaded footage in place. */
+  editContentVideo: (contentId: string, body: Record<string, unknown>) =>
+    req<{ ok: boolean; url: string; width?: number; height?: number; durationSec?: number }>(
+      `/content/${contentId}/video/edit`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
   /** srt === null means no Groq key — the UI falls back to manual captions. */
   transcribeContentVideo: (contentId: string) =>
     req<{ ok: boolean; srt: string | null; segments?: number; note?: string }>(

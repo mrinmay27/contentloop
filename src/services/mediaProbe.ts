@@ -54,13 +54,16 @@ export function parseProbeOutput(stdout: string): ProbeResult | null {
   };
 }
 
-/** A sentence the uploader can act on, or null when the clip is usable. */
+/** What still needs fixing before this clip can be published, or null when it
+ *  is ready. Returned as a WARNING on upload rather than a refusal: trim and
+ *  crop can fix both problems in place, so refusing would keep the creator
+ *  from reaching the tool that fixes it. */
 export function describeRejection(probe: ProbeResult): string | null {
   if (probe.height <= probe.width) {
-    return "This video is landscape or square — Reels and Shorts need vertical (9:16). Crop it or pick another file.";
+    return "This video is landscape or square — Reels and Shorts need vertical (9:16).";
   }
   if (probe.durationSec !== null && probe.durationSec > MAX_SHORT_SECONDS) {
-    return `This video is ${Math.round(probe.durationSec)}s — too long for Shorts and Reels (max 3 min). Trim it first.`;
+    return `This video is ${Math.round(probe.durationSec)}s — too long for Shorts and Reels (max 3 min).`;
   }
   return null;
 }

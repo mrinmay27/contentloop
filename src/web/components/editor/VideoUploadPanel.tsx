@@ -36,11 +36,16 @@ const fmtMb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, slideIndex, label, bridgeDefaultOpen = true }) => {
   const [asset, setAsset]       = useState<Asset | null>(null);
-  const [busy, setBusy]         = useState<'upload' | 'captions' | null>(null);
+  const [busy, setBusy]         = useState<'upload' | 'captions' | 'edit' | null>(null);
   const [error, setError]       = useState<string | null>(null);
   const [srt, setSrt]           = useState('');
   const [note, setNote]         = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // Trim / crop, shown once a clip is in place.
+  const [editOpen, setEditOpen]   = useState(false);
+  const [trimStart, setTrimStart] = useState('0');
+  const [trimEnd, setTrimEnd]     = useState('');
+  const [toVertical, setToVertical] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const disabled = !contentId;
@@ -49,8 +54,15 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, sli
     if (!contentId) return;
     setError(null); setNote(null); setBusy('upload');
     try {
-      const { asset: a } = await api.uploadContentVideo(contentId, file, slideIndex);
+      const { asset: a, warning } = await api.uploadContentVideo(contentId, file, slideIndex);
       setAsset(a);
+      if (warning) {
+        // Not an error — the clip is in, it just needs fixing before publish,
+        // and the fix is one panel away.
+        setNote(`${warning} Use Trim / crop below to fix it.`);
+        setEditOpen(true);
+        if (/vertical|9:16/i.test(warning)) setToVertical(true);
+      }
     } catch (err) {
       // The server's messages are written to be read — show them verbatim
       // rather than replacing them with a generic failure.
@@ -59,6 +71,29 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, sli
     } finally {
       setBusy(null);
     }
+  };
+
+  const applyEdit = async () => {
+    if (!contentId) return;
+    setError(null); setNote(null); setBusy('edit');
+    try {
+      const r = await api.editContentVideo(contentId, {
+        start: Number(trimStart) || 0,
+        end: trimEnd.trim() === '' ? null : Number(trimEnd),
+        toVertical,
+        slideIndex: slideIndex ?? null,
+      });
+      setAsset(a => a ? {
+        ...a, url: r.url,
+        width: r.width ?? a.width, height: r.height ?? a.height,
+        durationSec: r.durationSec ?? a.durationSec,
+      } : a);
+      setEditOpen(false);
+      setNote('Edit applied.');
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : 'Could not edit the video';
+      try { setError(JSON.parse(raw).error ?? raw); } catch { setError(raw); }
+    } finally { setBusy(null); }
   };
 
   const generateCaptions = async () => {
@@ -132,7 +167,11 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, sli
                 </button>
               )}
               <button className="btn btn-ghost btn-sm" disabled={busy !== null}
-                onClick={() => { setAsset(null); setSrt(''); setNote(null); setError(null); }}>
+                onClick={() => setEditOpen(o => !o)}>
+                ✂️ Trim / crop
+              </button>
+              <button className="btn btn-ghost btn-sm" disabled={busy !== null}
+                onClick={() => { setAsset(null); setSrt(''); setNote(null); setError(null); setEditOpen(false); }}>
                 Replace
               </button>
             </div>
@@ -140,8 +179,45 @@ export const VideoUploadPanel: React.FC<Props> = ({ contentId, topic, niche, sli
         </div>
       )}
 
+      {editOpen && asset && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
+          padding: 12, marginTop: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Trim / crop</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex',
+              alignItems: 'center', gap: 5 }}>
+              From
+              <input type="number" min={0} step={0.5} value={trimStart}
+                onChange={e => setTrimStart(e.target.value)} style={{ width: 66 }}/>s
+            </label>
+            <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex',
+              alignItems: 'center', gap: 5 }}>
+              to
+              <input type="number" min={0} step={0.5} value={trimEnd}
+                placeholder={asset.durationSec ? asset.durationSec.toFixed(1) : 'end'}
+                onChange={e => setTrimEnd(e.target.value)} style={{ width: 66 }}/>s
+            </label>
+            <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex',
+              alignItems: 'center', gap: 5 }}>
+              <input type="checkbox" checked={toVertical}
+                onChange={e => setToVertical(e.target.checked)}/>
+              Crop to vertical 9:16
+            </label>
+            <button className="btn btn-primary btn-sm" disabled={busy !== null}
+              onClick={applyEdit} style={{ marginLeft: 'auto' }}>
+              {busy === 'edit' ? 'Editing…' : 'Apply'}
+            </button>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>
+            This replaces the clip you uploaded. Leave the end blank to keep it to the end.
+          </div>
+        </div>
+      )}
+
       {error && (
-        <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 8, lineHeight: 1.5 }}>{error}</div>
+        <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 8, lineHeight: 1.5 }}>
+          {error}
+        </div>
       )}
       {note && (
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>{note}</div>

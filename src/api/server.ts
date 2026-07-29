@@ -612,11 +612,11 @@ app.post("/api/content/:id/video", async (req, res, next) => {
       fsSync.rmSync(absPath, { force: true });
       return void res.status(400).json({ error: "That file has no video track we can read." });
     }
-    const rejection = describeRejection(probe);
-    if (rejection) {
-      fsSync.rmSync(absPath, { force: true });
-      return void res.status(400).json({ error: rejection });
-    }
+    // Accept non-vertical / over-long footage rather than refusing it: trim and
+    // crop can now fix both in place, and refusing the upload would mean the
+    // creator could never reach the tool that fixes it. The problem is returned
+    // as a WARNING so the UI can offer the fix instead of a dead end.
+    const warning = describeRejection(probe);
 
     const publicUrl = slideIndex === null
       ? `/media/${req.params.id}/source.mp4`
@@ -660,6 +660,7 @@ app.post("/api/content/:id/video", async (req, res, next) => {
 
     res.json({
       ok: true,
+      warning,
       asset: {
         kind: "video", url: publicUrl, absPath,
         durationSec: probe.durationSec, width: probe.width, height: probe.height,
@@ -860,6 +861,92 @@ app.post("/api/content/:id/canva-media", async (req, res, next) => {
 
     res.json({ ok: true, kind, url: publicUrl });
   } catch (err) { next(err); }
+});
+
+// Route 3 — trim and crop uploaded footage in place.
+//
+// Previously a non-vertical clip was simply refused ('crop it or pick another
+// file'), sending the creator off to another app for something the bundled
+// ffmpeg can do here.
+app.post("/api/content/:id/video/edit", async (req, res, next) => {
+  try {
+    const { start = 0, end = null, toVertical = false, slideIndex = null } = req.body as {
+      start?: number; end?: number | null; toVertical?: boolean; slideIndex?: number | null;
+    };
+
+    const slot = Number.isInteger(slideIndex) ? (slideIndex as number) : null;
+    const absPath = slot === null
+      ? path.join(MEDIA_DIR, req.params.id, "source.mp4")
+      : path.join(MEDIA_DIR, req.params.id, "footage", `slide_${slot}.mp4`);
+    if (!fsSync.existsSync(absPath)) {
+      return void res.status(404).json({ error: "No uploaded video found for this content." });
+    }
+
+    const { probeVideo } = await import("../services/mediaProbe.js");
+    const before = await probeVideo(absPath);
+
+    const { validateTrim } = await import("../domain/videoEdit.js");
+    const problem = validateTrim({
+      start: Number(start) || 0,
+      end: end === null ? null : Number(end),
+      durationSec: before?.durationSec ?? null,
+    });
+    if (problem) return void res.status(400).json({ error: problem });
+
+    if (!toVertical && !(Number(start) > 0) && end === null) {
+      return void res.status(400).json({ error: "Nothing to change — set a trim range or turn on vertical crop." });
+    }
+
+    const { editVideo } = await import("../services/videoEditor.js");
+    const after = await editVideo({
+      absPath,
+      start: Number(start) || 0,
+      end: end === null ? null : Number(end),
+      toVertical: !!toVertical,
+    });
+
+    // Keep the stored dimensions honest after a crop, and re-render since the
+    // source changed.
+    const publicUrl = slot === null
+      ? `/media/${req.params.id}/source.mp4`
+      : `/media/${req.params.id}/footage/slide_${slot}.mp4`;
+
+    if (slot === null) {
+      await query(
+        `UPDATE content_items SET render_status = 'pending', updated_at = now() WHERE id = $1`,
+        [req.params.id]
+      );
+    } else {
+      const { rows } = await query<{ footage_urls: any }>(
+        `SELECT footage_urls FROM content_items WHERE id = $1`, [req.params.id]
+      );
+      const footage: any[] = Array.isArray(rows[0]?.footage_urls) ? [...rows[0].footage_urls] : [];
+      if (footage[slot]) {
+        footage[slot] = {
+          ...footage[slot],
+          width: after?.width ?? footage[slot].width,
+          height: after?.height ?? footage[slot].height,
+          durationSec: after?.durationSec ?? footage[slot].durationSec,
+        };
+        await query(
+          `UPDATE content_items SET footage_urls = $2, render_status = 'pending', updated_at = now() WHERE id = $1`,
+          [req.params.id, JSON.stringify(footage)]
+        );
+      }
+    }
+
+    res.json({
+      ok: true,
+      // Cache-bust so the browser shows the edited clip, not the old one.
+      url: `${publicUrl}?v=${Date.now()}`,
+      width: after?.width, height: after?.height, durationSec: after?.durationSec,
+    });
+  } catch (err: any) {
+    if (/Could not edit|empty file|bundled ffmpeg/.test(err?.message ?? "")) {
+      return void res.status(422).json({ error: err.message });
+    }
+    next(err);
+  }
 });
 
 // Content: upload an image for a content_item at a specific slide index.
