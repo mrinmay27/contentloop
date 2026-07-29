@@ -353,7 +353,9 @@ export async function dashboardStats(nicheId?: string, pageId?: string): Promise
               SELECT 1 FROM publish_jobs pj
               WHERE pj.content_item_id = c.id
                 AND pj.status IN ('scheduled', 'publishing', 'published')
-                AND pj.dry_run IS NOT TRUE
+                -- dry_run defaults to true until dispatch, so it only tells
+                -- the truth about jobs that have actually run.
+                AND NOT (pj.dry_run IS TRUE AND pj.status = 'published')
             )
         UNION ALL
         SELECT 'scheduled', count(*)::int
@@ -432,6 +434,15 @@ export async function listScheduledPostsForMonth(
       JOIN content_items c ON c.id = pj.content_item_id
       JOIN topics        t ON t.id = c.topic_id
       WHERE pj.page_id = $1
+        -- The calendar is a record of what went out and what is going out.
+        -- A dry run did neither, and showing it with a /shorts/dry-run link
+        -- put a post on the calendar that does not exist.
+        --
+        -- Tested against status, not dry_run alone: the column defaults to
+        -- true and is only set for real when a job is dispatched, so a
+        -- genuine future post sits here with dry_run = true. Filtering on the
+        -- flag by itself hid every scheduled post from the calendar.
+        AND NOT (pj.dry_run IS TRUE AND pj.status = 'published')
         AND COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) >= $2
         AND COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) <  $3
       ORDER BY display_at ASC
@@ -442,7 +453,32 @@ export async function listScheduledPostsForMonth(
 }
 
 export async function cancelPublishJob(jobId: string): Promise<void> {
+  // Capture the topic before the row goes, so the state can be walked back.
+  const { rows } = await query<any>(
+    `SELECT c.topic_id FROM publish_jobs pj
+     JOIN content_items c ON c.id = pj.content_item_id
+     WHERE pj.id = $1`,
+    [jobId]
+  );
   await query(`DELETE FROM publish_jobs WHERE id=$1 AND status='scheduled'`, [jobId]);
+
+  // Scheduling moves the topic to SCHEDULED; cancelling has to undo that or
+  // the topic sits in the Scheduled tab forever with no job behind it, and the
+  // pipeline never offers it back for work. Only when nothing else is queued
+  // for it, and never for something already posted.
+  const topicId = rows[0]?.topic_id;
+  if (!topicId) return;
+  await query(
+    `UPDATE topics t SET state = 'QA_PASSED'
+     WHERE t.id = $1
+       AND t.state = 'SCHEDULED'
+       AND NOT EXISTS (
+         SELECT 1 FROM publish_jobs pj
+         JOIN content_items c ON c.id = pj.content_item_id
+         WHERE c.topic_id = $1 AND pj.status IN ('scheduled', 'pending', 'publishing')
+       )`,
+    [topicId]
+  );
 }
 
 export async function reschedulePublishJob(jobId: string, scheduledAt: Date): Promise<void> {
@@ -500,7 +536,7 @@ export async function listAnalyticsForPage(pageId: string): Promise<any> {
       LEFT JOIN performance_metrics m1  ON m1.publish_job_id  = pj.id AND m1.capture_point  = '1h'
       LEFT JOIN performance_metrics m24 ON m24.publish_job_id = pj.id AND m24.capture_point = '24h'
       LEFT JOIN performance_metrics m7  ON m7.publish_job_id  = pj.id AND m7.capture_point  = '7d'
-      WHERE pj.page_id = $1 AND pj.status = 'published'
+      WHERE pj.page_id = $1 AND pj.status = 'published' AND pj.dry_run IS NOT TRUE
       ORDER BY pj.published_at DESC
       LIMIT 30
     `,
@@ -515,14 +551,32 @@ export async function listAnalyticsForPage(pageId: string): Promise<any> {
       JOIN content_items c ON c.id = pj.content_item_id
       LEFT JOIN performance_metrics pm
         ON pm.publish_job_id = pj.id AND pm.capture_point = '24h'
-      WHERE pj.page_id = $1 AND pj.status = 'published'
+      WHERE pj.page_id = $1 AND pj.status = 'published' AND pj.dry_run IS NOT TRUE
       GROUP BY c.type
     `,
     [pageId]
   );
 
   const simulated = postsResult.rows.some((r: any) => r.metric_source === "simulated");
-  return { posts: postsResult.rows, byType: typeResult.rows, simulated };
+
+  // Which live platforms nobody can measure. Only Instagram has an insights
+  // provider, so a real YouTube post shows zeros forever — and zeros with no
+  // explanation read as "this flopped" rather than "nothing is reading this".
+  const { rows: unmeasuredRows } = await query(
+    `SELECT DISTINCT pj.platform
+     FROM publish_jobs pj
+     WHERE pj.page_id = $1 AND pj.status = 'published'
+       AND pj.dry_run IS NOT TRUE
+       AND pj.platform <> 'instagram'`,
+    [pageId]
+  );
+
+  return {
+    posts: postsResult.rows,
+    byType: typeResult.rows,
+    simulated,
+    unmeasured: unmeasuredRows.map((r: any) => r.platform),
+  };
 }
 
 // ── Media pipeline repositories ───────────────────────────────────────────────

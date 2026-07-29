@@ -23,7 +23,11 @@ type ByType = {
   avg_engagement: number;
 };
 
-type AnalyticsData = { posts: Post[]; byType: ByType[]; simulated?: boolean };
+type AnalyticsData = {
+  posts: Post[]; byType: ByType[]; simulated?: boolean;
+  /** Live platforms with no insights provider — their posts read 0 forever. */
+  unmeasured?: string[];
+};
 type LearningData = {
   keywords: Array<{ label: string; score: number; sample_size: number }>;
   formats: Array<{ label: string; score: number; sample_size: number }>;
@@ -150,6 +154,17 @@ export const AnalyticsView: React.FC<{ page: ThemePage }> = ({ page }) => {
                 </div>
               ))}
             </div>
+
+            {(data.unmeasured?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8,
+                background: 'var(--bg-elevated)', border: '1px dashed var(--amber, #f59e0b)',
+                fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                📊 <strong>No metrics for {data.unmeasured!.join(', ').replace('youtube_shorts', 'YouTube Shorts')}.</strong>{' '}
+                Only Instagram reports insights back to ContentLoop today, so those
+                posts show 0 — that is missing data, not poor performance, and it is
+                left out of the learning loop rather than counted as a flop.
+              </div>
+            )}
 
             {data.simulated && (
               <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8,
