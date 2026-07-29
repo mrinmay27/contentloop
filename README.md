@@ -14,7 +14,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-brightgreen">
-  <img alt="tests" src="https://img.shields.io/badge/tests-372%20passing-brightgreen">
+  <img alt="tests" src="https://img.shields.io/badge/tests-379%20passing-brightgreen">
 </p>
 
 ContentLoop is a self-hosted content-operations tool for running "theme page" social
@@ -107,10 +107,10 @@ Nothing publishes without you approving it first, in either mode. Uploads
 default to **private** on YouTube, so a first post never lands in front of an
 audience by accident.
 
-**Performance data comes back from Instagram only.** YouTube posts show 0
-views because nothing reads them back yet — that is missing data, not a flop,
-and ContentLoop leaves it out of the learning loop rather than counting it as
-one. A YouTube Analytics provider is the next thing planned here.
+**Performance data comes back from Instagram and YouTube.** Views, likes and
+comments are read back automatically and feed the learning loop. Platforms
+with no provider record nothing at all rather than inventing numbers, and the
+Performance page says so instead of showing a zero that reads like a flop.
 
 ---
 
