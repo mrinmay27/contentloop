@@ -193,7 +193,16 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
           </div>
         )}
 
-        {/* Publish button */}
+        {/* Publish button.
+            Sticks to the bottom of the scrolling rail: the platform list grows
+            with every provider, and this — the one action the whole panel
+            exists for — was landing below the fold with nothing to suggest
+            there was anything under it. */}
+        <div style={{
+          position: 'sticky', bottom: 0, zIndex: 2,
+          background: 'var(--bg-elevated)',
+          paddingTop: 8, marginTop: 4,
+        }}>
         <button
           className="btn btn-primary btn-sm"
           style={{ width: '100%', fontSize: 12 }}
@@ -207,6 +216,7 @@ export const PublishPanel: React.FC<Props> = ({ contentId, pageId, approved }) =
               : `🚀 Publish Now (${[...selected].length} platform${selected.size > 1 ? 's' : ''})`
           }
         </button>
+        </div>
 
         {/* Jobs history */}
         {hasJobs && (
