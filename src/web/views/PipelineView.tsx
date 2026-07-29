@@ -67,6 +67,11 @@ export const PipelineView: React.FC<Props> = ({ topics, stats, busy, page, onOpe
   };
 
   const selectionCount = selectedIds.size;
+  // The pipeline is a work queue, so finished topics leave it. Without this a
+  // published topic stayed in the list wearing an "approved" badge and an Edit
+  // button, reading as though it still needed publishing. Its history lives on
+  // the Topics page under Posted.
+  const inFlight = local.filter(t => t.state !== 'POSTED' && t.state !== 'ANALYZED');
   const selectedTopics = local.filter(t => selectedIds.has(t.id));
 
   // A topic is ready to schedule if it's approved (either from API or just approved in preview)
@@ -162,18 +167,25 @@ export const PipelineView: React.FC<Props> = ({ topics, stats, busy, page, onOpe
       </div>
       <div className="view-area" style={{ paddingTop: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} className="stagger">
-          {local.map(topic => (
+          {inFlight.map(topic => (
             <TopicCard key={topic.id} topic={topic} pageId={page.id}
               selected={selectedIds.has(topic.id)} onSelect={handleSelect}
               onEdit={onOpenEditor} onDiscard={requestDiscard}
               onApproved={handleApproved}/>
           ))}
-          {local.length === 0 && (
+          {inFlight.length === 0 && (
             <div className="empty-state">
               <div style={{ fontSize: 28, opacity: 0.3 }}>◉</div>
-              <div style={{ fontWeight: 600 }}>No topics yet</div>
+              {/* Hiding finished topics means an all-published page would
+                  otherwise be told it has no topics, which is not true and
+                  reads like the work was lost. */}
+              <div style={{ fontWeight: 600 }}>
+                {local.length > 0 ? 'All caught up' : 'No topics yet'}
+              </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Run Ingest to pull trending topics
+                {local.length > 0
+                  ? `Everything here is published. See Topics → Posted for the ${local.length} finished one${local.length > 1 ? 's' : ''}.`
+                  : 'Add a topic, or run the pipeline to pull trending ones'}
               </div>
             </div>
           )}

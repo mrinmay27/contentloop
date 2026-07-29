@@ -343,7 +343,18 @@ export async function dashboardStats(nicheId?: string, pageId?: string): Promise
           FROM content_items WHERE status = 'qa_passed' AND ($2::uuid IS NULL OR page_id = $2)
         UNION ALL
         SELECT 'approved', count(*)::int
-          FROM content_items WHERE status = 'approved' AND ($2::uuid IS NULL OR page_id = $2)
+          -- Every other card counts what is AT that stage right now
+          -- (qa_ready, scheduled), so this one must too. Counting approved
+          -- cumulatively left the pipeline's REVIEW column reading 'Awaiting'
+          -- for work already published.
+          FROM content_items c WHERE c.status = 'approved'
+            AND ($2::uuid IS NULL OR c.page_id = $2)
+            AND NOT EXISTS (
+              SELECT 1 FROM publish_jobs pj
+              WHERE pj.content_item_id = c.id
+                AND pj.status IN ('scheduled', 'publishing', 'published')
+                AND pj.dry_run IS NOT TRUE
+            )
         UNION ALL
         SELECT 'scheduled', count(*)::int
           FROM publish_jobs WHERE status = 'scheduled' AND ($2::uuid IS NULL OR page_id = $2)
