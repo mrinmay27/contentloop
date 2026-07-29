@@ -30,7 +30,7 @@ import {
 } from "../services/repositories.js";
 import * as canva from "../services/canva.js";
 import * as instagram from "../services/instagram.js";
-import { configStore, CONFIG_META, type ConfigKey } from "../config/configStore.js";
+import { configStore, isPostingDryRun, CONFIG_META, type ConfigKey } from "../config/configStore.js";
 import { isDesktop } from "../config/mode.js";
 import { generateImage as genImage } from "../config/generationProviders.js";
 import { llmConfigStore, LLM_PROVIDERS, resolveBaseUrl } from "../config/llmConfigStore.js";
@@ -145,7 +145,7 @@ if (!isDesktop()) {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, mode: env.NODE_ENV, approvalRequired: env.APPROVAL_REQUIRED, postingDryRun: env.POSTING_DRY_RUN });
+  res.json({ ok: true, mode: env.NODE_ENV, approvalRequired: env.APPROVAL_REQUIRED, postingDryRun: isPostingDryRun() });
 });
 
 // Settings: returns integration status + pipeline config derived from env
@@ -1927,9 +1927,19 @@ app.get("/api/pages/:id/publish-platforms", async (req, res, next) => {
   try {
     const igInfo = await instagram.isConnected(req.params.id);
     const igConnected = igInfo !== false;
+
+    // YouTube was missing from this list entirely, which made the whole
+    // YouTube publishing path unreachable: a user could connect a channel in
+    // Settings, see "Connected", and then find no YouTube checkbox to tick.
+    // The key must be youtube_shorts — that is what the formatter, the
+    // publisher's switch and publish_jobs.platform all use.
+    const { getToken } = await import("../services/youtubeTokens.js");
+    const ytConnected = !!(await getToken(req.params.id));
+
     res.json({
       platforms: {
         instagram: { connected: igConnected, label: 'Instagram', icon: '📸' },
+        youtube_shorts: { connected: ytConnected, label: 'YouTube Shorts', icon: '▶️' },
         facebook:  { connected: igConnected, label: 'Facebook',  icon: '👍' },
         linkedin:  { connected: false, label: 'LinkedIn',   icon: '💼' },
         twitter:   { connected: !!(configStore.get('TWITTER_BEARER_TOKEN')), label: 'Twitter / X', icon: '𝕏' },
@@ -1960,6 +1970,14 @@ app.post("/api/content/:id/publish", async (req, res, next) => {
     };
     if (!Array.isArray(platforms) || platforms.length === 0)
       return void res.status(400).json({ error: 'platforms[] is required' });
+
+    const { PLATFORM_META } = await import('../services/platformFormatter.js');
+    const unknown = platforms.filter(p => !(p in PLATFORM_META));
+    if (unknown.length)
+      return void res.status(400).json({
+        error: `Unknown platform${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}. `
+             + `Valid: ${Object.keys(PLATFORM_META).join(', ')}`,
+      });
 
     // Load content item + page for formatting
     const { rows: ciRows } = await query(
@@ -2024,7 +2042,7 @@ app.post("/api/content/:id/publish", async (req, res, next) => {
           videoUrl:         ci.video_url ?? null,
           hook,
         };
-        dispatchPublishJob(jobInput, env.POSTING_DRY_RUN).catch(() => {});
+        dispatchPublishJob(jobInput, isPostingDryRun()).catch(() => {});
       }
     }
 
@@ -2068,7 +2086,7 @@ app.patch("/api/publish-jobs/:id", async (req, res, next) => {
       if (!['scheduled', 'failed', 'pending'].includes(rows[0].status))
         return void res.status(409).json({ error: 'Job already published or publishing' });
       const { dispatchPublishJob, buildPublishJobInput } = await import('../services/platforms/publisher.js');
-      dispatchPublishJob(buildPublishJobInput(rows[0]), env.POSTING_DRY_RUN).catch(() => {});
+      dispatchPublishJob(buildPublishJobInput(rows[0]), isPostingDryRun()).catch(() => {});
       return void res.json({ ok: true });
     }
     res.status(400).json({ error: 'Invalid action' });

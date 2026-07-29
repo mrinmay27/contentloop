@@ -289,3 +289,15 @@ class ConfigStore {
 }
 
 export const configStore = new ConfigStore();
+
+/** Is publishing in dry-run (no real posts)?
+ *
+ *  Single source of truth. The Settings toggle writes POSTING_DRY_RUN into
+ *  configStore, but every publish path used to read env.POSTING_DRY_RUN — so
+ *  the toggle changed a stored value that nothing consulted, and a user who
+ *  switched it off still got dry-run posts with no indication why. configStore
+ *  is seeded from env at first run, so the env var still sets the default.
+ */
+export function isPostingDryRun(): boolean {
+  return configStore.getBoolean("POSTING_DRY_RUN");
+}

@@ -25,7 +25,11 @@ export function formatCaption(opts: {
   hashtags?: string[];
 }): string {
   const { platform, hook, caption, hashtags = [] } = opts;
-  const { caption: limit, maxHashtags } = LIMITS[platform];
+  // An unrecognised platform used to throw a destructuring TypeError, which
+  // surfaced as a 500 with no clue that the platform name was the problem.
+  const limits = LIMITS[platform];
+  if (!limits) throw new Error(`Unknown publish platform: ${platform}`);
+  const { caption: limit, maxHashtags } = limits;
 
   const tags = hashtags
     .slice(0, maxHashtags)

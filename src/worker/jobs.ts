@@ -1,7 +1,7 @@
 import fsSync from "node:fs";
 import { env } from "../config/env.js";
 import type { TopicDecision } from "../domain/types.js";
-import { configStore } from "../config/configStore.js";
+import { configStore, isPostingDryRun } from "../config/configStore.js";
 import { classifyNiche } from "../domain/niche-taxonomy.js";
 import { scoreTopic, applySourceQualityOverrides } from "../domain/scoring.js";
 import { applySourceDiversityCap, DEFAULT_MAX_PER_SOURCE } from "../domain/sourceDiversity.js";
@@ -374,7 +374,7 @@ export async function schedule(): Promise<void> {
 
 export async function post(): Promise<void> {
   const { publishDueJobs } = await import("../services/platforms/publisher.js");
-  const published = await publishDueJobs(env.POSTING_DRY_RUN);
+  const published = await publishDueJobs(isPostingDryRun());
   if (published > 0) console.log(`[post] Published ${published} due job(s)`);
 }
 
