@@ -2,10 +2,12 @@ import { dueCapturePoints, POINT_MS } from "./capture.js";
 import { InstagramInsightsProvider } from "./instagramProvider.js";
 import { listCaptureCandidates, insertMetricSnapshot, type CaptureCandidate } from "./metricsRepo.js";
 import { SimulatedMetricsProvider } from "./simulatedProvider.js";
+import { YouTubeStatsProvider } from "./youtubeProvider.js";
 import type { MetricsProvider, PublishedJobContext } from "./types.js";
 
 const simulated = new SimulatedMetricsProvider();
 const instagram = new InstagramInsightsProvider();
+const youtube = new YouTubeStatsProvider();
 
 /**
  * Which provider, if any, may report on this job.
@@ -25,10 +27,12 @@ const instagram = new InstagramInsightsProvider();
 export function selectProvider(job: CaptureCandidate): MetricsProvider | null {
   if (job.dryRun) return simulated;
   if (job.platform === "instagram" && job.externalPostId) return instagram;
+  if (job.platform === "youtube_shorts" && job.externalPostId) return youtube;
   return null;
 }
 
-/** Instagram insights are cumulative-lifetime values: a stale catch-up capture
+/** Real insights are cumulative-lifetime values on both Instagram and
+ *  YouTube: a stale catch-up capture
  *  (e.g. grabbing the "24h" point 6 days late) would record near-7d numbers as
  *  a 24h snapshot and pollute the learning EMA. Real-source captures are only
  *  taken while the job's age is within 2x the point's nominal age; the
@@ -57,7 +61,7 @@ export async function runMetricsCapture(now = new Date()): Promise<number> {
       hook: job.hook,
     };
     for (const point of due) {
-      if (provider.source === "instagram" && isTooStaleForRealCapture(job.publishedAt, point, now)) continue;
+      if (provider.source !== "simulated" && isTooStaleForRealCapture(job.publishedAt, point, now)) continue;
       const snap = await provider.fetchMetrics(ctx, point);
       if (!snap) continue; // unavailable → retried next run until cutoff
       await insertMetricSnapshot(job.jobId, point, provider.source, snap);

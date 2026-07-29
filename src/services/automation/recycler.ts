@@ -30,14 +30,16 @@ interface RecycleCandidate {
  *  gated by continued 1.5x-average 24h performance. By design, not a loop.
  *
  *  Source discipline (spec §2, same as the learning loop): per niche, use real
- *  ('instagram') rows exclusively once any exist, else simulated — never mixed.
+ *  rows exclusively once any exist, else simulated — never mixed. 'Real' is
+ *  any source that is not the simulator, so a second real provider joins
+ *  without this needing to name it.
  *  Both the average AND the candidate's own snapshot must be in-mode. */
 async function listRecycleCandidates(): Promise<RecycleCandidate[]> {
   const r = await query<Omit<RecycleCandidate, "published_at"> & { published_at: string | Date }>(
     `
     WITH niche_mode AS (
       SELECT t.niche_id,
-             CASE WHEN bool_or(pm.source = 'instagram') THEN 'instagram' ELSE 'simulated' END AS mode
+             CASE WHEN bool_or(pm.source <> 'simulated') THEN 'real' ELSE 'simulated' END AS mode
       FROM performance_metrics pm
       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
       JOIN content_items c ON c.id = pj.content_item_id
@@ -51,7 +53,7 @@ async function listRecycleCandidates(): Promise<RecycleCandidate[]> {
       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
       JOIN content_items c ON c.id = pj.content_item_id
       JOIN topics t ON t.id = c.topic_id
-      JOIN niche_mode nm ON nm.niche_id = t.niche_id AND pm.source = nm.mode
+      JOIN niche_mode nm ON nm.niche_id = t.niche_id AND (pm.source <> 'simulated') = (nm.mode = 'real')
       WHERE pm.capture_point = '24h'
       GROUP BY t.niche_id
     )
@@ -64,7 +66,7 @@ async function listRecycleCandidates(): Promise<RecycleCandidate[]> {
     JOIN content_items c ON c.id = pj.content_item_id
     JOIN topics t ON t.id = c.topic_id
     JOIN niche_avg na ON na.niche_id = t.niche_id
-    JOIN niche_mode nm ON nm.niche_id = t.niche_id AND pm.source = nm.mode
+    JOIN niche_mode nm ON nm.niche_id = t.niche_id AND (pm.source <> 'simulated') = (nm.mode = 'real')
     WHERE pm.capture_point = '24h'
       AND pj.status = 'published'
       AND pj.published_at <= now() - interval '30 days'

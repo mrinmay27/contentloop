@@ -567,7 +567,7 @@ export async function listAnalyticsForPage(pageId: string): Promise<any> {
      FROM publish_jobs pj
      WHERE pj.page_id = $1 AND pj.status = 'published'
        AND pj.dry_run IS NOT TRUE
-       AND pj.platform <> 'instagram'`,
+       AND pj.platform NOT IN ('instagram', 'youtube_shorts')`,
     [pageId]
   );
 

@@ -1023,7 +1023,7 @@ app.get("/api/pages/:id/learning", async (req, res, next) => {
        JOIN publish_jobs pj ON pj.id = pm.publish_job_id
        JOIN content_items c ON c.id = pj.content_item_id
        JOIN topics t ON t.id = c.topic_id
-       WHERE t.niche_id = $1 AND pm.source = 'instagram' LIMIT 1`,
+       WHERE t.niche_id = $1 AND pm.source <> 'simulated' LIMIT 1`,
       [nicheId]
     );
     // "simulated" used to be the catch-all for "no real Instagram metrics",

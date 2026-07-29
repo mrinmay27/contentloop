@@ -160,7 +160,7 @@ async function listActivity(limit = 30): Promise<InboxActivityItem[]> {
     `
     WITH niche_mode AS (
       SELECT t.niche_id,
-             CASE WHEN bool_or(pm.source = 'instagram') THEN 'instagram' ELSE 'simulated' END AS mode
+             CASE WHEN bool_or(pm.source <> 'simulated') THEN 'real' ELSE 'simulated' END AS mode
       FROM performance_metrics pm
       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
       JOIN content_items c ON c.id = pj.content_item_id
@@ -174,7 +174,7 @@ async function listActivity(limit = 30): Promise<InboxActivityItem[]> {
       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
       JOIN content_items c ON c.id = pj.content_item_id
       JOIN topics t ON t.id = c.topic_id
-      JOIN niche_mode nm ON nm.niche_id = t.niche_id AND pm.source = nm.mode
+      JOIN niche_mode nm ON nm.niche_id = t.niche_id AND (pm.source <> 'simulated') = (nm.mode = 'real')
       WHERE pm.capture_point = '24h'
       GROUP BY t.niche_id
     ),
@@ -201,7 +201,7 @@ async function listActivity(limit = 30): Promise<InboxActivityItem[]> {
       JOIN topics t ON t.id = c.topic_id
       LEFT JOIN niche_mode nm ON nm.niche_id = t.niche_id
       LEFT JOIN performance_metrics pm
-        ON pm.publish_job_id = pj.id AND pm.capture_point = '24h' AND pm.source = nm.mode
+        ON pm.publish_job_id = pj.id AND pm.capture_point = '24h' AND (pm.source <> 'simulated') = (nm.mode = 'real')
       LEFT JOIN niche_avg na ON na.niche_id = t.niche_id
       -- A dry run published nothing, so it does not belong in a feed of
       -- things that happened. It also made this list disagree with the digest

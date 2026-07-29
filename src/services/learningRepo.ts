@@ -46,7 +46,7 @@ export async function nicheHasLearnedRealRows(nicheId: string): Promise<boolean>
       JOIN publish_jobs pj ON pj.id = pm.publish_job_id
       JOIN content_items c ON c.id = pj.content_item_id
       JOIN topics t ON t.id = c.topic_id
-      WHERE t.niche_id = $1 AND pm.source = 'instagram'
+      WHERE t.niche_id = $1 AND pm.source <> 'simulated'
         AND pm.capture_point = '24h' AND pm.learned_at IS NOT NULL
       LIMIT 1
     `,

@@ -1,5 +1,5 @@
 export type CapturePoint = "1h" | "24h" | "7d";
-export type MetricsSource = "simulated" | "instagram";
+export type MetricsSource = "simulated" | "instagram" | "youtube";
 
 export interface MetricSnapshot {
   views: number;
