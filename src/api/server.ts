@@ -1665,22 +1665,59 @@ app.get("/auth/youtube/callback", async (req, res, next) => {
 
     // Per page, like instagram and canva. A single global slot meant a second
     // page silently overwrote the first page's channel.
-    const { saveToken } = await import("../services/youtubeTokens.js");
+    const { saveToken, fetchChannel } = await import("../services/youtubeTokens.js");
+    // Which channel did they just authorise? Asked once, here, so the Settings
+    // card can name it instead of saying only "Connected".
+    const channel = await fetchChannel(token.access_token);
     await saveToken(entry.pageId, {
       accessToken: token.access_token,
       refreshToken: token.refresh_token ?? null,
       expiresAt: token.expires_in ? new Date(Date.now() + token.expires_in * 1000) : null,
       scope: token.scope ?? null,
+      channelId: channel.status === "ok" ? channel.id : null,
+      channelTitle: channel.status === "ok" ? channel.title : null,
     });
-    res.redirect(`/?youtube=connected&pageId=${entry.pageId}`);
+    // Say so now, not at publish time.
+    const outcome = channel.status === "no_channel" ? "nochannel" : "connected";
+    res.redirect(`/?youtube=${outcome}&pageId=${entry.pageId}`);
   } catch (error) { next(error); }
 });
 
 // YouTube status — per page, so two pages report independently.
 app.get("/api/pages/:id/youtube/status", async (req, res, next) => {
   try {
-    const { getToken } = await import("../services/youtubeTokens.js");
-    res.json({ connected: !!(await getToken(req.params.id)) });
+    const { getToken, saveToken, fetchChannel, ensureFreshToken } =
+      await import("../services/youtubeTokens.js");
+    const row = await getToken(req.params.id);
+    if (!row) return void res.json({ connected: false, username: null });
+
+    // Connections made before the channel was recorded would show a blank
+    // name forever. Fill it in on first sight instead of asking the user to
+    // disconnect and reconnect for a cosmetic field.
+    let title = row.channelTitle;
+    let noChannel = false;
+    if (!title) {
+      try {
+        // Must write back the token ensureFreshToken returned, not row's:
+        // it may have just refreshed and stored a new one, and passing the
+        // stale value here would overwrite the fresh token with an expired one.
+        const access = await ensureFreshToken(req.params.id);
+        const channel = await fetchChannel(access);
+        if (channel.status === "ok") {
+          await saveToken(req.params.id, {
+            accessToken: access,
+            channelId: channel.id, channelTitle: channel.title,
+          });
+          title = channel.title;
+        } else if (channel.status === "no_channel") {
+          noChannel = true;
+        }
+      } catch { /* still connected; the name is the only thing missing */ }
+    }
+    // username is what OAuthConnectCard renders beside "Connected"; for
+    // YouTube the meaningful identity is the channel, not the Google account.
+    // noChannel is the one that matters: authorised, but nothing to upload to.
+    res.json({ connected: true, username: title, noChannel });
   } catch (err) { next(err); }
 });
 

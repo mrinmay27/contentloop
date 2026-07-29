@@ -6,7 +6,8 @@
  */
 import { query } from "../db/pool.js";
 import { configStore } from "../config/configStore.js";
-import { needsRefresh } from "../domain/youtube.js";
+import { needsRefresh, interpretChannelResponse } from "../domain/youtube.js";
+import type { ChannelLookup } from "../domain/youtube.js";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
@@ -16,6 +17,8 @@ export interface YouTubeToken {
   refreshToken: string | null;
   expiresAt: Date | null;
   scope: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
 }
 
 function mapRow(r: any): YouTubeToken {
@@ -25,7 +28,32 @@ function mapRow(r: any): YouTubeToken {
     refreshToken: r.refresh_token ?? null,
     expiresAt: r.expires_at ? new Date(r.expires_at) : null,
     scope: r.scope ?? null,
+    channelId: r.channel_id ?? null,
+    channelTitle: r.channel_title ?? null,
   };
+}
+
+/** Ask Google which channel these credentials belong to.
+ *
+ *  Costs 1 quota unit against the 10,000/day budget — next to nothing beside
+ *  the 1,600 an upload costs.
+ *
+ *  Three outcomes, deliberately distinguished. A Google account with no
+ *  YouTube channel authorises perfectly happily and then fails every upload
+ *  with youtubeSignupRequired, which is a miserable thing to learn hours later
+ *  from a scheduled post. Collapsing that into "unknown" would hide it, so
+ *  no_channel is its own answer and the caller warns at connect time. */
+export async function fetchChannel(accessToken: string): Promise<ChannelLookup> {
+  try {
+    const res = await fetch(
+      "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+      { headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000) }
+    );
+    return interpretChannelResponse(res.ok, res.ok ? await res.json() : null);
+  } catch {
+    return { status: "unknown" };
+  }
 }
 
 export async function getToken(pageId: string): Promise<YouTubeToken | null> {
@@ -36,10 +64,12 @@ export async function getToken(pageId: string): Promise<YouTubeToken | null> {
 export async function saveToken(pageId: string, t: {
   accessToken: string; refreshToken?: string | null;
   expiresAt?: Date | null; scope?: string | null;
+  channelId?: string | null; channelTitle?: string | null;
 }): Promise<void> {
   await query(
-    `INSERT INTO youtube_tokens (page_id, access_token, refresh_token, expires_at, scope)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO youtube_tokens (page_id, access_token, refresh_token, expires_at, scope,
+                                 channel_id, channel_title)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (page_id) DO UPDATE SET
        access_token = EXCLUDED.access_token,
        -- Google omits refresh_token on refresh responses; keep the stored one
@@ -47,8 +77,12 @@ export async function saveToken(pageId: string, t: {
        refresh_token = COALESCE(EXCLUDED.refresh_token, youtube_tokens.refresh_token),
        expires_at = EXCLUDED.expires_at,
        scope = COALESCE(EXCLUDED.scope, youtube_tokens.scope),
+       -- A token refresh does not re-fetch the channel, so keep what is stored.
+       channel_id = COALESCE(EXCLUDED.channel_id, youtube_tokens.channel_id),
+       channel_title = COALESCE(EXCLUDED.channel_title, youtube_tokens.channel_title),
        updated_at = now()`,
-    [pageId, t.accessToken, t.refreshToken ?? null, t.expiresAt ?? null, t.scope ?? null]
+    [pageId, t.accessToken, t.refreshToken ?? null, t.expiresAt ?? null, t.scope ?? null,
+     t.channelId ?? null, t.channelTitle ?? null]
   );
 }
 

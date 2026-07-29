@@ -1,0 +1,11 @@
+-- Remember which channel a page is connected to, by name.
+--
+-- 009 added channel_id but nothing ever wrote it, so the Settings card could
+-- only say "Connected" — with no way to tell which of your channels that was.
+-- That is the exact failure 009 was written to fix: a second page overwriting
+-- the first page's channel was invisible, and it stays invisible if the UI
+-- cannot name the channel it is showing.
+--
+-- The youtube.readonly scope is already requested at connect time solely to
+-- read this, so no new permission is involved.
+ALTER TABLE youtube_tokens ADD COLUMN IF NOT EXISTS channel_title TEXT;

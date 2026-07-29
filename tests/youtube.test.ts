@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_TITLE, needsRefresh, buildTitle, describeShortRejection,
+  interpretChannelResponse,
 } from "../src/domain/youtube.js";
 
 describe("buildTitle", () => {
@@ -58,5 +59,38 @@ describe("needsRefresh", () => {
   it("refreshes when expiry is unknown", () => {
     // Safer to refresh needlessly than to upload with a dead token.
     expect(needsRefresh(null, now)).toBe(true);
+  });
+});
+
+describe("interpretChannelResponse", () => {
+  it("reads the channel out of a normal response", () => {
+    expect(interpretChannelResponse(true, {
+      items: [{ id: "UC123", snippet: { title: "Inside Money" } }],
+    })).toEqual({ status: "ok", id: "UC123", title: "Inside Money" });
+  });
+
+  // The real shape from a Google account with no channel: 200, and no `items`
+  // key at all. An earlier version tested for an empty array and so read this
+  // as "unknown", silently hiding the one problem worth warning about.
+  it("treats a 200 with no items key as no channel", () => {
+    expect(interpretChannelResponse(true, {
+      kind: "youtube#channelListResponse",
+      pageInfo: { totalResults: 0, resultsPerPage: 5 },
+    })).toEqual({ status: "no_channel" });
+  });
+
+  it("treats an explicitly empty items array as no channel too", () => {
+    expect(interpretChannelResponse(true, { items: [] })).toEqual({ status: "no_channel" });
+  });
+
+  // A failed request says nothing about whether a channel exists, so it must
+  // not report no-channel — that would tell users to create one they have.
+  it("does not claim no-channel when the request failed", () => {
+    expect(interpretChannelResponse(false, null)).toEqual({ status: "unknown" });
+  });
+
+  it("falls back to the id when the channel has no title", () => {
+    expect(interpretChannelResponse(true, { items: [{ id: "UC9" }] }))
+      .toEqual({ status: "ok", id: "UC9", title: "UC9" });
   });
 });

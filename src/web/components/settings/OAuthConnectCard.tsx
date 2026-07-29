@@ -57,7 +57,12 @@ const PROVIDER_META: Record<OAuthProvider, {
   },
 };
 
-type Status = { connected: boolean; username?: string | null };
+type Status = {
+  connected: boolean;
+  username?: string | null;
+  /** Authorised, but the account owns no channel — every upload would fail. */
+  noChannel?: boolean;
+};
 
 // Every URL below is same-origin and relative on purpose. The port is not
 // fixed — desktop mode defaults to 4173, the launcher picks a free port, and
@@ -105,13 +110,14 @@ export const OAuthConnectCard: React.FC<Props> = ({ provider, pageId, onStatusCh
   };
 
   const connected = status?.connected ?? false;
+  const noChannel = connected && status?.noChannel === true;
 
   return (
     <div style={{
-      border: `1px solid ${connected ? 'var(--green)' : 'var(--border)'}`,
+      border: `1px solid ${noChannel ? 'var(--amber, #f59e0b)' : connected ? 'var(--green)' : 'var(--border)'}`,
       borderRadius: 'var(--radius)',
       padding: '18px 20px',
-      background: connected ? '#10b98108' : 'var(--bg-elevated)',
+      background: noChannel ? '#f59e0b0d' : connected ? '#10b98108' : 'var(--bg-elevated)',
       marginBottom: 20,
       transition: 'border-color 0.2s, background 0.2s',
     }}>
@@ -126,9 +132,11 @@ export const OAuthConnectCard: React.FC<Props> = ({ provider, pageId, onStatusCh
             </span>
             {status === null
               ? <span style={{ fontSize:11, color:'var(--text-muted)' }}>Checking…</span>
-              : connected
-                ? <span className="badge badge-green badge-dot">Connected</span>
-                : <span className="badge badge-muted">Not connected</span>
+              : noChannel
+                ? <span className="badge badge-amber">Connected — no channel</span>
+                : connected
+                  ? <span className="badge badge-green badge-dot">Connected</span>
+                  : <span className="badge badge-muted">Not connected</span>
             }
           </div>
           <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:3, lineHeight:1.5 }}>
@@ -136,6 +144,22 @@ export const OAuthConnectCard: React.FC<Props> = ({ provider, pageId, onStatusCh
           </div>
         </div>
       </div>
+
+      {/* Signed in, but there is nothing to publish to. Worth stopping on:
+          the upload would otherwise fail much later, on a scheduled post. */}
+      {noChannel && (
+        <div style={{
+          padding:'10px 12px', marginBottom:12, fontSize:12.5, lineHeight:1.55,
+          background:'#f59e0b14', border:'1px solid #f59e0b55',
+          borderRadius:'var(--radius-sm)', color:'var(--text-primary)',
+        }}>
+          <strong>This Google account has no YouTube channel</strong>, so uploads
+          would fail. Either create one at youtube.com (Settings → Create a channel),
+          or Disconnect and reconnect signing in with the account that owns your
+          channel. If your channel is a Brand Account, pick the channel itself on
+          Google's account-chooser rather than your personal login.
+        </div>
+      )}
 
       {/* Connected: show @username */}
       {connected && status?.username && (

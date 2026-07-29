@@ -45,3 +45,22 @@ export function needsRefresh(expiresAt: Date | null, now: Date = new Date()): bo
   if (!expiresAt) return true;
   return expiresAt.getTime() - now.getTime() <= REFRESH_WINDOW_MS;
 }
+
+/** What a channels.list response means.
+ *
+ *  Split out from the fetch so it can be tested: the first version of this
+ *  logic checked for an empty `items` array, but Google omits `items` entirely
+ *  when an account has no channel, so a real no-channel account was read as a
+ *  transient failure and the warning never appeared.
+ */
+export type ChannelLookup =
+  | { status: "ok"; id: string; title: string }
+  | { status: "no_channel" }
+  | { status: "unknown" };
+
+export function interpretChannelResponse(ok: boolean, body: unknown): ChannelLookup {
+  if (!ok) return { status: "unknown" };
+  const ch = (body as any)?.items?.[0];
+  if (!ch?.id) return { status: "no_channel" };
+  return { status: "ok", id: ch.id, title: ch.snippet?.title ?? ch.id };
+}

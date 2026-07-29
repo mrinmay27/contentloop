@@ -634,6 +634,10 @@ const SETUP_GUIDES: Record<string, GuideStep[]> = {
       body:  'In your project → APIs & Services → Library → search "YouTube Data API v3" → Enable.',
     },
     {
+      title: 'Add the two scopes it needs',
+      body:  'Google Auth Platform → Data Access → Add or remove scopes. Add ".../auth/youtube.upload" (publishes the video) and ".../auth/youtube.readonly" (reads back your channel name). Both list as "sensitive", which is expected — sensitive scopes do not require Google verification.',
+    },
+    {
       title: 'Create OAuth 2.0 credentials',
       body:  'APIs & Services → Credentials → Create Credentials → OAuth Client ID → Application type: Web application.',
     },
@@ -646,12 +650,24 @@ const SETUP_GUIDES: Record<string, GuideStep[]> = {
       body:  'From the OAuth Client page, copy Client ID and Client Secret. Expand "Developer credentials — one-time setup" above and paste them in.',
     },
     {
-      title: 'Click Connect YouTube',
-      body:  'Hit the Connect YouTube button at the top of this section. Google Sign-In opens — sign in with the Google account that owns your channel. Tokens are saved automatically.',
+      title: 'Publish the app — or your login dies after 7 days',
+      body:  'Google Auth Platform → Audience → Publish app. While publishing status is "Testing", Google issues logins that expire after 7 days, so anything you schedule further out than that fails at publish time. Publishing does not submit you for review and exposes nothing — ignore the yellow "requires verification" banner, and do not go to the Verification Center. It is only needed past 100 connected users.',
     },
     {
-      title: 'Data API Key (required for YouTube Trending ingestion)',
-      body:  'APIs & Services → Credentials → Create Credentials → API Key. Copy and paste into the "Data API Key" field above. This activates the YouTube Trending source in the ingestion pipeline. Free tier: 10,000 units/day.',
+      title: 'Staying in Testing instead? Add yourself as a test user',
+      body:  'Only if you skipped the step above. Audience → Test users → Add users → the Google account that owns your channel. Without this Google blocks the sign-in outright, and the error will not tell you the account is the reason.',
+    },
+    {
+      title: 'Click Connect YouTube',
+      body:  'Hit Connect YouTube at the top of this section and sign in with the Google account that owns your channel — signing in with a different account is the most common cause of "Access blocked".',
+    },
+    {
+      title: 'Expect a scary warning — it is normal',
+      body:  'Google shows "Google hasn\'t verified this app". That is what an unverified app looks like, and yours is unverified because it is yours alone. Click Advanced → "Go to ContentLoop (unsafe)", then approve both permissions. You land back here with the card showing Connected.',
+    },
+    {
+      title: 'Optional: Data API Key — not needed to publish',
+      body:  'Only for pulling YouTube trending videos in as topic ideas. It is a different credential for a different job and has nothing to do with uploading. APIs & Services → Credentials → Create Credentials → API Key, then paste into "Data API Key" above. Free tier: 10,000 units/day.',
     },
   ],
   'Canva': [
