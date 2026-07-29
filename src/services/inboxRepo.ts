@@ -187,7 +187,10 @@ async function listActivity(limit = 30): Promise<InboxActivityItem[]> {
     ),
     posted AS (
       SELECT pj.id::text AS id, 'posted' AS kind,
-             '✓ Posted "' || t.title || '"' AS title,
+             -- No tick here: the view already renders one from its icon map
+             -- for kind='posted', so baking one into the text produced
+             -- "✓ ✓ Posted ...".
+             'Posted "' || t.title || '"' AS title,
              pj.published_at AS created_at,
              p.name AS page_name,
              pm.engagement_rate::float8 AS engagement_rate,
@@ -200,7 +203,12 @@ async function listActivity(limit = 30): Promise<InboxActivityItem[]> {
       LEFT JOIN performance_metrics pm
         ON pm.publish_job_id = pj.id AND pm.capture_point = '24h' AND pm.source = nm.mode
       LEFT JOIN niche_avg na ON na.niche_id = t.niche_id
+      -- A dry run published nothing, so it does not belong in a feed of
+      -- things that happened. It also made this list disagree with the digest
+      -- directly above it, which already excludes dry runs: '1 posted' over
+      -- two Posted entries.
       WHERE pj.status = 'published' AND pj.published_at IS NOT NULL
+        AND pj.dry_run IS NOT TRUE
     )
     SELECT * FROM (SELECT * FROM events UNION ALL SELECT * FROM posted) all_items
     ORDER BY created_at DESC
