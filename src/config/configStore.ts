@@ -25,7 +25,7 @@ export type ConfigKey =
   | 'INSTAGRAM_ACCESS_TOKEN'
   | 'INSTAGRAM_APP_ID' | 'INSTAGRAM_APP_SECRET' | 'INSTAGRAM_REDIRECT_URI'
   // YouTube
-  | 'YOUTUBE_API_KEY' | 'YOUTUBE_CHANNEL_ID'
+  | 'YOUTUBE_API_KEY'
   | 'YOUTUBE_CLIENT_ID' | 'YOUTUBE_CLIENT_SECRET'
   | 'YOUTUBE_ACCESS_TOKEN' | 'YOUTUBE_REFRESH_TOKEN'
   // Product Hunt
@@ -116,14 +116,15 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
   YOUTUBE_PRIVACY:       { label:'Upload visibility', group:'YouTube', type:'select',
                            options:['private','unlisted','public'],
                            placeholder:'private' },
-  YOUTUBE_CHANNEL_ID:    { label:'Channel ID',        group:'YouTube', type:'text',
-                           placeholder:'UCxxxxxxxxxxxxxxxxxxxxxxxx' },
   YOUTUBE_CLIENT_ID:     { label:'OAuth Client ID',   group:'YouTube', type:'text',
                            placeholder:'xxxxxx.apps.googleusercontent.com' },
   YOUTUBE_CLIENT_SECRET: { label:'OAuth Client Secret', group:'YouTube', type:'secret' },
-  YOUTUBE_ACCESS_TOKEN:  { label:'Access Token',      group:'YouTube', type:'secret',
-                           placeholder:'ya29.…' },
-  YOUTUBE_REFRESH_TOKEN: { label:'Refresh Token',     group:'YouTube', type:'secret' },
+  // Deliberately NOT listed in the YouTube group: since v0.3.0 these live per
+  // page in the youtube_tokens table, written by Connect. The keys remain only
+  // so adoptLegacyToken() can migrate an install that predates that. Offering
+  // them as fields invited people to paste tokens that nothing would read.
+  YOUTUBE_ACCESS_TOKEN:  { label:'Access Token (legacy)',  group:'_hidden', type:'secret' },
+  YOUTUBE_REFRESH_TOKEN: { label:'Refresh Token (legacy)', group:'_hidden', type:'secret' },
   // ── Canva ─────────────────────────────────────────────────────────────────
   CANVA_CLIENT_ID:     { label:'Client ID',      group:'Canva',     type:'text'   },
   CANVA_CLIENT_SECRET: { label:'Client Secret',  group:'Canva',     type:'secret' },
@@ -174,7 +175,6 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
   IMAGE_MODEL_PREFS:         process.env.IMAGE_MODEL_PREFS         ?? '{}',
   INSTAGRAM_ACCESS_TOKEN:    env.INSTAGRAM_ACCESS_TOKEN ?? '',
   YOUTUBE_API_KEY:           (process.env.YOUTUBE_API_KEY) ?? '',
-  YOUTUBE_CHANNEL_ID:        (process.env.YOUTUBE_CHANNEL_ID) ?? '',
   YOUTUBE_CLIENT_ID:         (process.env.YOUTUBE_CLIENT_ID) ?? '',
   YOUTUBE_CLIENT_SECRET:     (process.env.YOUTUBE_CLIENT_SECRET) ?? '',
   YOUTUBE_ACCESS_TOKEN:      (process.env.YOUTUBE_ACCESS_TOKEN) ?? '',
