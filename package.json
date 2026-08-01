@@ -25,7 +25,8 @@
     "start:desktop": "node dist/src/desktop/main.js",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx",
-    "check:feeds": "node scripts/check-feeds.mjs"
+    "check:feeds": "node scripts/check-feeds.mjs",
+    "check:lifecycle": "node scripts/check-lifecycle.mjs"
   },
   "dependencies": {
     "@andresaya/edge-tts": "^1.8.0",

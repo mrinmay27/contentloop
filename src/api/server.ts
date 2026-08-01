@@ -530,11 +530,20 @@ app.post("/api/content/draft", async (req, res, next) => {
     );
     if (existing.rows[0]) return void res.json({ ok: true, content: existing.rows[0] });
 
+    // Seed the hook from the topic title. An empty payload meant the editor
+    // opened on a blank Hook for every hand-added topic, and publishing it
+    // without noticing produced a Short titled "New Short" — while the user
+    // had already typed a perfectly good title one screen earlier.
+    const { rows: topicRows } = await query<{ title: string }>(
+      `SELECT title FROM topics WHERE id = $1`, [topicId]
+    );
+    const seed = topicRows[0]?.title ? { hook: topicRows[0].title } : {};
+
     const created = await query<{ id: string; payload: any; type: string; status: string }>(
       `INSERT INTO content_items (topic_id, page_id, type, status, payload)
-       VALUES ($1, $2, $3, 'draft', '{}'::jsonb)
+       VALUES ($1, $2, $3, 'draft', $4::jsonb)
        RETURNING id, payload, type, status`,
-      [topicId, pageId, type]
+      [topicId, pageId, type, JSON.stringify(seed)]
     );
     res.json({ ok: true, content: created.rows[0] });
   } catch (err) {

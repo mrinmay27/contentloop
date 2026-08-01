@@ -265,7 +265,16 @@ class ConfigStore {
     try {
       // Prefer the data dir; fall back to where older versions wrote, so an
       // upgrade does not silently reset every setting to its default.
+      // Legacy locations are only for upgrading the default install. If the
+      // user pointed CONTENTLOOP_DATA_DIR somewhere, that is a separate
+      // install and must start clean — otherwise the leak this fix exists to
+      // close simply happens once at first boot instead of permanently, and a
+      // second install still comes up holding the first one's API keys and
+      // dry-run setting.
+      const isDefaultInstall =
+        !(process.env.CONTENTLOOP_DATA_DIR ?? process.env.TPCE_DATA_DIR ?? "").trim();
       const source = fs.existsSync(CONFIG_PATH) ? CONFIG_PATH
+                   : !isDefaultInstall ? null
                    : fs.existsSync(LEGACY_CONFIG_PATH) ? LEGACY_CONFIG_PATH
                    : fs.existsSync(ESCAPED_CONFIG_PATH) ? ESCAPED_CONFIG_PATH
                    : null;

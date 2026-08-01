@@ -439,6 +439,7 @@ export async function listScheduledPostsForMonth(
         pj.published_at,
         pj.external_url,
         pj.error,
+        pj.dry_run,
         c.type,
         t.title AS topic_title,
         COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) AS display_at
@@ -454,7 +455,10 @@ export async function listScheduledPostsForMonth(
         -- true and is only set for real when a job is dispatched, so a
         -- genuine future post sits here with dry_run = true. Filtering on the
         -- flag by itself hid every scheduled post from the calendar.
-        AND NOT (pj.dry_run IS TRUE AND pj.status = 'published')
+        -- Any dispatched dry run, whatever its outcome. Testing only for
+        -- 'published' let a dry run that failed validation onto the calendar,
+        -- where it read as a real post having gone wrong.
+        AND NOT (pj.dry_run IS TRUE AND pj.status IN ('published', 'publishing', 'failed'))
         AND COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) >= $2
         AND COALESCE(pj.scheduled_at, pj.published_at, pj.created_at) <  $3
       ORDER BY display_at ASC
