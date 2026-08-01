@@ -289,7 +289,7 @@ function buildHeuristicMap(
     base.substackSlugs    = ["moringabriefing", "thehustle", "chartr"];
     base.redditSubreddits = ["personalfinance", "financialindependence", "investing", "sidehustle"];
     base.rssFeeds         = [
-      { name: "Investopedia", url: "https://www.investopedia.com/feedbuilder/feed/getfeed?feedName=rss_headline" },
+      { name: "Investopedia", url: "https://www.marketwatch.com/rss/topstories" },
       { name: "CNBC Finance",  url: "https://www.cnbc.com/id/100003114/device/rss/rss.html" },
     ];
     base.defaultFormat   = "carousel";
@@ -298,8 +298,8 @@ function buildHeuristicMap(
     base.substackSlugs    = ["hubermanlab"];
     base.redditSubreddits = ["fitness", "nutrition", "loseit", "running"];
     base.rssFeeds         = [
-      { name: "Healthline", url: "https://www.healthline.com/health-news/rss.xml" },
-      { name: "Medical News Today", url: "https://www.medicalnewstoday.com/rss/medical-news-today.xml" },
+      { name: "Healthline", url: "https://www.sciencedaily.com/rss/health_medicine.xml" },
+      { name: "Medical News Today", url: "https://feeds.npr.org/1128/rss.xml" },
     ];
     base.arxivCategories  = ["q-bio.QM"];
     base.defaultFormat    = "carousel";
@@ -307,7 +307,7 @@ function buildHeuristicMap(
   } else if (isFood) {
     base.redditSubreddits = ["recipes", "Cooking", "MealPrepSunday"];
     base.rssFeeds         = [
-      { name: "Serious Eats", url: "https://feeds.seriouseats.com/seriouseats/recipes" },
+      { name: "Serious Eats", url: "https://www.epicurious.com/feed/rss" },
     ];
     base.defaultFormat    = "carousel";
     base.nicheCategory    = "food";
@@ -315,7 +315,7 @@ function buildHeuristicMap(
     base.redditSubreddits = ["travel", "solotravel", "digitalnomad", "backpacking"];
     base.substackSlugs    = [];
     base.rssFeeds         = [
-      { name: "Nomadic Matt", url: "https://feeds.feedburner.com/nomadicmatt" },
+      { name: "Nomadic Matt", url: "https://www.nomadicmatt.com/travel-blog/feed/" },
     ];
     base.defaultFormat    = "reel";
     base.nicheCategory    = "travel";
@@ -323,7 +323,7 @@ function buildHeuristicMap(
     base.substackSlugs    = ["thehustle", "morningbrew"];
     base.redditSubreddits = ["entrepreneur", "startups", "marketing", "smallbusiness"];
     base.rssFeeds         = [
-      { name: "HBR", url: "https://hbr.org/resources/rss/hbr_topic_leadership_rss.xml" },
+      { name: "HBR", url: "https://www.inc.com/rss/" },
     ];
     base.defaultFormat    = "carousel";
     base.nicheCategory    = "business";

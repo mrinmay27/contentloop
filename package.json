@@ -24,7 +24,8 @@
     "desktop": "tsx src/desktop/main.ts",
     "start:desktop": "node dist/src/desktop/main.js",
     "test": "vitest run",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint . --ext .ts,.tsx",
+    "check:feeds": "node scripts/check-feeds.mjs"
   },
   "dependencies": {
     "@andresaya/edge-tts": "^1.8.0",

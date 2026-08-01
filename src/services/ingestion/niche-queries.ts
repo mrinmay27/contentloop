@@ -163,58 +163,58 @@ export const SUBREDDITS: Record<NicheCategory, string[]> = {
 // All URLs verified live on 2026-05-03. 403/404 sources removed and replaced.
 export const RSS_FEEDS: Record<NicheCategory, string[]> = {
   finance: [
-    "https://www.nerdwallet.com/blog/feed/",          // ✓ 200
-    "https://www.wisebread.com/feed",                  // ✓ 200 — personal finance blog
-    "https://www.doughroller.net/feed/",               // ✓ 200 — personal finance blog
+    "https://www.nerdwallet.com/blog/feed/",
+    "https://www.wisebread.com/feed",                  // personal finance blog
+    "https://www.cnbc.com/id/10001147/device/rss/rss.html", // CNBC Personal Finance
     // removed: mrmoneymustache.com (403), investopedia personal-finance page (403)
   ],
   tech: [
-    "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", // ✓ 200
-    "https://techcrunch.com/category/artificial-intelligence/feed/",      // ✓ 200
-    "https://hnrss.org/frontpage",                                         // ✓ 200
+    "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    "https://techcrunch.com/category/artificial-intelligence/feed/",
+    "https://hnrss.org/frontpage",
   ],
   health: [
-    "https://feeds.npr.org/1128/rss.xml",              // ✓ 200 — NPR Health
+    "https://feeds.npr.org/1128/rss.xml",              // NPR Health
     // removed: healthline.com (403), medicalnewstoday.com (403)
   ],
   food: [
-    "https://www.budgetbytes.com/feed/",               // ✓ 200
-    "https://cookieandkate.com/feed/",                 // ✓ 200
-    "https://pinchofyum.com/feed",                     // ✓ 200
+    "https://www.budgetbytes.com/feed/",
+    "https://cookieandkate.com/feed/",
+    "https://pinchofyum.com/feed",
     // removed: seriouseats.com (connection refused)
   ],
   travel: [
-    "https://www.adventurouskate.com/feed/",           // ✓ 200
-    "https://www.thebrokebackpacker.com/feed/",        // ✓ 200
+    "https://www.adventurouskate.com/feed/",
+    "https://www.adventurouskate.com/feed/",         // travel blog
     // removed: nomadicmatt feedburner (404)
   ],
   business: [
-    "https://feeds.feedburner.com/entrepreneur/latest", // ✓ 200
-    "https://feeds.feedburner.com/FastCompany",         // ✓ 200
+    "https://feeds.feedburner.com/entrepreneur/latest",
+    "https://www.fastcompany.com/latest/rss",
     // removed: hbr.org (403)
   ],
   creative: [
-    "https://feeds.feedburner.com/CreativeBloq",       // ✓ 200
-    "https://www.smashingmagazine.com/feed/",          // ✓ 200
+    "https://feeds.feedburner.com/CreativeBloq",
+    "https://www.smashingmagazine.com/feed/",
   ],
   education: [
-    "https://feeds.feedburner.com/TedTalksHD",         // ✓ 200
-    "https://edsurge.com/news.rss",                    // ✓ 200
+    "https://feeds.feedburner.com/TedTalksHD",
+    "https://www.edsurge.com/articles_rss",
   ],
   lifestyle: [
-    "https://jamesclear.com/feed",                     // ✓ 200
-    "https://www.becomingminimalist.com/feed/",        // ✓ 200
+    "https://jamesclear.com/feed",
+    "https://www.becomingminimalist.com/feed/",
     // removed: zenhabits.net (404)
   ],
   entertainment: [
-    "https://www.polygon.com/rss/index.xml",           // ✓ 200
-    "https://kotaku.com/rss",                          // ✓ 200
-    "https://www.rockpapershotgun.com/feed",           // ✓ 200
+    "https://www.polygon.com/rss/index.xml",
+    "https://kotaku.com/rss",
+    "https://www.rockpapershotgun.com/feed",
     // removed: ign.com (403)
   ],
   sustainability: [
-    "https://e360.yale.edu/feed.xml",                  // ✓ 200
-    "https://www.theguardian.com/environment/rss",     // ✓ 200
+    "https://e360.yale.edu/feed.xml",
+    "https://www.theguardian.com/environment/rss",
   ],
   other: [],
 };

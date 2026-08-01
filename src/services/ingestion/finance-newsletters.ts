@@ -26,9 +26,16 @@ const CRYPTO_RSS_FEEDS = [
   // removed: theblock.co (403 as of 2026-05-03)
 ];
 
+// Both former entries were dead, and one was worse than dead:
+// feeds.feedburner.com/FastCompany no longer belongs to Fast Company — the
+// FeedBurner name was recycled and now serves an unrelated French Blogger
+// feed, so every tech or business niche has been ingesting a stranger's blog
+// as newsletter content, boosted to engagementHint 78 and multiplied 1.15 by
+// scoring. www.inc.com/rss.xml is a plain 404. Both replacements verified to
+// return real articles.
 export const GENERAL_BUSINESS_RSS_FEEDS = [
-  "https://feeds.feedburner.com/FastCompany",                        // Fast Company
-  "https://www.inc.com/rss.xml",                                     // Inc.
+  "https://www.fastcompany.com/latest/rss",                          // Fast Company
+  "https://www.inc.com/rss/",                                        // Inc.
 ];
 
 /**
