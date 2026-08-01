@@ -228,7 +228,13 @@ export async function createContentItems(
       if (best) {
         await query(
           "INSERT INTO content_items (topic_id, page_id, type, status, payload, qa_result) VALUES ($1, $2, 'reel', $3, $4, $5)",
-          [topicId, page.id, status, { reel: best, caption, hashtags: content.hashtags }, qa]
+          // hook is stored alongside the reel, not only inside it. Seven
+          // consumers read payload.hook — the editor's Hook field, the Inbox
+          // card, caption formatting, the Reddit title and the YouTube title —
+          // and every one of them got "" for a generated reel. Shorts were
+          // uploading titled "New Short".
+          [topicId, page.id, status,
+            { reel: best, hook: best.hook ?? "", caption, hashtags: content.hashtags }, qa]
         );
       }
       continue;
@@ -236,7 +242,11 @@ export async function createContentItems(
     if (format === "carousel") {
       await query(
         "INSERT INTO content_items (topic_id, page_id, type, status, payload, qa_result) VALUES ($1, $2, 'carousel', $3, $4, $5)",
-        [topicId, page.id, status, { carousel: content.carousel, brand: page.brand, caption, hashtags: content.hashtags }, qa]
+        // Same omission for carousels: slide 1's title is the hook, so the
+        // value existed and simply was not written where anything looks.
+        [topicId, page.id, status,
+          { carousel: content.carousel, hook: content.reelScripts[0]?.hook ?? "",
+            brand: page.brand, caption, hashtags: content.hashtags }, qa]
       );
       continue;
     }
@@ -251,6 +261,7 @@ export async function createContentItems(
     // Legacy fan-out: no locked format — 2 reel variants + 1 carousel.
     const reelPayloads = content.reelScripts.map((script) => ({
       reel: script,
+      hook: script.hook ?? "",
       caption,
       hashtags: content.hashtags
     }));
@@ -270,6 +281,7 @@ export async function createContentItems(
         qa.passed ? "qa_passed" : "qa_failed",
         {
           carousel: content.carousel,
+          hook: content.reelScripts[0]?.hook ?? "",
           brand: page.brand,
           caption: content.captions[page.platform],
           hashtags: content.hashtags
