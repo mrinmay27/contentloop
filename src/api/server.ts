@@ -1811,6 +1811,7 @@ app.post("/api/pages/:id/canva/autofill", async (req, res, next) => {
     const result  = await canva.pollAutofill(req.params.id, jobId);
     res.json({ ok: true, ...result });
   } catch (error) {
+    if (canvaError(error, res)) return;
     next(error);
   }
 });
@@ -1827,6 +1828,7 @@ app.post("/api/pages/:id/canva/export", async (req, res, next) => {
     const urls  = await canva.pollExport(req.params.id, jobId);
     res.json({ ok: true, urls });
   } catch (error) {
+    if (canvaError(error, res)) return;
     next(error);
   }
 });

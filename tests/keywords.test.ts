@@ -41,3 +41,24 @@ describe("normalizeKeywords", () => {
     expect(normalizeKeywords(["##AI##"])).toEqual(["##ai"]);
   });
 });
+
+import { normaliseDevToTag } from "../src/services/ingestion/devto.js";
+
+describe("normaliseDevToTag", () => {
+  // dev.to tags are lowercase alphanumeric. Passing a niche keyword verbatim
+  // produced ?tag=ai%20tools, which 404s — so the source silently returned
+  // nothing for any niche whose keywords are more than one word.
+  it("collapses a multi-word keyword into a dev.to tag", () => {
+    expect(normaliseDevToTag("machine learning")).toBe("machinelearning");
+    expect(normaliseDevToTag("AI Tools")).toBe("aitools");
+  });
+
+  it("strips punctuation dev.to does not accept", () => {
+    expect(normaliseDevToTag("web-dev")).toBe("webdev");
+    expect(normaliseDevToTag("node.js")).toBe("nodejs");
+  });
+
+  it("returns empty for a keyword with nothing usable, so it can be dropped", () => {
+    expect(normaliseDevToTag("!!!")).toBe("");
+  });
+});

@@ -8,13 +8,24 @@ import type { RawTrend } from "../../domain/types.js";
 const DEVTO_API = "https://dev.to/api/articles";
 const QUALITY_THRESHOLD = 100; // minimum reactions
 
+/** dev.to tags are lowercase alphanumeric with no spaces or punctuation:
+ *  "machine learning" is the tag "machinelearning". Passing a niche keyword
+ *  through verbatim produced `?tag=ai%20tools`, which 404s — so for any niche
+ *  whose keywords are more than one word, and most are, this source returned
+ *  nothing at all while looking like it had simply found no articles. */
+export function normaliseDevToTag(tag: string): string {
+  return tag.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export async function fetchDevToTrends(tags: string[], keywords: string[]): Promise<RawTrend[]> {
   if (tags.length === 0) return [];
 
   const trends: RawTrend[] = [];
   const keywordLower = keywords.map((k) => k.toLowerCase());
 
-  for (const tag of tags.slice(0, 5)) {
+  const normalised = [...new Set(tags.map(normaliseDevToTag).filter(Boolean))];
+
+  for (const tag of normalised.slice(0, 5)) {
     try {
       const url = `${DEVTO_API}?tag=${encodeURIComponent(tag)}&top=7&per_page=20`;
       const res = await fetch(url, {

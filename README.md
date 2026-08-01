@@ -208,7 +208,7 @@ feature; nothing is required to run the pipeline end-to-end in dry-run.
 | `LLM_API_KEY` (+ `LLM_PROVIDER`, `LLM_MODEL`) or `OPENAI_API_KEY` | Real LLM content generation (reel scripts, carousels, captions, format suggestion) via Groq, OpenAI, OpenRouter, or any OpenAI-compatible endpoint | Deterministic template-based generation — no live LLM calls |
 | `YOUTUBE_API_KEY` | YouTube Trends ingestion source | Source is skipped |
 | `EXPLODING_TOPICS_API_KEY` | Exploding Topics ingestion source (Pro tier) | Source is skipped |
-| `PRODUCT_HUNT_TOKEN` | Higher rate limits on Product Hunt ingestion | Source still runs, unauthenticated (public API), lower limits |
+| `PRODUCT_HUNT_TOKEN` | Product Hunt ingestion | Source is skipped — Product Hunt's API v2 rejects unauthenticated requests with a 401, so this is required, not merely a rate-limit upgrade |
 | `PEXELS_API_KEY` | Stock B-roll footage for rendered Reels | Rendering falls back without stock footage |
 | `INSTAGRAM_ACCESS_TOKEN` (or Settings → Publishing → Instagram OAuth) | Live Instagram publishing | Publishing stays in dry-run/stub mode |
 | `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | YouTube Shorts OAuth publishing | Publishing stays in dry-run/stub mode |
