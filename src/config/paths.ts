@@ -12,6 +12,13 @@
  */
 import path from "node:path";
 
+/** The directory holding this install's data, honouring CONTENTLOOP_DATA_DIR. */
+export function resolveDataDir(): string {
+  const override = process.env.CONTENTLOOP_DATA_DIR ?? process.env.TPCE_DATA_DIR;
+  if (override && override.trim()) return path.resolve(override.trim());
+  return path.resolve(process.cwd(), "data");
+}
+
 export function resolveMediaDir(): string {
   const override = process.env.CONTENTLOOP_DATA_DIR ?? process.env.TPCE_DATA_DIR;
   if (override && override.trim()) return path.join(path.resolve(override.trim()), "media");

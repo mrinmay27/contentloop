@@ -10,7 +10,9 @@
  */
 import fs   from "fs";
 import path from "path";
+import { fileURLToPath } from "node:url";
 import { env } from "./env.js";
+import { resolveDataDir } from "./paths.js";
 
 // ─── Config schema ────────────────────────────────────────────────────────────
 
@@ -210,10 +212,47 @@ const ENV_DEFAULTS: Partial<Record<ConfigKey, string>> = {
 
 // ─── Store class ──────────────────────────────────────────────────────────────
 
-const CONFIG_PATH = path.resolve(
+/** Where settings are stored.
+ *
+ *  Two things were wrong here.
+ *
+ *  `new URL(...).pathname` does not percent-decode, so an install path
+ *  containing a space — "Theme Page Content Engine", "My Drive", any macOS
+ *  user with a space in their name — resolved to a literal `%20` directory
+ *  and wrote settings into a phantom folder beside the real one. It stayed
+ *  self-consistent, so nothing looked broken until the app was moved or run
+ *  from a clean path and every setting vanished. fileURLToPath decodes.
+ *
+ *  It also ignored CONTENTLOOP_DATA_DIR, storing config beside the code
+ *  rather than with the data. Two data dirs on one machine therefore shared a
+ *  single config file, so a fresh install inherited the previous one's API
+ *  keys, OAuth secrets and dry-run setting — which is how a brand-new install
+ *  came up with real publishing already switched on.
+ *
+ *  The old location is still read when the new one is absent, so upgrading
+ *  keeps your settings. */
+const LEGACY_CONFIG_PATH = path.resolve(
+  fileURLToPath(new URL(".", import.meta.url)),
+  "../../data/app.config.json"
+);
+
+/** Where the percent-encoding bug actually put the file.
+ *
+ *  Correcting the decoding is not enough on its own: an install that ran the
+ *  broken version has its real settings — API keys, OAuth client secrets, the
+ *  dry-run flag — sitting in a directory whose name literally contains %20.
+ *  Fixing the path without reading that would look exactly like a factory
+ *  reset. Consulted last, and only when neither proper location has a file. */
+const ESCAPED_CONFIG_PATH = path.resolve(
   new URL(".", import.meta.url).pathname,
   "../../data/app.config.json"
 );
+
+function resolveConfigPath(): string {
+  return path.join(resolveDataDir(), "app.config.json");
+}
+
+const CONFIG_PATH = resolveConfigPath();
 
 class ConfigStore {
   private data: Partial<Record<ConfigKey, string>> = {};
@@ -224,9 +263,18 @@ class ConfigStore {
 
   private load() {
     try {
-      if (fs.existsSync(CONFIG_PATH)) {
-        const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
-        this.data = JSON.parse(raw);
+      // Prefer the data dir; fall back to where older versions wrote, so an
+      // upgrade does not silently reset every setting to its default.
+      const source = fs.existsSync(CONFIG_PATH) ? CONFIG_PATH
+                   : fs.existsSync(LEGACY_CONFIG_PATH) ? LEGACY_CONFIG_PATH
+                   : fs.existsSync(ESCAPED_CONFIG_PATH) ? ESCAPED_CONFIG_PATH
+                   : null;
+      if (source) {
+        this.data = JSON.parse(fs.readFileSync(source, "utf-8"));
+        if (source !== CONFIG_PATH) {
+          console.log(`[config] migrating settings from ${source} to ${CONFIG_PATH}`);
+          this.persist();
+        }
       }
     } catch {
       this.data = {};

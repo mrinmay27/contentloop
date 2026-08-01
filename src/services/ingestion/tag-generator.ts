@@ -13,6 +13,7 @@
 
 import fs   from "fs";
 import path from "path";
+import { fileURLToPath } from "node:url";
 import { llmClient, llmConfig } from "../../config/llm.js";
 import { query } from "../../db/pool.js";
 
@@ -52,8 +53,11 @@ export interface PageSourceMap {
 // ─── Cache in DB (Sprint U1) ──────────────────────────────────────────────────
 
 // Legacy on-disk cache path — kept only for the one-time seed import below.
+// fileURLToPath, not .pathname: the latter leaves %20 in place, so any
+// install path containing a space pointed this at a phantom directory and the
+// one-time legacy import silently found nothing to seed.
 const CACHE_PATH = path.resolve(
-  new URL(".", import.meta.url).pathname,
+  fileURLToPath(new URL(".", import.meta.url)),
   "../../../data/page-sources.json"
 );
 
