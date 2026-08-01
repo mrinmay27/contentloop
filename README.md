@@ -14,7 +14,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-brightgreen">
-  <img alt="tests" src="https://img.shields.io/badge/tests-379%20passing-brightgreen">
+  <img alt="tests" src="https://img.shields.io/badge/tests-387%20passing-brightgreen">
 </p>
 
 ContentLoop is a self-hosted content-operations tool for running "theme page" social
